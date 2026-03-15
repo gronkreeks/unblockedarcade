@@ -73,7 +73,7 @@
   <div style="width:80px"></div>
 </header>
 <canvas id="c" width="1100" height="600"></canvas>
-<div class="hints">WASD &middot; E / click attack &middot; B build &middot; 1/2/3 select</div>
+<div class="hints">WASD &middot; E / click attack &middot; B build &middot; 1/2/3 select &middot; Upgrade spear (bottom-right)</div>
 
 <div id="overlay">
   <h2>&#129503; SURVIVE</h2>
@@ -82,7 +82,8 @@
      Survive as many zombie waves as you can!</p>
   <p style="font-size:0.82rem;color:rgba(255,255,255,0.55)">
     WASD move &nbsp;&bull;&nbsp; E / left-click attack &nbsp;&bull;&nbsp;
-    B build mode &nbsp;&bull;&nbsp; 1/2/3 select block
+    B build mode &nbsp;&bull;&nbsp; 1/2/3 select block &nbsp;&bull;&nbsp;
+    &#x2694;&#xFE0F; upgrade spear (bottom-right)
   </p>
   <button id="startBtn">Start!</button>
   <a href="index.html">&#8592; Back to Home</a>
@@ -95,6 +96,11 @@
 const TILE = 48;
 const CW = 1100, CH = 600;
 const WW = 2200, WH = 1500;
+
+// Upgrade button rect (screen-space, bottom-right)
+const UPGRADE_BTN = { x: CW - 190, y: CH - 66, w: 182, h: 58 };
+// Skip wave button (screen-space, under wave counter)
+const SKIP_BTN = { x: CW/2 - 38, y: 46, w: 76, h: 22 };
 
 // ── Canvas / context ────────────────────────────────────────────────────────
 const canvas = document.getElementById('c');
@@ -127,6 +133,15 @@ function rand(a, b) { return a + Math.random() * (b - a); }
 function randi(a, b) { return Math.floor(rand(a, b + 1)); }
 function dist(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); }
 function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+// Closest point on line segment (ax,ay)-(bx,by) to point (px,py)
+function closestPointOnSeg(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay;
+  const lenSq = dx*dx + dy*dy;
+  if (lenSq === 0) return { x: ax, y: ay };
+  const t = clamp(((px - ax)*dx + (py - ay)*dy) / lenSq, 0, 1);
+  return { x: ax + t*dx, y: ay + t*dy };
+}
 
 function circleRect(cx, cy, cr, rx, ry, rw, rh) {
   const nearX = clamp(cx, rx, rx + rw);
@@ -165,7 +180,7 @@ function spawnParticles(x, y, col, n) {
 // ── Game state ───────────────────────────────────────────────────────────────
 let gameRunning = false;
 let player, cam, resources, blocks, zombies, bullets;
-let waveNum, waveTimer, waveActive, zombiesLeft, spawnTimer, spawnQueue;
+let waveNum, waveTimer, waveActive, zombiesLeft, spawnTimer, spawnQueue, bossQueue;
 let buildMode, selectedBlock;
 
 // ── Resource definitions ─────────────────────────────────────────────────────
@@ -184,6 +199,26 @@ const BLOCK_DEFS = [
   { name:'Turret',      cost:{ metal:10 },hp:150, col:'#5a7fa8', accent:'#3a5f88' },
 ];
 
+// ── Spear upgrade ─────────────────────────────────────────────────────────────
+function spearUpgradeCost() {
+  const lvl = player.spearLevel + 1;
+  return { wood: lvl * 5, stone: lvl * 4, metal: lvl * 2 };
+}
+function canAffordSpearUpgrade() {
+  if (player.spearLevel >= 5) return false;
+  const c = spearUpgradeCost();
+  return player.inv.wood >= c.wood && player.inv.stone >= c.stone && player.inv.metal >= c.metal;
+}
+function buySpearUpgrade() {
+  if (!canAffordSpearUpgrade()) return;
+  const c = spearUpgradeCost();
+  player.inv.wood  -= c.wood;
+  player.inv.stone -= c.stone;
+  player.inv.metal -= c.metal;
+  player.spearLevel++;
+  spawnParticles(player.x, player.y, '#ffe066', 18);
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 function initGame() {
   player = {
@@ -193,7 +228,7 @@ function initGame() {
     inv: { wood: 15, stone: 5, metal: 0 },
     spearAngle: 0, spearSwing: 0, attacking: false, attackTimer: 0,
     invTimer: 0, flickerOn: true,
-    walkFrame: 0
+    walkFrame: 0, spearLevel: 0
   };
   cam = { x: WW / 2 - CW / 2, y: WH / 2 - CH / 2 };
   resources = [];
@@ -202,11 +237,12 @@ function initGame() {
   bullets = [];
   particles.length = 0;
   waveNum = 0;
-  waveTimer = 20;
+  waveTimer = 55;
   waveActive = false;
   zombiesLeft = 0;
   spawnTimer = 0;
   spawnQueue = 0;
+  bossQueue = 0;
   buildMode = false;
   selectedBlock = 0;
 
@@ -226,13 +262,12 @@ function spawnResources(type, count, avoidX, avoidY, avoidR) {
     const x = rand(60, WW - 60);
     const y = rand(60, WH - 60);
     if (dist(x, y, avoidX, avoidY) < avoidR + radius) continue;
-    // Check overlap with others
     let ok = true;
     for (const r of resources) {
       if (dist(x, y, r.x, r.y) < radius + r.r + 10) { ok = false; break; }
     }
     if (!ok) continue;
-    resources.push({ type, x, y, r: radius, hp: maxHp, maxHp, damaged: false });
+    resources.push({ type, x, y, r: radius, hp: maxHp, maxHp, damaged: false, respawnTimer: 0 });
     placed++;
   }
 }
@@ -243,15 +278,39 @@ function startWave() {
   waveActive = true;
   waveTimer = 0;
   const count = 4 + waveNum * 3;
+  // Bosses: first at wave 10, +1 every 5 waves after
+  bossQueue = waveNum >= 10 ? Math.floor((waveNum - 10) / 5) + 1 : 0;
   spawnQueue = count;
-  zombiesLeft = count;
+  zombiesLeft = count + bossQueue;
   spawnTimer = 0;
 }
 
-function spawnZombie() {
-  const speed  = 0.7 + (waveNum - 1) * 0.06;
-  const maxHp  = 40 + (waveNum - 1) * 12;
-  // Random world edge
+function spawnZombie(forceBoss) {
+  let type = 'zombie';
+  if (forceBoss) {
+    type = 'boss';
+  } else {
+    // Runners: wave 5+, chance grows each wave
+    const runnerChance = waveNum >= 5 ? Math.min(0.5, (waveNum - 4) * 0.08) : 0;
+    if (Math.random() < runnerChance) type = 'runner';
+  }
+
+  let speed, maxHp, r;
+  if (type === 'boss') {
+    speed = Math.max(0.9, 0.9 + (waveNum - 10) * 0.03);
+    maxHp = 600 + Math.max(0, (waveNum - 10)) * 40;
+    r = 28;
+  } else if (type === 'runner') {
+    // Just barely faster than player (player = 2.8)
+    speed = 2.85 + Math.min((waveNum - 5) * 0.01, 0.15);
+    maxHp = Math.max(20, 25 + (waveNum - 5) * 6);
+    r = 11;
+  } else {
+    speed = 0.7 + (waveNum - 1) * 0.06;
+    maxHp = 40 + (waveNum - 1) * 12;
+    r = 14;
+  }
+
   let x, y;
   const side = randi(0, 3);
   if (side === 0) { x = rand(0, WW); y = 0; }
@@ -260,9 +319,10 @@ function spawnZombie() {
   else { x = 0; y = rand(0, WH); }
 
   zombies.push({
-    x, y, r: 14,
+    x, y, r,
     hp: maxHp, maxHp,
     speed,
+    type,
     attackTimer: 0,
     blockTarget: null,
     walkFrame: 0, walkTimer: 0,
@@ -277,7 +337,6 @@ function updateTurrets(dt) {
     if (!blk.turretAngle) blk.turretAngle = 0;
     if (!blk.fireTimer)   blk.fireTimer   = 0;
 
-    // Find nearest zombie in range
     let nearest = null, nearDist = 300;
     for (const z of zombies) {
       const d = dist(blk.x, blk.y, z.x, z.y);
@@ -315,32 +374,35 @@ function resolvePlayerBlocks() {
 
 // ── Attack / harvest ──────────────────────────────────────────────────────────
 function doAttack() {
-  const reach = 55;
   const ang = player.spearAngle;
-  const tx = player.x + Math.cos(ang) * reach;
-  const ty = player.y + Math.sin(ang) * reach;
+  // Spear runs from player center to tip — full segment collision
+  const sx1 = player.x, sy1 = player.y;
+  const sx2 = player.x + Math.cos(ang) * 65;
+  const sy2 = player.y + Math.sin(ang) * 65;
 
-  // Hit resources
+  const resDmg = 1 + player.spearLevel;
   for (const res of resources) {
     if (res.hp <= 0) continue;
-    if (dist(tx, ty, res.x, res.y) < res.r + 10) {
-      res.hp--;
+    const cp = closestPointOnSeg(res.x, res.y, sx1, sy1, sx2, sy2);
+    if (dist(cp.x, cp.y, res.x, res.y) < res.r + 8) {
+      res.hp -= resDmg;
       res.damaged = true;
       spawnParticles(res.x, res.y, [res.type===0?'#4a8c2a':res.type===1?'#aaa':'#7a9fc0'][0], 5);
       if (res.hp <= 0) {
-        // Grant resources
         if (res.type === RES_TREE)  player.inv.wood  += 3;
         if (res.type === RES_ROCK)  player.inv.stone += 2;
         if (res.type === RES_METAL) player.inv.metal += 2;
         spawnParticles(res.x, res.y, '#ffe066', 10);
+        res.respawnTimer = 60; // regrow after 60s
       }
     }
   }
 
-  // Hit zombies
+  const zDmg = 25 + player.spearLevel * 10;
   for (const z of zombies) {
-    if (dist(tx, ty, z.x, z.y) < z.r + 12) {
-      z.hp -= 25;
+    const cp2 = closestPointOnSeg(z.x, z.y, sx1, sy1, sx2, sy2);
+    if (dist(cp2.x, cp2.y, z.x, z.y) < z.r + 8) {
+      z.hp -= zDmg;
       spawnParticles(z.x, z.y, '#f00', 6);
     }
   }
@@ -363,7 +425,6 @@ function spendBlock(type) {
 
 // ── Update ────────────────────────────────────────────────────────────────────
 function update(dt) {
-  // Mouse world position
   mouse.wx = mouse.x + cam.x;
   mouse.wy = mouse.y + cam.y;
 
@@ -390,12 +451,33 @@ function update(dt) {
   // Spear aim
   player.spearAngle = Math.atan2(mouse.wy - player.y, mouse.wx - player.x);
 
-  // Attack
+  // Check UI button clicks first (consume click)
+  let clickedUI = false;
+  if (mouse.clicked) {
+    const ub = UPGRADE_BTN;
+    if (mouse.x >= ub.x && mouse.x <= ub.x + ub.w &&
+        mouse.y >= ub.y && mouse.y <= ub.y + ub.h) {
+      buySpearUpgrade();
+      clickedUI = true;
+    }
+    // Skip wave button (only between waves)
+    if (!waveActive) {
+      const sb = SKIP_BTN;
+      if (mouse.x >= sb.x && mouse.x <= sb.x + sb.w &&
+          mouse.y >= sb.y && mouse.y <= sb.y + sb.h) {
+        startWave();
+        clickedUI = true;
+      }
+    }
+  }
+
+  // Attack cooldown scales down with spear level
+  const attackCooldown = Math.max(0.18, 0.35 - player.spearLevel * 0.03);
   player.attackTimer = Math.max(0, player.attackTimer - dt);
   if (player.attackTimer <= 0) {
-    if ((justPressed['KeyE'] || mouse.clicked) && !buildMode) {
+    if ((justPressed['KeyE'] || (mouse.clicked && !clickedUI)) && !buildMode) {
       player.attacking = true;
-      player.attackTimer = 0.35;
+      player.attackTimer = attackCooldown;
       player.spearSwing = -0.6;
       doAttack();
     }
@@ -406,10 +488,9 @@ function update(dt) {
   }
 
   // Build mode placement
-  if (buildMode && mouse.clicked) {
+  if (buildMode && mouse.clicked && !clickedUI) {
     const gx = Math.round(mouse.wx / TILE) * TILE;
     const gy = Math.round(mouse.wy / TILE) * TILE;
-    // Check not occupied
     let occupied = false;
     for (const b of blocks) {
       if (b.hp > 0 && Math.abs(b.x - gx) < 4 && Math.abs(b.y - gy) < 4) { occupied = true; break; }
@@ -430,27 +511,47 @@ function update(dt) {
   if (player.invTimer > 0) player.flickerOn = Math.floor(player.invTimer * 12) % 2 === 0;
   else player.flickerOn = true;
 
+  // Slow healing (1.5 hp/s)
+  player.hp = Math.min(player.maxHp, player.hp + dt * 1.5);
+
+  // Resource regeneration
+  for (const res of resources) {
+    if (res.hp <= 0 && res.respawnTimer > 0) {
+      res.respawnTimer -= dt;
+      if (res.respawnTimer <= 0) {
+        res.hp = res.maxHp;
+        res.damaged = false;
+        res.respawnTimer = 0;
+        spawnParticles(res.x, res.y, '#4cff4c', 8);
+      }
+    }
+  }
+
   // Wave system
   if (!waveActive) {
     waveTimer -= dt;
     if (waveTimer <= 0) startWave();
   } else {
-    // Spawn zombies over time
+    // Spawn regular zombies
     if (spawnQueue > 0) {
       spawnTimer -= dt;
       if (spawnTimer <= 0) {
-        spawnZombie();
+        spawnZombie(false);
         spawnQueue--;
         spawnTimer = 1;
       }
     }
-    // Update zombies
+    // Spawn bosses (after regular zombies are mostly out)
+    if (bossQueue > 0 && spawnQueue <= Math.floor(zombiesLeft / 2)) {
+      spawnZombie(true);
+      bossQueue--;
+    }
     updateZombies(dt);
     updateTurrets(dt);
     // Check wave end
-    if (spawnQueue === 0 && zombies.length === 0) {
+    if (spawnQueue === 0 && bossQueue === 0 && zombies.length === 0) {
       waveActive = false;
-      waveTimer = 20;
+      waveTimer = 55;
     }
   }
 
@@ -460,7 +561,6 @@ function update(dt) {
     b.x += b.vx; b.y += b.vy;
     b.dist += 8;
     if (b.dist > 300) { bullets.splice(i, 1); continue; }
-    // Hit zombies
     let hit = false;
     for (let j = zombies.length - 1; j >= 0; j--) {
       const z = zombies[j];
@@ -477,7 +577,8 @@ function update(dt) {
   // Remove dead zombies
   for (let i = zombies.length - 1; i >= 0; i--) {
     if (zombies[i].hp <= 0) {
-      spawnParticles(zombies[i].x, zombies[i].y, '#3a3', 8);
+      const col = zombies[i].type === 'boss' ? '#a050ff' : '#3a3';
+      spawnParticles(zombies[i].x, zombies[i].y, col, zombies[i].type === 'boss' ? 20 : 8);
       zombies.splice(i, 1);
     }
   }
@@ -507,7 +608,6 @@ function updateZombies(dt) {
     z.walkTimer += dt;
     if (z.walkTimer > 0.15) { z.walkTimer = 0; z.walkFrame++; }
 
-    // Find block target if colliding
     z.blockTarget = null;
     for (const blk of blocks) {
       if (blk.hp <= 0) continue;
@@ -519,21 +619,20 @@ function updateZombies(dt) {
     }
 
     if (z.blockTarget) {
-      // Attack block
       z.attackTimer += dt;
-      if (z.attackTimer >= 1) {
+      const blockDmg = z.type === 'boss' ? 40 : 12;
+      const blockRate = z.type === 'boss' ? 0.7 : 1;
+      if (z.attackTimer >= blockRate) {
         z.attackTimer = 0;
-        z.blockTarget.hp -= 12;
-        spawnParticles(z.blockTarget.x, z.blockTarget.y, '#a44', 3);
+        z.blockTarget.hp -= blockDmg;
+        spawnParticles(z.blockTarget.x, z.blockTarget.y, '#a44', z.type === 'boss' ? 6 : 3);
       }
     } else {
-      // Move toward player
       const ang = Math.atan2(player.y - z.y, player.x - z.x);
       z.x += Math.cos(ang) * z.speed;
       z.y += Math.sin(ang) * z.speed;
       z.armSwing = Math.sin(z.walkFrame * 0.8) * 0.4;
 
-      // Resolve block collision (push out)
       for (const blk of blocks) {
         if (blk.hp <= 0) continue;
         const r = blockRect(blk);
@@ -541,13 +640,23 @@ function updateZombies(dt) {
         if (push) { z.x += push.dx; z.y += push.dy; }
       }
 
-      // Attack player if adjacent
+      // Push zombie out of player — no clipping
+      const dToPlayer = dist(z.x, z.y, player.x, player.y);
+      const minSep = z.r + player.r;
+      if (dToPlayer < minSep && dToPlayer > 0) {
+        const pushAng = Math.atan2(z.y - player.y, z.x - player.x);
+        z.x = player.x + Math.cos(pushAng) * minSep;
+        z.y = player.y + Math.sin(pushAng) * minSep;
+      }
+
       if (dist(z.x, z.y, player.x, player.y) < z.r + player.r + 4) {
         z.attackTimer += dt;
-        if (z.attackTimer >= 1) {
+        const playerDmg = z.type === 'boss' ? 20 + waveNum * 3 : 8 + waveNum * 2;
+        const attackRate = z.type === 'boss' ? 0.8 : 1;
+        if (z.attackTimer >= attackRate) {
           z.attackTimer = 0;
           if (player.invTimer <= 0) {
-            player.hp -= 8 + waveNum * 2;
+            player.hp -= playerDmg;
             player.invTimer = 0.4;
           }
         }
@@ -570,10 +679,8 @@ function drawHpBar(x, y, hp, maxHp, w) {
 
 function drawTree(res) {
   const x = res.x, y = res.y;
-  // Trunk
   ctx.fillStyle = '#7a4e28';
   ctx.fillRect(x - 5, y - 4, 10, res.r + 8);
-  // Foliage
   ctx.beginPath();
   ctx.arc(x, y - 8, res.r, 0, Math.PI * 2);
   ctx.fillStyle = res.hp < res.maxHp ? '#3a7a2a' : '#4caf50';
@@ -642,7 +749,6 @@ function drawBlock(blk) {
     ctx.fillRect(x, y, TILE, TILE);
     ctx.strokeStyle = def.accent;
     ctx.lineWidth = 1.5;
-    // Crack pattern
     ctx.beginPath();
     ctx.moveTo(x+10, y+5); ctx.lineTo(x+20, y+22); ctx.lineTo(x+8, y+30);
     ctx.moveTo(x+30, y+8); ctx.lineTo(x+42, y+20); ctx.lineTo(x+35, y+40);
@@ -652,25 +758,21 @@ function drawBlock(blk) {
     ctx.strokeRect(x+1, y+1, TILE-2, TILE-2);
 
   } else if (blk.type === BLK_TURRET) {
-    // Base
     ctx.fillStyle = def.col;
     ctx.beginPath(); ctx.arc(blk.x, blk.y, TILE*0.45, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle = def.accent;
     ctx.beginPath(); ctx.arc(blk.x, blk.y, TILE*0.3, 0, Math.PI*2); ctx.fill();
-    // Barrel
     ctx.save();
     ctx.translate(blk.x, blk.y);
     ctx.rotate(blk.turretAngle || 0);
     ctx.fillStyle = '#2a4060';
     ctx.fillRect(0, -5, TILE*0.45, 10);
     ctx.restore();
-    // Range ring (faint)
     ctx.strokeStyle = 'rgba(100,160,220,0.15)';
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(blk.x, blk.y, 300, 0, Math.PI*2); ctx.stroke();
   }
 
-  // HP bar if damaged
   if (blk.hp < blk.maxHp) drawHpBar(blk.x, blk.y - TILE/2 - 8, blk.hp, blk.maxHp, TILE - 4);
 }
 
@@ -682,13 +784,11 @@ function drawPlayer() {
   ctx.save();
   ctx.translate(x, y);
 
-  // Body (blue armour)
   ctx.fillStyle = '#3a7cc2';
   ctx.beginPath(); ctx.ellipse(0, 4, 9, 12, 0, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = '#2a5c9a';
   ctx.fillRect(-9, 0, 18, 8);
 
-  // Legs
   const legSwing = Math.sin(player.walkFrame) * 0.4;
   ctx.strokeStyle = '#1a3a6a'; ctx.lineWidth = 5; ctx.lineCap = 'round';
   ctx.beginPath();
@@ -696,50 +796,52 @@ function drawPlayer() {
   ctx.beginPath();
   ctx.moveTo(3, 12); ctx.lineTo(3 - Math.sin(legSwing)*6, 24); ctx.stroke();
 
-  // Helmet
   ctx.fillStyle = '#2a5c9a';
   ctx.beginPath(); ctx.arc(0, -8, 10, Math.PI, 0); ctx.fill();
   ctx.fillStyle = '#3a7cc2';
   ctx.fillRect(-10, -9, 20, 6);
-  // Visor
   ctx.fillStyle = '#7ad0f0';
   ctx.fillRect(-7, -10, 14, 4);
 
-  // Head
   ctx.fillStyle = '#f5c88a';
   ctx.beginPath(); ctx.arc(0, -9, 7, 0, Math.PI*2); ctx.fill();
 
-  // Spear
   const swingAng = ang + player.spearSwing;
   ctx.rotate(swingAng);
-  ctx.strokeStyle = '#8B5E3C'; ctx.lineWidth = 3;
+  const spearCol = player.spearLevel >= 3 ? '#c8a000' : '#8B5E3C';
+  ctx.strokeStyle = spearCol; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(50, 0); ctx.stroke();
-  ctx.fillStyle = '#ccc';
+  ctx.fillStyle = player.spearLevel >= 1 ? '#ffe066' : '#ccc';
   ctx.beginPath();
   ctx.moveTo(50, -5); ctx.lineTo(65, 0); ctx.lineTo(50, 5); ctx.closePath(); ctx.fill();
+  if (player.spearLevel >= 3) {
+    ctx.shadowColor = '#ffe066'; ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.moveTo(50, -5); ctx.lineTo(65, 0); ctx.lineTo(50, 5); ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+  }
 
   ctx.restore();
 }
 
 function drawZombie(z) {
+  if (z.type === 'runner') { drawRunner(z); return; }
+  if (z.type === 'boss')   { drawBoss(z);   return; }
+
   const x = z.x, y = z.y;
   const legSwing = Math.sin(z.walkFrame * 0.8) * 0.35;
 
   ctx.save();
   ctx.translate(x, y);
 
-  // Legs
   ctx.strokeStyle = '#2a5a2a'; ctx.lineWidth = 4; ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.moveTo(-3, 10); ctx.lineTo(-3 + Math.sin(legSwing)*8, 22); ctx.stroke();
   ctx.beginPath();
   ctx.moveTo(3, 10); ctx.lineTo(3 - Math.sin(legSwing)*8, 22); ctx.stroke();
 
-  // Body
   ctx.fillStyle = '#3a7a3a';
   ctx.beginPath(); ctx.ellipse(0, 2, 8, 11, 0, 0, Math.PI*2); ctx.fill();
 
-  // Arms outstretched
   const armSwing = z.armSwing || 0;
   ctx.strokeStyle = '#2a6a2a'; ctx.lineWidth = 4;
   ctx.beginPath();
@@ -747,11 +849,9 @@ function drawZombie(z) {
   ctx.beginPath();
   ctx.moveTo(8, -2); ctx.lineTo(22, 2 - Math.sin(armSwing)*4); ctx.stroke();
 
-  // Head
   ctx.fillStyle = '#4a8a4a';
   ctx.beginPath(); ctx.arc(0, -10, 9, 0, Math.PI*2); ctx.fill();
 
-  // Red glowing eyes
   ctx.shadowColor = '#f00'; ctx.shadowBlur = 8;
   ctx.fillStyle = '#f33';
   ctx.beginPath(); ctx.arc(-3.5, -11, 2.5, 0, Math.PI*2); ctx.fill();
@@ -759,14 +859,135 @@ function drawZombie(z) {
   ctx.shadowBlur = 0;
 
   ctx.restore();
-
-  // HP bar
   drawHpBar(x, y - z.r - 10, z.hp, z.maxHp, 28);
+}
+
+function drawRunner(z) {
+  const x = z.x, y = z.y;
+  const legSwing = Math.sin(z.walkFrame * 1.6) * 0.5;
+
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Blue legs
+  ctx.strokeStyle = '#1a4a8a'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-3, 8); ctx.lineTo(-4 + Math.sin(legSwing)*9, 18); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(3, 8); ctx.lineTo(4 - Math.sin(legSwing)*9, 18); ctx.stroke();
+
+  // Blue body (leaned forward)
+  ctx.fillStyle = '#2060c0';
+  ctx.beginPath(); ctx.ellipse(0, 0, 6, 9, 0.2, 0, Math.PI*2); ctx.fill();
+
+  // Arms pumping
+  const armSwing = z.armSwing || 0;
+  ctx.strokeStyle = '#1a50a0'; ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(-6, -2); ctx.lineTo(-14, 4 + Math.sin(armSwing)*6); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(6, -2); ctx.lineTo(14, -4 - Math.sin(armSwing)*6); ctx.stroke();
+
+  // Blue head (smaller)
+  ctx.fillStyle = '#3070d0';
+  ctx.beginPath(); ctx.arc(0, -9, 7, 0, Math.PI*2); ctx.fill();
+
+  // Glowing cyan eyes
+  ctx.shadowColor = '#00cfff'; ctx.shadowBlur = 10;
+  ctx.fillStyle = '#00eeff';
+  ctx.beginPath(); ctx.arc(-2.5, -10, 2, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(2.5, -10, 2, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Blue speed lines
+  ctx.strokeStyle = 'rgba(80,160,255,0.4)'; ctx.lineWidth = 1;
+  for (let i = 0; i < 3; i++) {
+    ctx.beginPath();
+    ctx.moveTo(-8 - i * 4, -8 + i * 5);
+    ctx.lineTo(-16 - i * 4, -8 + i * 5);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  drawHpBar(x, y - z.r - 10, z.hp, z.maxHp, 22);
+  ctx.font = 'bold 8px Segoe UI';
+  ctx.fillStyle = '#00eeff';
+  ctx.fillText('RUN', x - 8, y - z.r - 14);
+}
+
+function drawBoss(z) {
+  const x = z.x, y = z.y;
+  const legSwing = Math.sin(z.walkFrame * 0.5) * 0.3;
+  const pulse = 0.85 + Math.sin(Date.now() / 300) * 0.15;
+
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Thick legs
+  ctx.strokeStyle = '#4a007a'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-8, 16); ctx.lineTo(-8 + Math.sin(legSwing)*10, 34); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(8, 16); ctx.lineTo(8 - Math.sin(legSwing)*10, 34); ctx.stroke();
+
+  // Massive body
+  ctx.shadowColor = '#aa00ff'; ctx.shadowBlur = 20 * pulse;
+  ctx.fillStyle = '#6a00cc';
+  ctx.beginPath(); ctx.ellipse(0, 2, 18, 22, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#4a0099';
+  ctx.fillRect(-18, 0, 36, 12);
+
+  // Shoulder spikes
+  ctx.fillStyle = '#330077';
+  ctx.beginPath(); ctx.moveTo(-18, -4); ctx.lineTo(-28, -16); ctx.lineTo(-14, -8); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(18, -4); ctx.lineTo(28, -16); ctx.lineTo(14, -8); ctx.closePath(); ctx.fill();
+
+  // Arms (huge, outstretched)
+  const armSwing = z.armSwing || 0;
+  ctx.strokeStyle = '#5500aa'; ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(-18, -4); ctx.lineTo(-38, 6 + Math.sin(armSwing)*6); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(18, -4); ctx.lineTo(38, 6 - Math.sin(armSwing)*6); ctx.stroke();
+
+  // Head
+  ctx.fillStyle = '#7700dd';
+  ctx.beginPath(); ctx.arc(0, -18, 14, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#330077';
+  ctx.beginPath(); ctx.arc(0, -18, 14, Math.PI, 0); ctx.fill();
+
+  // Crown spikes
+  ctx.fillStyle = '#aa44ff';
+  for (let i = -2; i <= 2; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * 5 - 3, -30);
+    ctx.lineTo(i * 5, -30 - 8 + Math.abs(i) * 2);
+    ctx.lineTo(i * 5 + 3, -30);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Glowing purple eyes (larger)
+  ctx.shadowColor = '#ff00ff'; ctx.shadowBlur = 16;
+  ctx.fillStyle = '#ff44ff';
+  ctx.beginPath(); ctx.arc(-5, -20, 4, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(5, -20, 4, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 0;
+
+  ctx.restore();
+
+  // Wide HP bar
+  drawHpBar(x, y - z.r - 14, z.hp, z.maxHp, 56);
+  ctx.font = 'bold 9px Segoe UI';
+  ctx.fillStyle = '#cc88ff';
+  ctx.textAlign = 'center';
+  ctx.fillText('BOSS', x, y - z.r - 18);
+  ctx.textAlign = 'left';
 }
 
 // ── Draw ──────────────────────────────────────────────────────────────────────
 function draw() {
-  // World
   ctx.save();
   ctx.translate(-cam.x, -cam.y);
 
@@ -775,18 +996,26 @@ function draw() {
   ctx.fillRect(0, 0, WW, WH);
 
   // Grass tiles
-  const gs = 64;
-  for (let gx = 0; gx < WW; gx += gs) {
-    for (let gy = 0; gy < WH; gy += gs) {
-      ctx.fillStyle = (Math.floor(gx/gs) + Math.floor(gy/gs)) % 2 === 0 ? '#5cb85c' : '#57b057';
-      ctx.fillRect(gx, gy, gs, gs);
+  for (let gx = 0; gx < WW; gx += TILE) {
+    for (let gy = 0; gy < WH; gy += TILE) {
+      ctx.fillStyle = (Math.floor(gx/TILE) + Math.floor(gy/TILE)) % 2 === 0 ? '#5cb85c' : '#57b057';
+      ctx.fillRect(gx, gy, TILE, TILE);
     }
+  }
+
+  // White grid lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.lineWidth = 0.5;
+  for (let gx = 0; gx <= WW; gx += TILE) {
+    ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, WH); ctx.stroke();
+  }
+  for (let gy = 0; gy <= WH; gy += TILE) {
+    ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(WW, gy); ctx.stroke();
   }
 
   // Dirt patches
   ctx.fillStyle = 'rgba(139,90,43,0.18)';
   for (let i = 0; i < 30; i++) {
-    // Deterministic fake patches
     const px = ((i * 317 + 131) % WW);
     const py = ((i * 491 + 237) % WH);
     ctx.beginPath(); ctx.ellipse(px, py, 40, 28, i * 0.3, 0, Math.PI*2); ctx.fill();
@@ -806,7 +1035,18 @@ function draw() {
 
   // Resources
   for (const res of resources) {
-    if (res.hp <= 0) continue;
+    if (res.hp <= 0) {
+      // Show regrow timer as a faint stump/outline
+      if (res.respawnTimer > 0) {
+        const frac = 1 - res.respawnTimer / 60;
+        ctx.globalAlpha = 0.25 + frac * 0.4;
+        if (res.type === RES_TREE) drawTree(res);
+        else if (res.type === RES_ROCK) drawRock(res);
+        else drawMetal(res);
+        ctx.globalAlpha = 1;
+      }
+      continue;
+    }
     if (res.type === RES_TREE)  drawTree(res);
     else if (res.type === RES_ROCK)  drawRock(res);
     else drawMetal(res);
@@ -843,7 +1083,7 @@ function draw() {
 
   ctx.restore();
 
-  // ── HUD (screen space) ──────────────────────────────────────────────────────
+  // HUD (screen space)
   drawHUD();
 }
 
@@ -861,7 +1101,6 @@ function drawHUD() {
   ctx.fillStyle = player.hp / player.maxHp > 0.5 ? '#e74c3c' : player.hp / player.maxHp > 0.25 ? '#e67e22' : '#c0392b';
   ctx.fillRect(14, 32, 140 * clamp(player.hp / player.maxHp, 0, 1), 10);
 
-  // Inventory
   ctx.font = 'bold 13px Segoe UI';
   ctx.fillStyle = '#fff';
   ctx.fillText('🪵' + player.inv.wood + '  🪨' + player.inv.stone + '  ⚙️' + player.inv.metal, 12, 54);
@@ -876,6 +1115,20 @@ function drawHUD() {
   ctx.beginPath(); ctx.roundRect(CW/2 - wm/2 - 12, 8, wm + 24, 32, 8); ctx.fill();
   ctx.fillStyle = waveActive ? '#ffe066' : '#cef';
   ctx.fillText(waveText, CW/2 - wm/2, 29);
+
+  // Skip button (between waves only)
+  if (!waveActive) {
+    const sb = SKIP_BTN;
+    ctx.fillStyle = 'rgba(39,120,60,0.85)';
+    ctx.beginPath(); ctx.roundRect(sb.x, sb.y, sb.w, sb.h, 6); ctx.fill();
+    ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(sb.x, sb.y, sb.w, sb.h, 6); ctx.stroke();
+    ctx.font = 'bold 11px Segoe UI';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.fillText('Skip ▶', sb.x + sb.w / 2, sb.y + 15);
+    ctx.textAlign = 'left';
+  }
 
   // Build panel top-right
   if (buildMode) {
@@ -904,6 +1157,41 @@ function drawHUD() {
     ctx.fillStyle = 'rgba(255,255,255,0.65)';
     ctx.fillText('[B] build mode', CW - 133, 26);
   }
+
+  // ── Spear upgrade button (bottom-right) ──────────────────────────────────
+  const ub = UPGRADE_BTN;
+  const maxed = player.spearLevel >= 5;
+  const canUp = canAffordSpearUpgrade();
+
+  ctx.fillStyle = maxed
+    ? 'rgba(80,80,80,0.7)'
+    : canUp
+      ? 'rgba(39,120,60,0.85)'
+      : 'rgba(0,0,0,0.6)';
+  ctx.beginPath(); ctx.roundRect(ub.x, ub.y, ub.w, ub.h, 8); ctx.fill();
+  if (canUp && !maxed) {
+    ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(ub.x, ub.y, ub.w, ub.h, 8); ctx.stroke();
+  }
+
+  ctx.font = 'bold 12px Segoe UI';
+  ctx.fillStyle = '#fff';
+  if (maxed) {
+    ctx.fillText('⚔️ Spear MAX (Lv5)', ub.x + 8, ub.y + 20);
+    ctx.font = '11px Segoe UI';
+    ctx.fillStyle = '#ffe066';
+    ctx.fillText('DMG: ' + (25 + 5*10) + '  Harvest: ' + (1+5) + 'x', ub.x + 8, ub.y + 38);
+  } else {
+    const c = spearUpgradeCost();
+    ctx.fillText('⚔️ Spear Lv' + player.spearLevel + '->' + (player.spearLevel+1), ub.x + 8, ub.y + 18);
+    ctx.font = '11px Segoe UI';
+    ctx.fillStyle = canUp ? '#cfc' : '#f88';
+    ctx.fillText('Cost: ' + c.wood + '🪵 ' + c.stone + '🪨 ' + c.metal + '⚙️', ub.x + 8, ub.y + 34);
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    const nextDmg = 25 + (player.spearLevel + 1) * 10;
+    const nextHarv = 1 + (player.spearLevel + 1);
+    ctx.fillText('DMG ' + (25 + player.spearLevel*10) + '->' + nextDmg + '  Hvst ' + (1+player.spearLevel) + 'x->' + nextHarv + 'x', ub.x + 8, ub.y + 50);
+  }
 }
 
 // ── Game over ─────────────────────────────────────────────────────────────────
@@ -929,7 +1217,6 @@ function loop(ts) {
     update(dt);
     draw();
   }
-  // Clear per-frame inputs
   for (const k in justPressed) delete justPressed[k];
   mouse.clicked = false;
   requestAnimationFrame(loop);
@@ -943,7 +1230,6 @@ function startGame() {
 
 document.getElementById('startBtn').addEventListener('click', startGame);
 
-// Kick off render loop immediately (shows nothing until game starts)
 requestAnimationFrame(ts => { lastTime = ts; requestAnimationFrame(loop); });
 </script>
 </body>
