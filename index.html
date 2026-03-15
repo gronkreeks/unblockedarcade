@@ -218,82 +218,43 @@
       border: 2px solid rgba(255,255,255,0.3);
     }
 
-    /* ── Sidebar ad panels ── */
-    .ad-panel {
-      flex-shrink: 0;
-      width: 160px;
-      /* Wooden pinboard border */
-      background: #5a3a1a;
-      border-radius: 14px;
-      padding: 10px;
-      box-shadow:
-        0 0 0 3px #3d2508,
-        0 0 0 5px #7a4e22,
-        0 4px 18px rgba(0,0,0,0.45);
-      /* Subtle wood grain lines */
-      background-image:
-        linear-gradient(
-          180deg,
-          rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px,
-          transparent 1px, transparent 6px
-        ),
-        linear-gradient(#5a3a1a, #5a3a1a);
-      background-size: 100% 6px, 100% 100%;
-      position: sticky;
-      top: 1.5rem;
+    .card-recommended {
+      outline: 3px solid #ffd700;
+      outline-offset: 2px;
+      box-shadow: 0 0 0 3px #ffd700, 0 6px 20px rgba(39,174,96,0.45);
     }
-
-    /* Nail heads at corners of the board */
-    .ad-panel::before, .ad-panel::after {
-      content: '';
-      position: absolute;
-      width: 9px; height: 9px;
-      border-radius: 50%;
-      background: radial-gradient(circle at 35% 35%, #ccc, #666);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.5);
-    }
-    .ad-panel::before { top: 7px; left: 7px; }
-    .ad-panel::after  { top: 7px; right: 7px; }
-
-    /* The actual ad slot inside the board */
-    .ad-slot {
-      width: 140px;
-      height: 600px;
-      background: rgba(0,0,0,0.22);
-      border-radius: 8px;
-      border: 1.5px solid rgba(255,255,255,0.08);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-      color: rgba(255,255,255,0.2);
-      font-size: 0.6rem;
-      font-weight: 700;
-      letter-spacing: 2px;
+    .badge-mobile {
+      display: inline-block;
+      margin-top: 0.4rem;
+      margin-left: 0.3rem;
+      padding: 0.18rem 0.6rem;
+      border-radius: 50px;
+      font-size: 0.58rem;
+      font-weight: 900;
+      letter-spacing: 1px;
       text-transform: uppercase;
-      position: relative;
-      overflow: hidden;
-    }
-    .ad-slot::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(160deg, rgba(255,255,255,0.04) 0%, transparent 55%);
-      pointer-events: none;
-      border-radius: 8px;
-    }
-    .ad-label {
-      font-size: 0.5rem;
-      letter-spacing: 2px;
-      color: rgba(255,255,255,0.18);
-      font-weight: 700;
-      text-transform: uppercase;
-      margin-bottom: 0.3rem;
+      background: rgba(255,255,255,0.18);
+      border: 1.5px solid rgba(255,255,255,0.5);
+      color: #fff;
+      vertical-align: middle;
     }
 
-    /* Hide side ads on narrow screens */
-    @media (max-width: 900px) { .ad-panel { display: none; } }
+    .card-recommended::before {
+      content: '★ Recommended';
+      position: absolute;
+      top: 8px; left: 50%;
+      transform: translateX(-50%);
+      background: #ffd700;
+      color: #1a1a1a;
+      font-size: 0.55rem;
+      font-weight: 900;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 20px;
+      white-space: nowrap;
+      z-index: 2;
+    }
   </style>
 </head>
 <body>
@@ -311,14 +272,6 @@
 
   <div class="ground">
 
-    <!-- Left ad panel -->
-    <div class="ad-panel">
-      <div class="ad-slot">
-        <span class="ad-label">Ad</span>
-        <!-- Google AdSense tag goes here -->
-      </div>
-    </div>
-
     <!-- Centre: section label + game grid -->
     <div class="ground-main">
       <p class="section-label">2 Player Games</p>
@@ -334,6 +287,7 @@
           <span class="icon">⚔️</span>
           <div class="card-title">Battle</div>
           <span class="badge">2 Players</span>
+          <span class="badge-mobile">📱 Mobile</span>
         </a>
 
         <a class="card card-tag" href="sniper.html" style="background:linear-gradient(160deg,#27ae60,#1e8449);box-shadow:0 6px 20px rgba(39,174,96,0.45)">
@@ -352,6 +306,7 @@
           <span class="icon">♟</span>
           <div class="card-title">Chess</div>
           <span class="badge">2 Players</span>
+          <span class="badge-mobile">📱 Mobile</span>
         </a>
 
         <!-- Add more 2-player cards here -->
@@ -361,7 +316,7 @@
       <p class="section-label" style="margin-top:2.5rem;">Singleplayer Games</p>
       <div class="grid">
 
-        <a class="card card-tag" href="survive.html" style="background:linear-gradient(160deg,#27ae60,#145a32);box-shadow:0 6px 20px rgba(39,174,96,0.45)">
+        <a class="card card-tag card-recommended" href="survive.html" style="background:linear-gradient(160deg,#27ae60,#145a32)">
           <span class="icon">🧟</span>
           <div class="card-title">Survive</div>
           <span class="badge">1 Player</span>
@@ -369,14 +324,6 @@
 
         <!-- Add more singleplayer cards here -->
 
-      </div>
-    </div>
-
-    <!-- Right ad panel -->
-    <div class="ad-panel">
-      <div class="ad-slot">
-        <span class="ad-label">Ad</span>
-        <!-- Google AdSense tag goes here -->
       </div>
     </div>
 

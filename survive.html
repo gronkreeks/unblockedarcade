@@ -181,7 +181,7 @@ function spawnParticles(x, y, col, n) {
 let gameRunning = false;
 let player, cam, resources, blocks, zombies, bullets;
 let waveNum, waveTimer, waveActive, zombiesLeft, spawnTimer, spawnQueue, bossQueue;
-let buildMode, selectedBlock;
+let buildMode, selectedBlock, buildAction;
 
 // ── Resource definitions ─────────────────────────────────────────────────────
 const RES_TREE  = 0;
@@ -189,14 +189,18 @@ const RES_ROCK  = 1;
 const RES_METAL = 2;
 
 // ── Block definitions ─────────────────────────────────────────────────────────
-const BLK_WOOD  = 0;
-const BLK_STONE = 1;
+const BLK_WOOD   = 0;
+const BLK_STONE  = 1;
 const BLK_TURRET = 2;
+const BLK_METAL  = 3;
+const BLK_GATE   = 4;
 
 const BLOCK_DEFS = [
-  { name:'Wood Wall',   cost:{ wood:4 },  hp:80,  col:'#8B5E3C', accent:'#6b4323' },
-  { name:'Stone Wall',  cost:{ stone:4 }, hp:220, col:'#888',    accent:'#555' },
-  { name:'Turret',      cost:{ metal:10 },hp:150, col:'#5a7fa8', accent:'#3a5f88' },
+  { name:'Wood Wall',   cost:{ wood:4 },   hp:180,  col:'#8B5E3C', accent:'#6b4323' },
+  { name:'Stone Wall',  cost:{ stone:4 },  hp:480,  col:'#888',    accent:'#555' },
+  { name:'Turret',      cost:{ metal:10 }, hp:200,  col:'#5a7fa8', accent:'#3a5f88' },
+  { name:'Metal Wall',  cost:{ metal:6 },  hp:950,  col:'#607d8b', accent:'#37474f' },
+  { name:'Gate',        cost:{ wood:3 },   hp:220,  col:'#7a5230', accent:'#4e3218', walkable:true },
 ];
 
 // ── Spear upgrade ─────────────────────────────────────────────────────────────
@@ -245,6 +249,7 @@ function initGame() {
   bossQueue = 0;
   buildMode = false;
   selectedBlock = 0;
+  buildAction = 'place';
 
   // Spawn resources avoiding 250px center radius
   const cx = WW / 2, cy = WH / 2;
@@ -366,6 +371,7 @@ function blockRect(blk) {
 function resolvePlayerBlocks() {
   for (const blk of blocks) {
     if (blk.hp <= 0) continue;
+    if (BLOCK_DEFS[blk.type].walkable) continue; // gates: player walks through
     const r = blockRect(blk);
     const push = pushOutCircleRect(player.x, player.y, player.r, r.x, r.y, r.w, r.h);
     if (push) { player.x += push.dx; player.y += push.dy; }
@@ -380,7 +386,8 @@ function doAttack() {
   const sx2 = player.x + Math.cos(ang) * 65;
   const sy2 = player.y + Math.sin(ang) * 65;
 
-  const resDmg = 1 + player.spearLevel;
+  const resDmg = 1 + player.spearLevel; // levels 1-5 all improve hit speed
+  const yieldBonus = Math.max(0, player.spearLevel - 3); // levels 4-5 boost yield
   for (const res of resources) {
     if (res.hp <= 0) continue;
     const cp = closestPointOnSeg(res.x, res.y, sx1, sy1, sx2, sy2);
@@ -389,11 +396,11 @@ function doAttack() {
       res.damaged = true;
       spawnParticles(res.x, res.y, [res.type===0?'#4a8c2a':res.type===1?'#aaa':'#7a9fc0'][0], 5);
       if (res.hp <= 0) {
-        if (res.type === RES_TREE)  player.inv.wood  += 3;
-        if (res.type === RES_ROCK)  player.inv.stone += 2;
-        if (res.type === RES_METAL) player.inv.metal += 2;
+        if (res.type === RES_TREE)  player.inv.wood  += 3 + yieldBonus;
+        if (res.type === RES_ROCK)  player.inv.stone += 2 + yieldBonus;
+        if (res.type === RES_METAL) player.inv.metal += 2 + yieldBonus;
         spawnParticles(res.x, res.y, '#ffe066', 10);
-        res.respawnTimer = 60; // regrow after 60s
+        res.respawnTimer = 60;
       }
     }
   }
@@ -423,6 +430,49 @@ function spendBlock(type) {
   if (cost.metal) player.inv.metal -= cost.metal;
 }
 
+// ── Build helpers: repair / delete ────────────────────────────────────────────
+function blockAtMouse() {
+  for (const b of blocks) {
+    if (b.hp > 0 && Math.abs(b.x - mouse.wx) < TILE / 2 && Math.abs(b.y - mouse.wy) < TILE / 2) return b;
+  }
+  return null;
+}
+
+function repairCost(blk) {
+  const ratio = 1 - blk.hp / blk.maxHp;
+  if (ratio <= 0) return null;
+  const c = {};
+  for (const [res, amt] of Object.entries(BLOCK_DEFS[blk.type].cost)) {
+    c[res] = Math.max(1, Math.floor(amt * ratio * 0.75));
+  }
+  return c;
+}
+
+function canAffordRepair(blk) {
+  const c = repairCost(blk);
+  if (!c) return false;
+  for (const [res, amt] of Object.entries(c)) {
+    if ((player.inv[res] || 0) < amt) return false;
+  }
+  return true;
+}
+
+function doRepair(blk) {
+  const c = repairCost(blk);
+  if (!c) return;
+  for (const [res, amt] of Object.entries(c)) player.inv[res] -= amt;
+  blk.hp = blk.maxHp;
+  spawnParticles(blk.x, blk.y, '#88ff88', 14);
+}
+
+function doDelete(blk) {
+  const def = BLOCK_DEFS[blk.type];
+  for (const [res, amt] of Object.entries(def.cost))
+    player.inv[res] = (player.inv[res] || 0) + Math.floor(amt * 0.5);
+  blocks.splice(blocks.indexOf(blk), 1);
+  spawnParticles(blk.x, blk.y, '#ff8844', 14);
+}
+
 // ── Update ────────────────────────────────────────────────────────────────────
 function update(dt) {
   mouse.wx = mouse.x + cam.x;
@@ -430,9 +480,13 @@ function update(dt) {
 
   // Build mode toggle
   if (justPressed['KeyB']) buildMode = !buildMode;
-  if (justPressed['Digit1']) selectedBlock = 0;
-  if (justPressed['Digit2']) selectedBlock = 1;
-  if (justPressed['Digit3']) selectedBlock = 2;
+  if (justPressed['Digit1']) { selectedBlock = 0; buildAction = 'place'; }
+  if (justPressed['Digit2']) { selectedBlock = 1; buildAction = 'place'; }
+  if (justPressed['Digit3']) { selectedBlock = 2; buildAction = 'place'; }
+  if (justPressed['Digit4']) { selectedBlock = 3; buildAction = 'place'; }
+  if (justPressed['Digit5']) { selectedBlock = 4; buildAction = 'place'; }
+  if (buildMode && justPressed['KeyR']) buildAction = 'repair';
+  if (buildMode && justPressed['KeyX']) buildAction = 'delete';
 
   // Player movement
   const spd = 2.8;
@@ -487,22 +541,26 @@ function update(dt) {
     if (player.spearSwing >= 0.55) { player.attacking = false; player.spearSwing = 0; }
   }
 
-  // Build mode placement
+  // Build mode actions
   if (buildMode && mouse.clicked && !clickedUI) {
-    const gx = Math.round(mouse.wx / TILE) * TILE;
-    const gy = Math.round(mouse.wy / TILE) * TILE;
-    let occupied = false;
-    for (const b of blocks) {
-      if (b.hp > 0 && Math.abs(b.x - gx) < 4 && Math.abs(b.y - gy) < 4) { occupied = true; break; }
-    }
-    if (!occupied && canAfford(selectedBlock)) {
-      spendBlock(selectedBlock);
-      const def = BLOCK_DEFS[selectedBlock];
-      blocks.push({
-        type: selectedBlock, x: gx, y: gy,
-        hp: def.hp, maxHp: def.hp,
-        turretAngle: 0, fireTimer: 0
-      });
+    if (buildAction === 'place') {
+      const gx = Math.floor(mouse.wx / TILE) * TILE + TILE / 2;
+      const gy = Math.floor(mouse.wy / TILE) * TILE + TILE / 2;
+      let occupied = false;
+      for (const b of blocks) {
+        if (b.hp > 0 && Math.abs(b.x - gx) < 4 && Math.abs(b.y - gy) < 4) { occupied = true; break; }
+      }
+      if (!occupied && canAfford(selectedBlock)) {
+        spendBlock(selectedBlock);
+        const def = BLOCK_DEFS[selectedBlock];
+        blocks.push({ type: selectedBlock, x: gx, y: gy, hp: def.hp, maxHp: def.hp, turretAngle: 0, fireTimer: 0 });
+      }
+    } else if (buildAction === 'repair') {
+      const blk = blockAtMouse();
+      if (blk && canAffordRepair(blk)) doRepair(blk);
+    } else if (buildAction === 'delete') {
+      const blk = blockAtMouse();
+      if (blk) doDelete(blk);
     }
   }
 
@@ -620,7 +678,7 @@ function updateZombies(dt) {
 
     if (z.blockTarget) {
       z.attackTimer += dt;
-      const blockDmg = z.type === 'boss' ? 40 : 12;
+      const blockDmg = z.type === 'boss' ? 18 : 5;
       const blockRate = z.type === 'boss' ? 0.7 : 1;
       if (z.attackTimer >= blockRate) {
         z.attackTimer = 0;
@@ -771,6 +829,45 @@ function drawBlock(blk) {
     ctx.strokeStyle = 'rgba(100,160,220,0.15)';
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(blk.x, blk.y, 300, 0, Math.PI*2); ctx.stroke();
+
+  } else if (blk.type === BLK_METAL) {
+    ctx.fillStyle = def.col;
+    ctx.fillRect(x, y, TILE, TILE);
+    ctx.strokeStyle = def.accent; ctx.lineWidth = 2;
+    // rivets at corners
+    for (const [rx, ry] of [[x+6,y+6],[x+TILE-6,y+6],[x+6,y+TILE-6],[x+TILE-6,y+TILE-6]]) {
+      ctx.beginPath(); ctx.arc(rx, ry, 3, 0, Math.PI*2); ctx.fillStyle = def.accent; ctx.fill();
+    }
+    // cross brace lines
+    ctx.strokeStyle = def.accent; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x+2, y+TILE/2); ctx.lineTo(x+TILE-2, y+TILE/2);
+    ctx.moveTo(x+TILE/2, y+2); ctx.lineTo(x+TILE/2, y+TILE-2);
+    ctx.stroke();
+    ctx.strokeStyle = '#263238'; ctx.lineWidth = 2;
+    ctx.strokeRect(x+1, y+1, TILE-2, TILE-2);
+
+  } else if (blk.type === BLK_GATE) {
+    // Draw gate as wooden bars with a gap in the middle
+    ctx.fillStyle = def.col;
+    ctx.fillRect(x, y, TILE, TILE);
+    // Vertical bars
+    ctx.fillStyle = def.accent;
+    const barW = 6, barGap = (TILE - barW * 4) / 3;
+    for (let i = 0; i < 4; i++) {
+      ctx.fillRect(x + i * (barW + barGap) + barGap * 0.5, y + 3, barW, TILE - 6);
+    }
+    // Horizontal brace
+    ctx.fillStyle = def.col;
+    ctx.fillRect(x + 2, y + TILE/2 - 4, TILE - 4, 8);
+    ctx.strokeStyle = '#2c1a08'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(x+1, y+1, TILE-2, TILE-2);
+    // Gate label
+    ctx.font = 'bold 9px Segoe UI';
+    ctx.fillStyle = 'rgba(255,220,160,0.8)';
+    ctx.textAlign = 'center';
+    ctx.fillText('GATE', blk.x, blk.y + 3);
+    ctx.textAlign = 'left';
   }
 
   if (blk.hp < blk.maxHp) drawHpBar(blk.x, blk.y - TILE/2 - 8, blk.hp, blk.maxHp, TILE - 4);
@@ -1021,16 +1118,38 @@ function draw() {
     ctx.beginPath(); ctx.ellipse(px, py, 40, 28, i * 0.3, 0, Math.PI*2); ctx.fill();
   }
 
-  // Grid ghost in build mode
+  // Cursor highlight in build mode
   if (buildMode) {
-    const gx = Math.round(mouse.wx / TILE) * TILE;
-    const gy = Math.round(mouse.wy / TILE) * TILE;
-    const affordable = canAfford(selectedBlock);
-    ctx.fillStyle = affordable ? 'rgba(255,255,255,0.15)' : 'rgba(255,0,0,0.15)';
-    ctx.fillRect(gx - TILE/2, gy - TILE/2, TILE, TILE);
-    ctx.strokeStyle = affordable ? 'rgba(255,255,255,0.5)' : 'rgba(255,0,0,0.5)';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(gx - TILE/2, gy - TILE/2, TILE, TILE);
+    const gx = Math.floor(mouse.wx / TILE) * TILE + TILE / 2;
+    const gy = Math.floor(mouse.wy / TILE) * TILE + TILE / 2;
+    if (buildAction === 'place') {
+      const affordable = canAfford(selectedBlock);
+      ctx.fillStyle = affordable ? 'rgba(255,255,255,0.15)' : 'rgba(255,0,0,0.15)';
+      ctx.fillRect(gx - TILE/2, gy - TILE/2, TILE, TILE);
+      ctx.strokeStyle = affordable ? 'rgba(255,255,255,0.5)' : 'rgba(255,0,0,0.5)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(gx - TILE/2, gy - TILE/2, TILE, TILE);
+    } else {
+      const blk = blockAtMouse();
+      if (blk) {
+        const col = buildAction === 'repair' ? 'rgba(100,255,120,0.35)' : 'rgba(255,90,40,0.35)';
+        const border = buildAction === 'repair' ? 'rgba(100,255,120,0.9)' : 'rgba(255,90,40,0.9)';
+        ctx.fillStyle = col;
+        ctx.fillRect(blk.x - TILE/2, blk.y - TILE/2, TILE, TILE);
+        ctx.strokeStyle = border; ctx.lineWidth = 2;
+        ctx.strokeRect(blk.x - TILE/2, blk.y - TILE/2, TILE, TILE);
+        // Show repair cost tooltip
+        if (buildAction === 'repair') {
+          const c = repairCost(blk);
+          const tip = c ? Object.entries(c).map(([r,a]) => a + {wood:'\uD83E\uDEB5',stone:'\uD83E\uDEA8',metal:'\u2699\uFE0F'}[r]).join(' ') : 'Full HP';
+          ctx.font = 'bold 11px Segoe UI';
+          ctx.fillStyle = '#000';
+          ctx.fillText(tip, blk.x - TILE/2 + 3, blk.y - TILE/2 - 5);
+          ctx.fillStyle = '#88ff88';
+          ctx.fillText(tip, blk.x - TILE/2 + 2, blk.y - TILE/2 - 6);
+        }
+      }
+    }
   }
 
   // Resources
@@ -1132,23 +1251,64 @@ function drawHUD() {
 
   // Build panel top-right
   if (buildMode) {
-    const px = CW - 200, py = 8;
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.beginPath(); ctx.roundRect(px, py, 192, 120, 8); ctx.fill();
+    const px = CW - 214, py = 8;
+    const panelH = buildAction === 'place' ? 210 : 92;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.beginPath(); ctx.roundRect(px, py, 206, panelH, 8); ctx.fill();
+
+    // Title row
     ctx.font = 'bold 12px Segoe UI';
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
     ctx.fillText('BUILD MODE  [B] exit', px + 8, py + 16);
-    const bnames = ['1 Wood Wall (4🪵)','2 Stone Wall (4🪨)','3 Turret (10⚙️)'];
-    for (let i = 0; i < 3; i++) {
-      const by = py + 26 + i * 30;
-      const sel = selectedBlock === i;
-      const aff = canAfford(i);
-      ctx.fillStyle = sel ? 'rgba(255,255,200,0.2)' : 'transparent';
-      ctx.beginPath(); ctx.roundRect(px+4, by, 184, 24, 5); ctx.fill();
-      if (sel) { ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.roundRect(px+4, by, 184, 24, 5); ctx.stroke(); }
-      ctx.fillStyle = aff ? '#fff' : '#f88';
-      ctx.font = (sel ? 'bold' : '') + ' 12px Segoe UI';
-      ctx.fillText(bnames[i], px + 12, by + 16);
+
+    // Action tabs
+    const tabs = [['place','PLACE','#ffe066'],['repair','REPAIR','#88ff88'],['delete','DELETE','#ff7755']];
+    let tx = px + 8;
+    for (const [act, label, col] of tabs) {
+      const tw = 56;
+      const active = buildAction === act;
+      ctx.fillStyle = active ? col : 'rgba(255,255,255,0.12)';
+      ctx.beginPath(); ctx.roundRect(tx, py + 22, tw, 18, 4); ctx.fill();
+      ctx.font = 'bold 9px Segoe UI';
+      ctx.fillStyle = active ? '#111' : 'rgba(255,255,255,0.5)';
+      ctx.fillText(label, tx + 4, py + 34);
+      tx += tw + 4;
+    }
+    ctx.font = '9px Segoe UI';
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fillText('[R] repair  [X] delete  1-5 place', px + 8, py + 52);
+
+    if (buildAction === 'place') {
+      const bnames = [
+        '1 Wood Wall (4\uD83E\uDEB5)',
+        '2 Stone Wall (4\uD83E\uDEA8)',
+        '3 Turret (10\u2699\uFE0F)',
+        '4 Metal Wall (6\u2699\uFE0F)',
+        '5 Gate (3\uD83E\uDEB5)',
+      ];
+      for (let i = 0; i < BLOCK_DEFS.length; i++) {
+        const by = py + 58 + i * 28;
+        const sel = selectedBlock === i && buildAction === 'place';
+        const aff = canAfford(i);
+        ctx.fillStyle = sel ? 'rgba(255,255,200,0.18)' : 'transparent';
+        ctx.beginPath(); ctx.roundRect(px+4, by, 198, 23, 5); ctx.fill();
+        if (sel) { ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.roundRect(px+4, by, 198, 23, 5); ctx.stroke(); }
+        ctx.fillStyle = aff ? '#fff' : '#f88';
+        ctx.font = (sel ? 'bold ' : '') + '11px Segoe UI';
+        ctx.fillText(bnames[i], px + 12, by + 16);
+      }
+    } else if (buildAction === 'repair') {
+      ctx.font = '11px Segoe UI';
+      ctx.fillStyle = 'rgba(255,255,255,0.65)';
+      ctx.fillText('Click a damaged block to repair it.', px + 8, py + 68);
+      ctx.fillStyle = 'rgba(136,255,136,0.8)';
+      ctx.fillText('Cost: ~75% of missing HP value', px + 8, py + 84);
+    } else if (buildAction === 'delete') {
+      ctx.font = '11px Segoe UI';
+      ctx.fillStyle = 'rgba(255,255,255,0.65)';
+      ctx.fillText('Click a block to demolish it.', px + 8, py + 68);
+      ctx.fillStyle = 'rgba(255,180,120,0.8)';
+      ctx.fillText('Refunds 50% of build cost.', px + 8, py + 84);
     }
   } else {
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
@@ -1177,20 +1337,23 @@ function drawHUD() {
   ctx.font = 'bold 12px Segoe UI';
   ctx.fillStyle = '#fff';
   if (maxed) {
-    ctx.fillText('⚔️ Spear MAX (Lv5)', ub.x + 8, ub.y + 20);
+    ctx.fillText('\u2694\uFE0F Spear MAX (Lv5)', ub.x + 8, ub.y + 20);
     ctx.font = '11px Segoe UI';
     ctx.fillStyle = '#ffe066';
-    ctx.fillText('DMG: ' + (25 + 5*10) + '  Harvest: ' + (1+5) + 'x', ub.x + 8, ub.y + 38);
+    ctx.fillText('DMG: ' + (25+5*10) + '  Spd: ' + (1+5) + 'x  Yield: +' + Math.max(0,5-3), ub.x + 8, ub.y + 38);
   } else {
     const c = spearUpgradeCost();
-    ctx.fillText('⚔️ Spear Lv' + player.spearLevel + '->' + (player.spearLevel+1), ub.x + 8, ub.y + 18);
+    const nextLvl = player.spearLevel + 1;
+    ctx.fillText('\u2694\uFE0F Spear Lv' + player.spearLevel + '->' + nextLvl, ub.x + 8, ub.y + 18);
     ctx.font = '11px Segoe UI';
     ctx.fillStyle = canUp ? '#cfc' : '#f88';
-    ctx.fillText('Cost: ' + c.wood + '🪵 ' + c.stone + '🪨 ' + c.metal + '⚙️', ub.x + 8, ub.y + 34);
+    ctx.fillText('Cost: ' + c.wood + '\uD83E\uDEB5 ' + c.stone + '\uD83E\uDEA8 ' + c.metal + '\u2699\uFE0F', ub.x + 8, ub.y + 34);
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    const nextDmg = 25 + (player.spearLevel + 1) * 10;
-    const nextHarv = 1 + (player.spearLevel + 1);
-    ctx.fillText('DMG ' + (25 + player.spearLevel*10) + '->' + nextDmg + '  Hvst ' + (1+player.spearLevel) + 'x->' + nextHarv + 'x', ub.x + 8, ub.y + 50);
+    const nextDmg  = 25 + nextLvl * 10;
+    const curYield = Math.max(0, player.spearLevel - 3);
+    const nextYield = Math.max(0, nextLvl - 3);
+    const yieldStr = nextLvl >= 4 ? '  Yield +' + curYield + '->' + '+' + nextYield : '';
+    ctx.fillText('DMG ' + (25+player.spearLevel*10) + '->' + nextDmg + '  Spd ' + (1+player.spearLevel) + 'x->' + (1+nextLvl) + 'x' + yieldStr, ub.x + 8, ub.y + 50);
   }
 }
 
