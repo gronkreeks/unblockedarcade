@@ -5,6 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Arcade</title>
   <link rel="icon" href="favicon.ico">
+
+  <!-- Open Graph / Discord / iMessage embed -->
+  <meta property="og:type"        content="website">
+  <meta property="og:url"         content="https://unblockedarcade.org/">
+  <meta property="og:title"       content="Unblocked Arcade">
+  <meta property="og:description" content="Free multiplayer and singleplayer browser games. No downloads, no login — just play.">
+  <meta property="og:image"       content="https://unblockedarcade.org/embed.png">
+
+  <!-- Twitter / X card -->
+  <meta name="twitter:card"        content="summary_large_image">
+  <meta name="twitter:title"       content="Unblocked Arcade">
+  <meta name="twitter:description" content="Free multiplayer and singleplayer browser games. No downloads, no login — just play.">
+  <meta name="twitter:image"       content="https://unblockedarcade.org/embed.png">
   <!-- Google AdSense -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9603713606760464" crossorigin="anonymous"></script>
   <style>
@@ -168,6 +181,9 @@
       overflow: hidden;
       cursor: pointer;
       border-bottom: 5px solid rgba(0,0,0,0.2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
     .card::after {
       content: '';
@@ -209,7 +225,8 @@
 
     .badge {
       display: inline-block;
-      margin-top: 1rem;
+      margin-top: auto;
+      padding-top: 1rem;
       padding: 0.25rem 0.9rem;
       border-radius: 50px;
       font-size: 0.65rem;

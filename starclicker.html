@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Star Clicker</title>
+  <link rel="icon" href="favicon.ico">
   <!-- Google AdSense -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9603713606760464" crossorigin="anonymous"></script>
   <style>
@@ -49,12 +50,46 @@
 
     .main { position:relative; z-index:1; display:flex; flex:1; overflow:hidden; }
 
+    /* ── Panel close/toggle arrow buttons ── */
+    .panel-arrow {
+      flex-shrink:0; display:flex; align-items:center; justify-content:center;
+      padding:0.3rem; border-bottom:1px solid var(--bdr);
+      background:transparent;
+    }
+    .panel-arrow button {
+      background:rgba(255,255,255,0.07); border:1px solid var(--bdr);
+      color:var(--txt); font-size:1rem; cursor:pointer; border-radius:6px;
+      padding:0.1rem 0.5rem; line-height:1.5; transition:background 0.1s;
+      font-weight:900;
+    }
+    .panel-arrow button:hover { background:rgba(255,255,255,0.18); }
+    /* Stats arrow sits on the right side of the arrow bar */
+    #stats .panel-arrow { justify-content:flex-end; }
+    /* Shop arrow sits on the left side */
+    #shop .panel-arrow  { justify-content:flex-start; }
+
+    /* Header toggle buttons (hidden on desktop by default, reopen collapsed panels) */
+    .hbtn-tog {
+      background:rgba(255,255,255,0.07); border:1px solid var(--bdr);
+      color:var(--txt); padding:0.2rem 0.55rem; border-radius:6px;
+      font-size:0.85rem; cursor:pointer; font-weight:700; display:none;
+      transition:background 0.1s;
+    }
+    .hbtn-tog:hover { background:rgba(255,255,255,0.18); }
+    .hbtn-tog.visible { display:block; }
+
     /* ── Left stats ── */
     #stats {
       width:205px; flex-shrink:0;
       background:var(--panel); border-right:1px solid var(--bdr);
+      display:flex; flex-direction:column; gap:0;
+      overflow:hidden;
+      transition:width 0.22s ease, border-color 0.22s ease;
+    }
+    #stats.closed { width:0; border-right-color:transparent; }
+    .stats-inner {
       padding:0.75rem 0.65rem; display:flex; flex-direction:column; gap:0.6rem;
-      overflow-y:auto;
+      overflow-y:auto; flex:1; min-width:205px;
     }
     .st-row { border-bottom:1px solid var(--bdr); padding-bottom:0.5rem; }
     .st-v { font-size:1.2rem; font-weight:900; color:var(--gold); }
@@ -83,6 +118,7 @@
       font-size:8rem; line-height:1; cursor:pointer;
       filter:drop-shadow(0 0 28px rgba(255,215,0,0.5));
       transition:transform 0.07s, filter 0.07s;
+      touch-action:manipulation;
     }
     #star:active { transform:scale(0.88); filter:drop-shadow(0 0 65px rgba(255,215,0,1)); }
     #star:hover  { filter:drop-shadow(0 0 48px rgba(255,215,0,0.85)); }
@@ -91,6 +127,7 @@
       position:absolute; font-size:3.5rem; cursor:pointer; display:none; z-index:5;
       animation:gPulse 0.85s ease-in-out infinite;
       filter:drop-shadow(0 0 18px gold) drop-shadow(0 0 5px #fff);
+      touch-action:manipulation;
     }
     @keyframes gPulse { 0%,100%{transform:scale(1) rotate(-5deg)} 50%{transform:scale(1.18) rotate(5deg)} }
 
@@ -107,8 +144,11 @@
     #shop {
       width:290px; flex-shrink:0;
       background:var(--panel); border-left:1px solid var(--bdr);
-      overflow-y:auto; display:flex; flex-direction:column;
+      display:flex; flex-direction:column; overflow:hidden;
+      transition:width 0.22s ease, border-color 0.22s ease;
     }
+    #shop.closed { width:0; border-left-color:transparent; }
+    .shop-inner { display:flex; flex-direction:column; flex:1; overflow-y:auto; min-width:290px; }
     .sh-hd {
       font-size:0.62rem; font-weight:900; letter-spacing:2px; text-transform:uppercase;
       color:var(--dim); padding:0.45rem 0.65rem 0.2rem;
@@ -145,6 +185,58 @@
     ::-webkit-scrollbar { width:4px; }
     ::-webkit-scrollbar-thumb { background:var(--bdr); border-radius:2px; }
 
+    /* ── Mobile backdrop ── */
+    #mob-bd {
+      display:none; position:fixed; inset:0;
+      background:rgba(0,0,0,0.55); z-index:18;
+    }
+    #mob-bd.show { display:block; }
+
+    /* ── Mobile layout ── */
+    @media (max-width:680px) {
+      body { overflow:hidden; }
+
+      /* Star bigger & centered */
+      #star { font-size:9rem; }
+      #hint { font-size:0.72rem; }
+
+      /* Panels become fixed overlays, slide in/out */
+      #stats {
+        position:fixed; left:0; top:0; bottom:0; z-index:20;
+        width:82vw; max-width:280px;
+        transform:translateX(-110%);
+        transition:transform 0.24s ease;
+        border-right:1px solid var(--bdr) !important;
+        /* reset desktop width-collapse */
+        width:82vw !important;
+      }
+      #stats.open   { transform:translateX(0); }
+      #stats.closed { transform:translateX(-110%); width:82vw !important; }
+
+      #shop {
+        position:fixed; right:0; top:0; bottom:0; z-index:20;
+        width:86vw; max-width:300px;
+        transform:translateX(110%);
+        transition:transform 0.24s ease;
+        border-left:1px solid var(--bdr) !important;
+        width:86vw !important;
+      }
+      #shop.open   { transform:translateX(0); }
+      #shop.closed { transform:translateX(110%); width:86vw !important; }
+
+      /* stats-inner / shop-inner: full width on mobile */
+      .stats-inner { min-width:0; width:100%; }
+      .shop-inner  { min-width:0; width:100%; }
+
+      /* Show header toggles */
+      .hbtn-tog { display:block !important; }
+
+      /* Compact header */
+      header { padding:0.3rem 0.5rem; gap:0.3rem; }
+      .title { font-size:0.85rem; letter-spacing:2px; }
+      .hbtns { gap:0.25rem; }
+      .hbtn  { padding:0.2rem 0.4rem; font-size:0.65rem; }
+    }
   </style>
 </head>
 <body>
@@ -152,30 +244,45 @@
 <canvas id="bg"></canvas>
 
 <header>
-  <a href="index.html" class="back">← Arcade</a>
+  <div style="display:flex;align-items:center;gap:0.4rem">
+    <button class="hbtn-tog" id="tog-stats" onclick="toggleStats()" title="Toggle stats">📊</button>
+    <a href="index.html" class="back">← Arcade</a>
+  </div>
   <div class="title">⭐ STAR CLICKER</div>
-  <div class="hbtns">
-    <button class="hbtn" onclick="saveGame()">💾 Save</button>
-    <button class="hbtn" onclick="confirmReset()">🗑️ Reset</button>
+  <div style="display:flex;align-items:center;gap:0.4rem">
+    <div class="hbtns">
+      <button class="hbtn" onclick="saveGame()">💾 Save</button>
+      <button class="hbtn" onclick="confirmReset()">🗑️ Reset</button>
+    </div>
+    <button class="hbtn-tog" id="tog-shop" onclick="toggleShop()" title="Toggle shop">🏪</button>
   </div>
 </header>
+
+<!-- Mobile backdrop -->
+<div id="mob-bd" onclick="closeAllPanels()"></div>
 
 <div class="main">
 
   <div id="stats">
-    <div class="st-row"><div class="st-v" id="s-stars">0</div><div class="st-l">stars</div></div>
-    <div class="st-row"><div class="st-v" id="s-total">0</div><div class="st-l">all-time stars</div></div>
-    <div class="st-row"><div class="st-v" id="s-sps">0</div><div class="st-l">per second</div></div>
-    <div class="st-row"><div class="st-v" id="s-spc">1</div><div class="st-l">per click</div></div>
-
-    <div>
-      <div class="ms-title">⚡ Mega Clicker Milestone</div>
-      <div class="ms-count" id="s-mc">0 / 1,000 clicks</div>
-      <div class="bar"><div class="bar-f" id="s-bar" style="width:0%"></div></div>
-      <div class="ms-info" id="s-mega">Mega Clickers: 0 (×100 SPS each)</div>
+    <!-- Close arrow -->
+    <div class="panel-arrow">
+      <button onclick="toggleStats()" title="Close stats">›</button>
     </div>
+    <div class="stats-inner">
+      <div class="st-row"><div class="st-v" id="s-stars">0</div><div class="st-l">stars</div></div>
+      <div class="st-row"><div class="st-v" id="s-total">0</div><div class="st-l">all-time stars</div></div>
+      <div class="st-row"><div class="st-v" id="s-sps">0</div><div class="st-l">per second</div></div>
+      <div class="st-row"><div class="st-v" id="s-spc">1</div><div class="st-l">per click</div></div>
 
-    <div class="notif-wrap" id="notifs"></div>
+      <div>
+        <div class="ms-title">⚡ Mega Clicker Milestone</div>
+        <div class="ms-count" id="s-mc">0 / 1,000 clicks</div>
+        <div class="bar"><div class="bar-f" id="s-bar" style="width:0%"></div></div>
+        <div class="ms-info" id="s-mega">Mega Clickers: 0 (×100 SPS each)</div>
+      </div>
+
+      <div class="notif-wrap" id="notifs"></div>
+    </div>
   </div>
 
   <div id="center">
@@ -185,16 +292,21 @@
   </div>
 
   <div id="shop">
-    <div id="upg-sec" style="display:none">
-      <div class="sh-hd">⬆ Upgrades</div>
-      <div id="upg-list"></div>
+    <!-- Close arrow -->
+    <div class="panel-arrow">
+      <button onclick="toggleShop()" title="Close shop">‹</button>
     </div>
-    <div>
-      <div class="sh-hd">🏗 Buildings</div>
-      <div id="bld-list"></div>
+    <div class="shop-inner">
+      <div id="upg-sec" style="display:none">
+        <div class="sh-hd">⬆ Upgrades</div>
+        <div id="upg-list"></div>
+      </div>
+      <div>
+        <div class="sh-hd">🏗 Buildings</div>
+        <div id="bld-list"></div>
+      </div>
     </div>
   </div>
-
 
 </div>
 
@@ -217,17 +329,17 @@
 
 // ── Building definitions (11 items) ──────────────────────────────────────────
 const BLDS = [
-  { name:'Cursor',        e:'🖱️',  base:15,        sps:0.1,   desc:'Auto-clicks the star for you.' },
-  { name:'Telescope',     e:'🔭',  base:100,       sps:0.5,   desc:'Spots distant stars in the cosmos.' },
-  { name:'Observatory',   e:'🏛️', base:500,       sps:2,     desc:'Tracks constellations all night.' },
-  { name:'Rocket',        e:'🚀',  base:2000,      sps:8,     desc:'Collects stardust from the belt.' },
-  { name:'Space Station', e:'🛸',  base:10000,     sps:25,    desc:'Harvests raw solar wind energy.' },
-  { name:'Planet',        e:'🪐',  base:50000,     sps:80,    desc:'Converts planetary mass to stars.' },
-  { name:'Star Factory',  e:'⚡',  base:250000,    sps:250,   desc:'Manufactures stars from plasma.' },
-  { name:'Nebula',        e:'🌌',  base:1000000,   sps:750,   desc:'Births entire star clusters.' },
-  { name:'Black Hole',    e:'🕳️', base:5000000,   sps:2500,  desc:'Warps spacetime into starlight.' },
-  { name:'Galaxy',        e:'🌀',  base:25000000,  sps:8000,  desc:'A whole galaxy producing for you.' },
-  { name:'Universe',      e:'✨',  base:100000000, sps:25000, desc:'All of existence, clicking.' },
+  { name:'Cursor',        e:'🖱️',  base:15,        sps:0.1,    desc:'Auto-clicks the star for you.' },
+  { name:'Telescope',     e:'🔭',  base:100,       sps:0.8,    desc:'Spots distant stars in the cosmos.' },
+  { name:'Observatory',   e:'🏛️', base:500,       sps:4,      desc:'Tracks constellations all night.' },
+  { name:'Rocket',        e:'🚀',  base:2000,      sps:10,     desc:'Collects stardust from the belt.' },
+  { name:'Space Station', e:'🛸',  base:10000,     sps:40,     desc:'Harvests raw solar wind energy.' },
+  { name:'Planet',        e:'🪐',  base:50000,     sps:100,    desc:'Converts planetary mass to stars.' },
+  { name:'Star Factory',  e:'⚡',  base:250000,    sps:400,    desc:'Manufactures stars from plasma.' },
+  { name:'Nebula',        e:'🌌',  base:1000000,   sps:1600,   desc:'Births entire star clusters.' },
+  { name:'Black Hole',    e:'🕳️', base:5000000,   sps:6400,   desc:'Warps spacetime into starlight.' },
+  { name:'Galaxy',        e:'🌀',  base:25000000,  sps:25600,  desc:'A whole galaxy producing for you.' },
+  { name:'Universe',      e:'✨',  base:100000000, sps:102400, desc:'All of existence, clicking.' },
 ];
 
 // ── State (mutable, restored from save) ──────────────────────────────────────
@@ -494,6 +606,56 @@ function loop(now) {
 
   requestAnimationFrame(loop);
 }
+
+// ── Panel toggles ─────────────────────────────────────────────────────────────
+const isMobile = () => window.innerWidth <= 680;
+
+function toggleStats() {
+  const el = document.getElementById('stats');
+  const isOpen = isMobile() ? el.classList.contains('open') : !el.classList.contains('closed');
+  if (isMobile()) {
+    el.classList.toggle('open');
+    document.getElementById('shop').classList.remove('open');
+    document.getElementById('mob-bd').classList.toggle('show', !isOpen);
+  } else {
+    el.classList.toggle('closed');
+    document.getElementById('tog-stats').classList.toggle('visible', el.classList.contains('closed'));
+  }
+}
+
+function toggleShop() {
+  const el = document.getElementById('shop');
+  const isOpen = isMobile() ? el.classList.contains('open') : !el.classList.contains('closed');
+  if (isMobile()) {
+    el.classList.toggle('open');
+    document.getElementById('stats').classList.remove('open');
+    document.getElementById('mob-bd').classList.toggle('show', !isOpen);
+  } else {
+    el.classList.toggle('closed');
+    document.getElementById('tog-shop').classList.toggle('visible', el.classList.contains('closed'));
+  }
+}
+
+function closeAllPanels() {
+  if (isMobile()) {
+    document.getElementById('stats').classList.remove('open');
+    document.getElementById('shop').classList.remove('open');
+    document.getElementById('mob-bd').classList.remove('show');
+  }
+}
+
+// ── Leave warning ─────────────────────────────────────────────────────────────
+let lastSaveTime = 0;
+
+const _origSave = saveGame;
+saveGame = function() { _origSave(); lastSaveTime = Date.now(); };
+
+window.addEventListener('beforeunload', e => {
+  if (total > 0 && Date.now() - lastSaveTime > 5000) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadGame();
