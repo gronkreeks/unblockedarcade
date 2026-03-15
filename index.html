@@ -10,13 +10,13 @@
   <meta property="og:type"        content="website">
   <meta property="og:url"         content="https://unblockedarcade.org/">
   <meta property="og:title"       content="Unblocked Arcade">
-  <meta property="og:description" content="Free multiplayer and singleplayer browser games. No downloads, no login — just play.">
+  <meta property="og:description" content="Free multiplayer and singleplayer browser games. No downloads, no login, no ads. Just play.">
   <meta property="og:image"       content="https://unblockedarcade.org/embed.png">
 
   <!-- Twitter / X card -->
   <meta name="twitter:card"        content="summary_large_image">
   <meta name="twitter:title"       content="Unblocked Arcade">
-  <meta name="twitter:description" content="Free multiplayer and singleplayer browser games. No downloads, no login — just play.">
+  <meta name="twitter:description" content="Free multiplayer and singleplayer browser games. No downloads, no login, no ads. Just play.">
   <meta name="twitter:image"       content="https://unblockedarcade.org/embed.png">
   <!-- Google AdSense -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9603713606760464" crossorigin="anonymous"></script>
@@ -172,7 +172,7 @@
 
     .card {
       position: relative;
-      padding: 2rem 1.5rem 1.6rem;
+      padding: 2rem 1.5rem 2rem;
       border-radius: 20px;
       text-decoration: none;
       color: #fff;
@@ -224,9 +224,8 @@
     }
 
     .badge {
-      display: inline-block;
+      display: block;
       margin-top: auto;
-      padding-top: 1rem;
       padding: 0.25rem 0.9rem;
       border-radius: 50px;
       font-size: 0.65rem;
@@ -237,25 +236,48 @@
       border: 2px solid rgba(255,255,255,0.3);
     }
 
+    .card-soon {
+      background: rgba(0,0,0,0.15);
+      border: 2px dashed rgba(255,255,255,0.15);
+      border-radius: 20px;
+      padding: 2rem 1.5rem 1.6rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: rgba(255,255,255,0.25);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      line-height: 1.6;
+      gap: 0.5rem;
+      cursor: default;
+    }
+    .card-soon span { font-size: 1.8rem; opacity: 0.3; }
+
     .card-recommended {
       outline: 3px solid #ffd700;
       outline-offset: 2px;
       box-shadow: 0 0 0 3px #ffd700, 0 6px 20px rgba(39,174,96,0.45);
     }
     .badge-mobile {
-      display: inline-block;
-      margin-top: 0.4rem;
-      margin-left: 0.3rem;
-      padding: 0.18rem 0.6rem;
-      border-radius: 50px;
-      font-size: 0.58rem;
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      white-space: nowrap;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 0.55rem;
       font-weight: 900;
       letter-spacing: 1px;
       text-transform: uppercase;
-      background: rgba(255,255,255,0.18);
-      border: 1.5px solid rgba(255,255,255,0.5);
+      background: rgba(255,255,255,0.2);
+      border: 1.5px solid rgba(255,255,255,0.45);
       color: #fff;
-      vertical-align: middle;
+      z-index: 2;
     }
 
     .card-recommended::before {
@@ -303,10 +325,10 @@
         </a>
 
         <a class="card card-tag" href="battle.html" style="background:linear-gradient(160deg,#e67e22,#ca6f1e);box-shadow:0 6px 20px rgba(230,126,34,0.45)">
+          <span class="badge-mobile">📱 Mobile</span>
           <span class="icon">⚔️</span>
           <div class="card-title">Battle</div>
           <span class="badge">2 Players</span>
-          <span class="badge-mobile">📱 Mobile</span>
         </a>
 
         <a class="card card-tag" href="sniper.html" style="background:linear-gradient(160deg,#27ae60,#1e8449);box-shadow:0 6px 20px rgba(39,174,96,0.45)">
@@ -322,13 +344,11 @@
         </a>
 
         <a class="card card-tag" href="chess.html" style="background:linear-gradient(160deg,#5d4037,#3e2723);box-shadow:0 6px 20px rgba(93,64,55,0.55)">
+          <span class="badge-mobile">📱 Mobile</span>
           <span class="icon">♟</span>
           <div class="card-title">Chess</div>
           <span class="badge">2 Players</span>
-          <span class="badge-mobile">📱 Mobile</span>
         </a>
-
-        <!-- Add more 2-player cards here -->
 
       </div>
 
@@ -347,7 +367,9 @@
           <span class="badge">1 Player</span>
         </a>
 
-        <!-- Add more singleplayer cards here -->
+        <div class="card-soon"><span>🎮</span>More games<br>coming soon</div>
+        <div class="card-soon"><span>🎮</span>More games<br>coming soon</div>
+        <div class="card-soon"><span>🎮</span>More games<br>coming soon</div>
 
       </div>
     </div>
@@ -355,5 +377,23 @@
   </div>
 
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "f19965aca353444c9351b9a951d995e7"}'></script><!-- End Cloudflare Web Analytics -->
+
+<footer style="
+  background: rgba(0,0,0,0.55);
+  width: 100%;
+  text-align: center;
+  padding: 1.4rem 1rem;
+  font-family: 'Segoe UI', sans-serif;
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 1px;
+  line-height: 2;
+">
+  <div style="margin-bottom:0.4rem;">
+    <a href="privacy.html" style="color:rgba(255,255,255,0.5);text-decoration:none;margin:0 0.8rem;font-weight:700;">Privacy Policy</a>
+    <a href="contact.html" style="color:rgba(255,255,255,0.5);text-decoration:none;margin:0 0.8rem;font-weight:700;">Contact</a>
+  </div>
+  © 2026 Unblocked Arcade · All rights reserved
+</footer>
 </body>
 </html>

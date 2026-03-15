@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact — Unblocked Arcade</title>
+  <link rel="icon" href="favicon.ico">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #8B5E3C;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: linear-gradient(to bottom, #5bc8f5, #a8dff7);
+      padding: 1.5rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+    .back {
+      color: #fff; text-decoration: none; font-size: 0.8rem; font-weight: 700;
+      background: rgba(0,0,0,0.18); padding: 0.3rem 0.9rem;
+      border-radius: 20px; border: 1px solid rgba(255,255,255,0.4);
+      white-space: nowrap;
+    }
+    .back:hover { background: rgba(0,0,0,0.3); }
+    header h1 { font-size: 1.6rem; font-weight: 900; letter-spacing: 3px; color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+    .grass { width: 100%; background: #4caf50; height: 20px; flex-shrink: 0; }
+    main {
+      flex: 1;
+      max-width: 600px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 3rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.4rem;
+    }
+    .card {
+      background: rgba(0,0,0,0.2);
+      border-radius: 16px;
+      padding: 2rem 2.2rem;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    h2 {
+      font-size: 1.05rem; font-weight: 900; letter-spacing: 1px;
+      text-transform: uppercase; color: #ffd93d; margin-bottom: 0.9rem;
+    }
+    p { font-size: 0.92rem; line-height: 1.75; color: rgba(255,255,255,0.85); margin-bottom: 0.5rem; }
+    p:last-child { margin-bottom: 0; }
+    a { color: #5bc8f5; }
+    a:hover { text-decoration: underline; }
+    .template {
+      background: rgba(0,0,0,0.3); border-left: 3px solid #ffd93d;
+      border-radius: 0 10px 10px 0; padding: 0.9rem 1.1rem;
+      margin-top: 0.9rem; font-size: 0.85rem; line-height: 1.8;
+      color: rgba(255,255,255,0.8); font-family: 'Courier New', monospace;
+      white-space: pre-wrap;
+    }
+    .tag {
+      display: inline-block; padding: 0.18rem 0.65rem;
+      border-radius: 20px; font-size: 0.65rem; font-weight: 900;
+      letter-spacing: 1px; text-transform: uppercase;
+      margin-bottom: 0.8rem;
+    }
+    .tag-bug      { background: rgba(231,76,60,0.3);  border: 1.5px solid rgba(231,76,60,0.6);  color: #ff8f80; }
+    .tag-suggest  { background: rgba(52,152,219,0.3); border: 1.5px solid rgba(52,152,219,0.6); color: #87d0ff; }
+    .tag-other    { background: rgba(255,255,255,0.1);border: 1.5px solid rgba(255,255,255,0.25);color: rgba(255,255,255,0.7); }
+    .note { font-size: 0.8rem; color: rgba(255,255,255,0.45); margin-top: 0.6rem; font-style: italic; }
+    footer {
+      background: rgba(0,0,0,0.3);
+      text-align: center;
+      padding: 1.2rem;
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.35);
+      letter-spacing: 1px;
+    }
+    footer a { color: rgba(255,255,255,0.5); text-decoration: none; margin: 0 0.6rem; }
+    footer a:hover { color: #fff; }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="back" href="index.html">← Back to Arcade</a>
+  <h1>Contact</h1>
+</header>
+<div class="grass"></div>
+
+<main>
+
+  <div class="card">
+    <h2>Get in Touch</h2>
+    <p>Send us an email at <a href="mailto:contact.unblockedarcade@gmail.com">contact.unblockedarcade@gmail.com</a> for any of the following. Use the templates below to help us respond faster.</p>
+  </div>
+
+  <div class="card">
+    <span class="tag tag-bug">🐛 Bug Report</span>
+    <h2>Reporting a Bug</h2>
+    <p>Found something broken? Include as much detail as possible so we can reproduce it. Use this format:</p>
+    <div class="template">Subject: [Bug] &lt;Game Name&gt; — &lt;short description&gt;
+
+Game: e.g. Survive
+Device / Browser: e.g. Windows 11, Chrome 124
+What happened:
+  Describe exactly what went wrong.
+
+What you expected to happen:
+  Describe what should have happened instead.
+
+Steps to reproduce:
+  1. Open the game
+  2. ...
+  3. Bug occurs
+
+(Optional) Screenshot or screen recording attached.</div>
+    <p class="note">The more detail you include, the quicker we can fix it.</p>
+  </div>
+
+  <div class="card">
+    <span class="tag tag-suggest">💡 Game Suggestion</span>
+    <h2>Suggesting a Game</h2>
+    <p>Have an idea for a new game? We'd love to hear it. Use this format:</p>
+    <div class="template">Subject: [Suggestion] &lt;Game Idea Name&gt;
+
+Game idea: e.g. Platformer
+Single or multiplayer: e.g. Singleplayer
+Description:
+  Explain the gameplay — how it works, what the goal is,
+  and what makes it fun.
+
+(Optional) Any reference games or inspirations.</div>
+  </div>
+
+  <div class="card">
+    <span class="tag tag-other">✉️ General</span>
+    <h2>Everything Else</h2>
+    <p>For anything else — questions, feedback, or just to say hi — email us at <a href="mailto:contact.unblockedarcade@gmail.com">contact.unblockedarcade@gmail.com</a>. No strict format needed, just write naturally.</p>
+    <p class="note">We try to respond within a few days.</p>
+  </div>
+
+</main>
+
+<footer>
+  <a href="index.html">Home</a>
+  <a href="privacy.html">Privacy Policy</a>
+  <a href="contact.html">Contact</a>
+  <br><br>
+  © 2026 Unblocked Arcade. All rights reserved.
+</footer>
+
+<!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "f19965aca353444c9351b9a951d995e7"}'></script><!-- End Cloudflare Web Analytics -->
+</body>
+</html>
