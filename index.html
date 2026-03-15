@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arcade</title>
+  <link rel="icon" href="favicon.ico">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+    }
+
+    /* ── Sky ── */
+    .sky {
+      width: 100%;
+      background: linear-gradient(to bottom, #5bc8f5, #a8dff7);
+      padding: 2rem 1rem 4rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Clouds */
+    .cloud {
+      position: absolute;
+      background: rgba(255,255,255,0.85);
+      border-radius: 50px;
+      pointer-events: none;
+    }
+    .cloud::before, .cloud::after {
+      content: '';
+      position: absolute;
+      background: rgba(255,255,255,0.85);
+      border-radius: 50%;
+    }
+    .c1 { width:120px; height:36px; top:30px;  left:5%;  }
+    .c1::before { width:60px;  height:60px;  top:-30px; left:15px; }
+    .c1::after  { width:50px;  height:50px;  top:-22px; left:55px; }
+
+    .c2 { width:100px; height:30px; top:55px;  left:30%; }
+    .c2::before { width:50px;  height:50px;  top:-26px; left:10px; }
+    .c2::after  { width:44px;  height:44px;  top:-20px; left:46px; }
+
+    .c3 { width:130px; height:38px; top:20px;  right:8%; }
+    .c3::before { width:64px;  height:64px;  top:-34px; left:18px; }
+    .c3::after  { width:52px;  height:52px;  top:-24px; left:64px; }
+
+    .c4 { width:90px;  height:28px; top:70px;  right:28%; }
+    .c4::before { width:46px;  height:46px;  top:-24px; left:8px;  }
+    .c4::after  { width:38px;  height:38px;  top:-18px; left:42px; }
+
+    /* Title */
+    .logo {
+      font-size: 5rem;
+      font-weight: 900;
+      letter-spacing: 6px;
+      color: #fff;
+      text-shadow: 0 4px 0 rgba(0,0,0,0.15), 0 8px 20px rgba(0,0,0,0.1);
+      margin-bottom: 0.3rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .tagline {
+      color: rgba(255,255,255,0.75);
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── Grass strip ── */
+    .grass {
+      width: 100%;
+      background: #4caf50;
+      height: 24px;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .grass::before {
+      content: '';
+      position: absolute;
+      bottom: 100%;
+      left: 0; right: 0;
+      height: 16px;
+      background: repeating-linear-gradient(
+        90deg,
+        #4caf50 0px, #4caf50 8px,
+        transparent 8px, transparent 14px
+      );
+      mask-image: repeating-linear-gradient(
+        90deg,
+        black 0px, black 8px,
+        transparent 8px, transparent 14px
+      );
+    }
+    .grass::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 0; right: 0;
+      height: 12px;
+      background: #388e3c;
+    }
+
+    /* ── Ground / game area ── */
+    .ground {
+      width: 100%;
+      background: #8B5E3C;
+      flex: 1;
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 2.5rem 1rem 3rem;
+      gap: 1.8rem;
+    }
+
+    /* Centre column */
+    .ground-main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .section-label {
+      color: rgba(255,255,255,0.5);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 1.5rem;
+    }
+
+    /* ── Game grid ── */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 160px));
+      gap: 1.2rem;
+      width: 100%;
+      max-width: 900px;
+      justify-content: center;
+    }
+
+    .card {
+      position: relative;
+      padding: 2rem 1.5rem 1.6rem;
+      border-radius: 20px;
+      text-decoration: none;
+      color: #fff;
+      text-align: center;
+      transition: transform 0.18s, box-shadow 0.18s;
+      overflow: hidden;
+      cursor: pointer;
+      border-bottom: 5px solid rgba(0,0,0,0.2);
+    }
+    .card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 20px;
+      background: rgba(255,255,255,0);
+      transition: background 0.18s;
+    }
+    .card:hover::after  { background: rgba(255,255,255,0.1); }
+    .card:hover { transform: translateY(-8px); }
+
+    /* Card colours — add more as needed */
+    .card-tag    { background: linear-gradient(160deg, #e74c3c, #c0392b); box-shadow: 0 6px 20px rgba(231,76,60,0.45); }
+    .card-coming { background: linear-gradient(160deg, #7f8c8d, #5d6d7e); box-shadow: 0 6px 20px rgba(100,100,100,0.3); }
+
+    .card:hover.card-tag    { box-shadow: 0 14px 36px rgba(231,76,60,0.6); }
+
+    .icon {
+      font-size: 3.5rem;
+      display: block;
+      margin-bottom: 0.8rem;
+      filter: drop-shadow(0 3px 6px rgba(0,0,0,0.25));
+    }
+
+    .card-title {
+      font-size: 1.5rem;
+      font-weight: 900;
+      letter-spacing: 1px;
+      margin-bottom: 0.45rem;
+    }
+
+    .card-desc {
+      font-size: 0.8rem;
+      opacity: 0.85;
+      line-height: 1.55;
+      font-weight: 600;
+    }
+
+    .badge {
+      display: inline-block;
+      margin-top: 1rem;
+      padding: 0.25rem 0.9rem;
+      border-radius: 50px;
+      font-size: 0.65rem;
+      font-weight: 900;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      background: rgba(0,0,0,0.22);
+      border: 2px solid rgba(255,255,255,0.3);
+    }
+
+    /* ── Sidebar ad panels ── */
+    .ad-panel {
+      flex-shrink: 0;
+      width: 160px;
+      /* Wooden pinboard border */
+      background: #5a3a1a;
+      border-radius: 14px;
+      padding: 10px;
+      box-shadow:
+        0 0 0 3px #3d2508,
+        0 0 0 5px #7a4e22,
+        0 4px 18px rgba(0,0,0,0.45);
+      /* Subtle wood grain lines */
+      background-image:
+        linear-gradient(
+          180deg,
+          rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px,
+          transparent 1px, transparent 6px
+        ),
+        linear-gradient(#5a3a1a, #5a3a1a);
+      background-size: 100% 6px, 100% 100%;
+      position: sticky;
+      top: 1.5rem;
+    }
+
+    /* Nail heads at corners of the board */
+    .ad-panel::before, .ad-panel::after {
+      content: '';
+      position: absolute;
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #ccc, #666);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    }
+    .ad-panel::before { top: 7px; left: 7px; }
+    .ad-panel::after  { top: 7px; right: 7px; }
+
+    /* The actual ad slot inside the board */
+    .ad-slot {
+      width: 140px;
+      height: 600px;
+      background: rgba(0,0,0,0.22);
+      border-radius: 8px;
+      border: 1.5px solid rgba(255,255,255,0.08);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      color: rgba(255,255,255,0.2);
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      position: relative;
+      overflow: hidden;
+    }
+    .ad-slot::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(160deg, rgba(255,255,255,0.04) 0%, transparent 55%);
+      pointer-events: none;
+      border-radius: 8px;
+    }
+    .ad-label {
+      font-size: 0.5rem;
+      letter-spacing: 2px;
+      color: rgba(255,255,255,0.18);
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 0.3rem;
+    }
+
+    /* Hide side ads on narrow screens */
+    @media (max-width: 900px) { .ad-panel { display: none; } }
+  </style>
+</head>
+<body>
+
+  <div class="sky">
+    <div class="cloud c1"></div>
+    <div class="cloud c2"></div>
+    <div class="cloud c3"></div>
+    <div class="cloud c4"></div>
+    <div class="logo">ARCADE</div>
+    <p class="tagline">pick a game and play</p>
+  </div>
+
+  <div class="grass"></div>
+
+  <div class="ground">
+
+    <!-- Left ad panel -->
+    <div class="ad-panel">
+      <div class="ad-slot">
+        <span class="ad-label">Ad</span>
+        <!-- Google AdSense tag goes here -->
+      </div>
+    </div>
+
+    <!-- Centre: section label + game grid -->
+    <div class="ground-main">
+      <p class="section-label">Games</p>
+      <div class="grid">
+
+        <a class="card card-tag" href="tag.html">
+          <span class="icon">🏃</span>
+          <div class="card-title">Tag</div>
+          <span class="badge">2 Players</span>
+        </a>
+
+        <a class="card card-tag" href="battle.html" style="background:linear-gradient(160deg,#e67e22,#ca6f1e);box-shadow:0 6px 20px rgba(230,126,34,0.45)">
+          <span class="icon">⚔️</span>
+          <div class="card-title">Battle</div>
+          <span class="badge">2 Players</span>
+        </a>
+
+        <a class="card card-tag" href="sniper.html" style="background:linear-gradient(160deg,#27ae60,#1e8449);box-shadow:0 6px 20px rgba(39,174,96,0.45)">
+          <span class="icon">🎯</span>
+          <div class="card-title">Sniper</div>
+          <span class="badge">2 Players</span>
+        </a>
+
+        <a class="card card-tag" href="boxing.html" style="background:linear-gradient(160deg,#e74c3c,#8e0000);box-shadow:0 6px 20px rgba(231,76,60,0.45)">
+          <span class="icon">🥊</span>
+          <div class="card-title">Boxing</div>
+          <span class="badge">2 Players</span>
+        </a>
+
+        <a class="card card-tag" href="survive.html" style="background:linear-gradient(160deg,#27ae60,#145a32);box-shadow:0 6px 20px rgba(39,174,96,0.45)">
+          <span class="icon">🧟</span>
+          <div class="card-title">Survive</div>
+          <span class="badge">1 Player</span>
+        </a>
+
+        <!-- Add more cards here -->
+
+      </div>
+    </div>
+
+    <!-- Right ad panel -->
+    <div class="ad-panel">
+      <div class="ad-slot">
+        <span class="ad-label">Ad</span>
+        <!-- Google AdSense tag goes here -->
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>
