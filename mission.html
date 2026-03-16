@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Our Mission · EduArcade</title>
+  <link rel="icon" href="favicon.ico">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(160deg, #0d1f44 0%, #1a3a6e 60%, #0f1e3d 100%);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── Header ── */
+    header {
+      width: 100%;
+      max-width: 860px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.4rem 1.5rem 0;
+    }
+
+    .back {
+      color: rgba(255,255,255,0.7);
+      text-decoration: none;
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 1px;
+      background: rgba(255,255,255,0.1);
+      border: 1.5px solid rgba(255,255,255,0.25);
+      padding: 0.35rem 0.9rem;
+      border-radius: 50px;
+      transition: background 0.15s;
+    }
+    .back:hover { background: rgba(255,255,255,0.2); color: #fff; }
+
+    .site-name {
+      font-size: 1rem;
+      font-weight: 900;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.5);
+    }
+
+    /* ── Main content ── */
+    main {
+      width: 100%;
+      max-width: 860px;
+      padding: 3rem 1.5rem 4rem;
+    }
+
+    .page-eyebrow {
+      font-size: 0.65rem;
+      font-weight: 900;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #7ec8ff;
+      margin-bottom: 0.7rem;
+    }
+
+    h1 {
+      font-size: 2.8rem;
+      font-weight: 900;
+      line-height: 1.15;
+      letter-spacing: 1px;
+      margin-bottom: 1.5rem;
+      color: #fff;
+    }
+
+    .lead {
+      font-size: 1.1rem;
+      line-height: 1.8;
+      color: rgba(255,255,255,0.75);
+      max-width: 680px;
+      margin-bottom: 3rem;
+    }
+
+    /* ── Divider ── */
+    .divider {
+      width: 60px;
+      height: 4px;
+      background: linear-gradient(90deg, #7ec8ff, #a78bfa);
+      border-radius: 50px;
+      margin-bottom: 3rem;
+    }
+
+    /* ── Pillars ── */
+    .pillars {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1.2rem;
+      margin-bottom: 3.5rem;
+    }
+
+    .pillar {
+      background: rgba(255,255,255,0.06);
+      border: 1.5px solid rgba(255,255,255,0.12);
+      border-radius: 18px;
+      padding: 1.6rem 1.4rem;
+    }
+
+    .pillar-icon {
+      width: 36px;
+      height: 36px;
+      margin-bottom: 0.8rem;
+      display: block;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+    }
+
+    .pillar h3 {
+      font-size: 1rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+      color: #fff;
+    }
+
+    .pillar p {
+      font-size: 0.82rem;
+      line-height: 1.65;
+      color: rgba(255,255,255,0.6);
+    }
+
+    /* ── Skills section ── */
+    .skills-heading {
+      font-size: 0.65rem;
+      font-weight: 900;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #7ec8ff;
+      margin-bottom: 1.2rem;
+    }
+
+    .skill-categories {
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+      margin-bottom: 3.5rem;
+    }
+
+    .skill-row {
+      background: rgba(255,255,255,0.05);
+      border: 1.5px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 1.2rem 1.5rem;
+      display: flex;
+      gap: 1.2rem;
+      align-items: flex-start;
+    }
+
+    .skill-row-icon {
+      width: 30px;
+      height: 30px;
+      flex-shrink: 0;
+      margin-top: 0.1rem;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+    }
+
+    .skill-row-title {
+      font-size: 0.88rem;
+      font-weight: 800;
+      margin-bottom: 0.3rem;
+      color: #fff;
+    }
+
+    .skill-row-desc {
+      font-size: 0.78rem;
+      color: rgba(255,255,255,0.55);
+      line-height: 1.6;
+    }
+
+    .skill-games {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.6rem;
+    }
+
+    .skill-game-pill {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 50px;
+      padding: 0.15rem 0.65rem;
+      font-size: 0.65rem;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      color: rgba(255,255,255,0.8);
+    }
+
+    /* ── Footer note ── */
+    .mission-footer {
+      background: rgba(255,255,255,0.05);
+      border: 1.5px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 1.4rem 1.6rem;
+      font-size: 0.85rem;
+      line-height: 1.7;
+      color: rgba(255,255,255,0.6);
+      text-align: center;
+    }
+
+    .mission-footer strong { color: #fff; }
+
+    @media (max-width: 500px) {
+      h1 { font-size: 2rem; }
+      .skill-row { flex-direction: column; gap: 0.6rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <a class="back" href="index.html">← Back</a>
+    <span class="site-name">EduArcade</span>
+  </header>
+
+  <main>
+
+    <p class="page-eyebrow">Mission Statement</p>
+    <h1>Education should be<br>accessible to everyone.</h1>
+
+    <p class="lead">
+      EduArcade was created to make learning a genuine and fun experience. My younger sister told me
+      she was tired of the books, the study techniques and boring lessons. I took that to heart.
+      I made EduArcade, a cost-free way to teach your child motor skills, typing, and strategic reasoning.
+      This is a passion project, created to learn how to use HTML5 and learn to construct websites.
+      I believe in high quality, fun games that all kids can play while still teaching them something so it's not just a waste of time.
+    </p>
+
+    <div class="divider"></div>
+
+    <p class="skills-heading">Our three pillars</p>
+    <div class="pillars">
+
+      <div class="pillar">
+        <img class="pillar-icon" src="icons/globe.svg" alt="Globe">
+        <h3>Accessible to All</h3>
+        <p>Every game runs instantly in any browser on any device — phone, tablet, or desktop.
+           No installation, no account, no cost. If you have an internet connection, you can learn.</p>
+      </div>
+
+      <div class="pillar">
+        <img class="pillar-icon" src="icons/gamepad.svg" alt="Gamepad">
+        <h3>Learning Through Play</h3>
+        <p>Research consistently shows that children absorb and retain skills more effectively when
+           they are engaged and having fun. Every game here is designed so that the skill <em>is</em>
+           the game — not a worksheet bolted on top of it.</p>
+      </div>
+
+      <div class="pillar">
+        <img class="pillar-icon" src="icons/chart.svg" alt="Bar chart">
+        <h3>Real, Measurable Skills</h3>
+        <p>We are deliberate about what each game teaches. Motor skills, critical thinking, literacy,
+           strategic reasoning — these are transferable skills that matter inside and outside the classroom.</p>
+      </div>
+
+    </div>
+
+    <p class="skills-heading">What our games teach</p>
+    <div class="skill-categories">
+
+      <div class="skill-row">
+        <img class="skill-row-icon" src="icons/runner.svg" alt="Runner">
+        <div>
+          <div class="skill-row-title">Motor Skills &amp; Coordination</div>
+          <div class="skill-row-desc">
+            Rapid physical response, hand-eye coordination, spatial awareness and agility — the
+            foundations of physical literacy that support both sport and everyday tasks.
+          </div>
+          <div class="skill-games">
+            <span class="skill-game-pill">Tag</span>
+            <span class="skill-game-pill">Boxing</span>
+            <span class="skill-game-pill">Sniper</span>
+            <span class="skill-game-pill">Star Clicker</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="skill-row">
+        <img class="skill-row-icon" src="icons/brain.svg" alt="Brain">
+        <div>
+          <div class="skill-row-title">Strategy &amp; Critical Thinking</div>
+          <div class="skill-row-desc">
+            Forward planning, resource management, logical reasoning and adaptive decision-making
+            under pressure — skills that translate directly to mathematics, science and everyday
+            problem-solving.
+          </div>
+          <div class="skill-games">
+            <span class="skill-game-pill">Battle</span>
+            <span class="skill-game-pill">Chess</span>
+            <span class="skill-game-pill">Survive</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="skill-row">
+        <img class="skill-row-icon" src="icons/pencil.svg" alt="Pencil">
+        <div>
+          <div class="skill-row-title">Literacy &amp; Technology</div>
+          <div class="skill-row-desc">
+            Keyboard fluency, typing speed and accuracy — core digital literacy skills for every
+            student in a world where written communication happens on a screen.
+          </div>
+          <div class="skill-games">
+            <span class="skill-game-pill">Type Quest</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="mission-footer">
+      <strong>EduArcade is free, and always will be.</strong><br>
+      We are committed to keeping every game open and available to all students and educators —
+      no subscription, no paywall, no barrier to entry.
+    </div>
+
+  </main>
+
+</body>
+</html>

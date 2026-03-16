@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- controller body -->
+  <path d="M10 22 Q4 22 4 30 L6 46 Q7 54 16 54 Q22 54 26 44 L38 44 Q42 54 48 54 Q57 54 58 46 L60 30 Q60 22 54 22 Z" fill="white"/>
+  <!-- D-pad vertical -->
+  <rect x="15" y="27" width="6" height="16" rx="2" fill="rgba(0,0,0,0.14)"/>
+  <!-- D-pad horizontal -->
+  <rect x="10" y="32" width="16" height="6" rx="2" fill="rgba(0,0,0,0.14)"/>
+  <!-- face buttons -->
+  <circle cx="44" cy="31" r="4" fill="rgba(0,0,0,0.14)"/>
+  <circle cx="50" cy="37" r="4" fill="rgba(0,0,0,0.14)"/>
+  <circle cx="38" cy="37" r="4" fill="rgba(0,0,0,0.14)"/>
+  <circle cx="44" cy="43" r="4" fill="rgba(0,0,0,0.14)"/>
+  <!-- start button -->
+  <rect x="27" y="30" width="10" height="4" rx="2" fill="rgba(0,0,0,0.10)"/>
+</svg>

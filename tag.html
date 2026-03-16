@@ -127,6 +127,10 @@
     <div style="color:#c084fc"><b>IT advantage</b><br>Purple portals teleport<br>Yellow pads launch you</div>
   </div>
   <div class="winner" id="winner-text"></div>
+  <div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:0.75rem 1.2rem;max-width:420px;text-align:left;margin-bottom:0.4rem;">
+    <p style="font-size:0.62rem;font-weight:900;letter-spacing:2px;text-transform:uppercase;opacity:0.55;margin-bottom:0.35rem;">What you'll learn</p>
+    <p style="font-size:0.82rem;line-height:1.6;opacity:0.82;">Builds <strong>spatial awareness</strong>, <strong>agility</strong> &amp; <strong>quick tactical decisions</strong> while chasing or evading an opponent.</p>
+  </div>
   <button id="sbtn" onclick="startGame()">Play!</button>
   <a class="home-btn" href="index.html">⬅ Back to Home</a>
 </div>
@@ -139,8 +143,8 @@ const W = canvas.width, H = canvas.height;  // 1100 x 620
 // ── Constants ─────────────────────────────────────────────────────────────────
 const GRAVITY       = 0.13;
 const JUMP_VEL      = -7;
-const SPEED         = 1.35;
-const PAD_BOOST     = -13;
+const SPEED         = 2.5;
+const PAD_BOOST     = -8;
 const CHAR_W        = 12;
 const CHAR_H        = 30;
 const HEAD_R        = 6;

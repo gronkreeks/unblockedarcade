@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- messy hair spikes -->
+  <path d="M18 12 Q19 4 23 9" stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M27 8 Q31 1 35 8" stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M41 9 Q46 3 47 12" stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <!-- head -->
+  <ellipse cx="32" cy="18" rx="14" ry="13" fill="white"/>
+  <!-- left eye — X -->
+  <line x1="22" y1="14" x2="27" y2="19" stroke="rgba(0,0,0,0.4)" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="27" y1="14" x2="22" y2="19" stroke="rgba(0,0,0,0.4)" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- right eye — X -->
+  <line x1="37" y1="14" x2="42" y2="19" stroke="rgba(0,0,0,0.4)" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="42" y1="14" x2="37" y2="19" stroke="rgba(0,0,0,0.4)" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- stitched jagged mouth -->
+  <path d="M23 24 L25 22 L27 24 L29 22 L31 24 L33 22 L35 24 L37 22 L39 24 L41 22" stroke="rgba(0,0,0,0.4)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- neck -->
+  <rect x="27" y="31" width="10" height="6" fill="white"/>
+  <!-- body -->
+  <rect x="19" y="36" width="26" height="18" rx="4" fill="white"/>
+  <!-- left arm — raised and outstretched -->
+  <line x1="19" y1="39" x2="4" y2="24" stroke="white" stroke-width="5" stroke-linecap="round"/>
+  <!-- right arm — raised and outstretched -->
+  <line x1="45" y1="39" x2="60" y2="24" stroke="white" stroke-width="5" stroke-linecap="round"/>
+  <!-- left leg -->
+  <line x1="24" y1="54" x2="20" y2="63" stroke="white" stroke-width="5" stroke-linecap="round"/>
+  <!-- right leg -->
+  <line x1="40" y1="54" x2="44" y2="63" stroke="white" stroke-width="5" stroke-linecap="round"/>
+</svg>

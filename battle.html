@@ -105,16 +105,16 @@
 <div class="controls">
   <!-- P1 controls -->
   <div style="display:flex;gap:0.6rem;align-items:center">
-    <div class="gold-bar">💰 <span id="gold0">50</span></div>
+    <div class="gold-bar"><span id="gold0">50</span>g</div>
     <div class="ctrl-panel">
       <button class="spawn-btn btn-sword"  onclick="spawn(0,'sword')" id="b0s">
-        ⚔️ Sword<span class="key">Q</span><span class="cost">30g</span>
+        Sword<span class="key">Q</span><span class="cost">30g</span>
       </button>
       <button class="spawn-btn btn-archer" onclick="spawn(0,'archer')" id="b0a">
-        🏹 Archer<span class="key">W</span><span class="cost">50g</span>
+        Archer<span class="key">W</span><span class="cost">50g</span>
       </button>
       <button class="spawn-btn btn-knight" onclick="spawn(0,'knight')" id="b0k">
-        🛡️ Knight<span class="key">E</span><span class="cost">80g</span>
+        Knight<span class="key">E</span><span class="cost">80g</span>
       </button>
     </div>
   </div>
@@ -123,21 +123,21 @@
   <div style="display:flex;gap:0.6rem;align-items:center">
     <div class="ctrl-panel">
       <button class="spawn-btn btn-sword"  onclick="spawn(1,'sword')" id="b1s">
-        ⚔️ Sword<span class="key">U</span><span class="cost">30g</span>
+        Sword<span class="key">U</span><span class="cost">30g</span>
       </button>
       <button class="spawn-btn btn-archer" onclick="spawn(1,'archer')" id="b1a">
-        🏹 Archer<span class="key">I</span><span class="cost">50g</span>
+        Archer<span class="key">I</span><span class="cost">50g</span>
       </button>
       <button class="spawn-btn btn-knight" onclick="spawn(1,'knight')" id="b1k">
-        🛡️ Knight<span class="key">O</span><span class="cost">80g</span>
+        Knight<span class="key">O</span><span class="cost">80g</span>
       </button>
     </div>
-    <div class="gold-bar">💰 <span id="gold1">50</span></div>
+    <div class="gold-bar"><span id="gold1">50</span>g</div>
   </div>
 </div>
 
 <div id="overlay">
-  <h2>⚔️ BATTLE</h2>
+  <h2><img src="icons/swords.svg" alt="" style="width:48px;height:48px;vertical-align:middle;margin-right:0.5rem;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.3))">BATTLE</h2>
   <p>Spawn units to attack the enemy castle. Destroy it to win!</p>
   <p style="margin-top:0.5rem">
     <b style="color:#88ccff">P1 (left):</b> Q = Swordsman &nbsp; W = Archer &nbsp; E = Knight<br>
@@ -145,11 +145,15 @@
   </p>
   <table>
     <tr><th>Unit</th><th>Cost</th><th>HP</th><th>Damage</th><th>Range</th></tr>
-    <tr><td>⚔️ Swordsman</td><td>30g</td><td>80</td><td>12</td><td>Melee</td></tr>
-    <tr><td>🏹 Archer</td>   <td>50g</td><td>40</td><td>20</td><td>Ranged</td></tr>
-    <tr><td>🛡️ Knight</td>   <td>80g</td><td>160</td><td>16</td><td>Melee</td></tr>
+    <tr><td>Swordsman</td><td>30g</td><td>80</td><td>12</td><td>Melee</td></tr>
+    <tr><td>Archer</td>   <td>50g</td><td>40</td><td>20</td><td>Ranged</td></tr>
+    <tr><td>Knight</td>   <td>80g</td><td>160</td><td>16</td><td>Melee</td></tr>
   </table>
   <div class="winner" id="winner-text"></div>
+  <div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:0.75rem 1.2rem;max-width:420px;text-align:left;margin-bottom:0.4rem;">
+    <p style="font-size:0.62rem;font-weight:900;letter-spacing:2px;text-transform:uppercase;opacity:0.55;margin-bottom:0.35rem;">What you'll learn</p>
+    <p style="font-size:0.82rem;line-height:1.6;opacity:0.82;">Develops <strong>strategic thinking</strong>, <strong>resource management</strong> &amp; the ability to read and counter your opponent's tactics.</p>
+  </div>
   <button onclick="startGame()">Start Battle!</button>
   <a class="home-btn" href="index.html">⬅ Back to Home</a>
 </div>

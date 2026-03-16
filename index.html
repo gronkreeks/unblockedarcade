@@ -3,20 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Arcade</title>
+  <title>EduArcade</title>
   <link rel="icon" href="favicon.ico">
 
   <!-- Open Graph / Discord / iMessage embed -->
   <meta property="og:type"        content="website">
   <meta property="og:url"         content="https://unblockedarcade.org/">
-  <meta property="og:title"       content="Unblocked Arcade">
-  <meta property="og:description" content="Free multiplayer and singleplayer browser games. No downloads, no login, no ads. Just play.">
+  <meta property="og:title"       content="EduArcade">
+  <meta property="og:description" content="Free educational browser games that build real skills. No downloads, no login, no data stored. Just learn and play.">
   <meta property="og:image"       content="https://unblockedarcade.org/embed.png">
 
   <!-- Twitter / X card -->
   <meta name="twitter:card"        content="summary_large_image">
-  <meta name="twitter:title"       content="Unblocked Arcade">
-  <meta name="twitter:description" content="Free multiplayer and singleplayer browser games. No downloads, no login, no ads. Just play.">
+  <meta name="twitter:title"       content="EduArcade">
+  <meta name="twitter:description" content="Free educational browser games that build real skills. No downloads, no login, no data stored. Just learn and play.">
   <meta name="twitter:image"       content="https://unblockedarcade.org/embed.png">
   <!-- Google AdSense -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9603713606760464" crossorigin="anonymous"></script>
@@ -35,7 +35,7 @@
     /* ── Sky ── */
     .sky {
       width: 100%;
-      background: linear-gradient(to bottom, #5bc8f5, #a8dff7);
+      background: linear-gradient(to bottom, #1a3a6e, #2e6fb5, #5b9fd4);
       padding: 2rem 1rem 4rem;
       display: flex;
       flex-direction: column;
@@ -45,11 +45,18 @@
     }
 
     /* Clouds */
+    @keyframes drift {
+      from { transform: translateX(115vw); }
+      to   { transform: translateX(-300px); }
+    }
+
     .cloud {
       position: absolute;
+      left: 0;
       background: rgba(255,255,255,0.85);
       border-radius: 50px;
       pointer-events: none;
+      animation: drift linear infinite;
     }
     .cloud::before, .cloud::after {
       content: '';
@@ -57,21 +64,72 @@
       background: rgba(255,255,255,0.85);
       border-radius: 50%;
     }
-    .c1 { width:120px; height:36px; top:30px;  left:5%;  }
+    .c1 { width:120px; height:36px; top:30px;  animation-duration:38s; animation-delay:-12s; }
     .c1::before { width:60px;  height:60px;  top:-30px; left:15px; }
     .c1::after  { width:50px;  height:50px;  top:-22px; left:55px; }
 
-    .c2 { width:100px; height:30px; top:55px;  left:30%; }
+    .c2 { width:100px; height:30px; top:55px;  animation-duration:52s; animation-delay:-36s; }
     .c2::before { width:50px;  height:50px;  top:-26px; left:10px; }
     .c2::after  { width:44px;  height:44px;  top:-20px; left:46px; }
 
-    .c3 { width:130px; height:38px; top:20px;  right:8%; }
+    .c3 { width:130px; height:38px; top:18px;  animation-duration:45s; animation-delay:-21s; }
     .c3::before { width:64px;  height:64px;  top:-34px; left:18px; }
     .c3::after  { width:52px;  height:52px;  top:-24px; left:64px; }
 
-    .c4 { width:90px;  height:28px; top:70px;  right:28%; }
+    .c4 { width:90px;  height:28px; top:65px;  animation-duration:30s; animation-delay:-8s; }
     .c4::before { width:46px;  height:46px;  top:-24px; left:8px;  }
     .c4::after  { width:38px;  height:38px;  top:-18px; left:42px; }
+
+    .c5 { width:110px; height:34px; top:42px;  animation-duration:58s; animation-delay:-45s; }
+    .c5::before { width:55px;  height:55px;  top:-28px; left:12px; }
+    .c5::after  { width:46px;  height:46px;  top:-21px; left:52px; }
+
+    /* Birds */
+    @keyframes fly {
+      from { transform: translateX(115vw); }
+      to   { transform: translateX(-80px); }
+    }
+    @keyframes wingL {
+      from { transform: rotate(-22deg); }
+      to   { transform: rotate(16deg); }
+    }
+    @keyframes wingR {
+      from { transform: rotate(22deg); }
+      to   { transform: rotate(-16deg); }
+    }
+
+    .bird {
+      position: absolute;
+      left: 0;
+      pointer-events: none;
+      animation: fly linear infinite;
+    }
+    .bird::before, .bird::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      height: 8px;
+      border-top: 3px solid rgba(25,25,45,0.72);
+      border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+    }
+    .bird::before {
+      width: var(--wing, 13px);
+      left: 0;
+      transform-origin: right top;
+      animation: wingL var(--flap, 0.5s) ease-in-out infinite alternate;
+    }
+    .bird::after {
+      width: var(--wing, 13px);
+      left: var(--wing, 13px);
+      transform-origin: left top;
+      animation: wingR var(--flap, 0.5s) ease-in-out infinite alternate;
+    }
+
+    .b1 { --wing:15px; --flap:0.55s; top:20px;  animation-duration:19s; animation-delay:-5s; }
+    .b2 { --wing:11px; --flap:0.42s; top:62px;  animation-duration:25s; animation-delay:-14s; }
+    .b3 { --wing:13px; --flap:0.5s;  top:10px;  animation-duration:16s; animation-delay:-9s; }
+    .b4 { --wing:9px;  --flap:0.37s; top:78px;  animation-duration:21s; animation-delay:-18s; }
+    .b5 { --wing:17px; --flap:0.62s; top:35px;  animation-duration:14s; animation-delay:-3s; }
 
     /* Title */
     .logo {
@@ -95,11 +153,32 @@
       z-index: 1;
     }
 
-    /* ── Grass strip ── */
+    .mission-btn {
+      margin-top: 1.4rem;
+      padding: 0.5rem 1.5rem;
+      border-radius: 50px;
+      background: rgba(255,255,255,0.15);
+      border: 2px solid rgba(255,255,255,0.45);
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 900;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      text-decoration: none;
+      position: relative;
+      z-index: 1;
+      transition: background 0.18s, border-color 0.18s;
+    }
+    .mission-btn:hover {
+      background: rgba(255,255,255,0.28);
+      border-color: rgba(255,255,255,0.7);
+    }
+
+    /* ── Divider strip ── */
     .grass {
       width: 100%;
-      background: #4caf50;
-      height: 24px;
+      background: #1a3f7a;
+      height: 8px;
       position: relative;
       flex-shrink: 0;
     }
@@ -108,31 +187,22 @@
       position: absolute;
       bottom: 100%;
       left: 0; right: 0;
-      height: 16px;
-      background: repeating-linear-gradient(
-        90deg,
-        #4caf50 0px, #4caf50 8px,
-        transparent 8px, transparent 14px
-      );
-      mask-image: repeating-linear-gradient(
-        90deg,
-        black 0px, black 8px,
-        transparent 8px, transparent 14px
-      );
+      height: 6px;
+      background: #0f2a55;
     }
     .grass::after {
       content: '';
       position: absolute;
       top: 100%;
       left: 0; right: 0;
-      height: 12px;
-      background: #388e3c;
+      height: 4px;
+      background: #0a1e3d;
     }
 
     /* ── Ground / game area ── */
     .ground {
       width: 100%;
-      background: #8B5E3C;
+      background: #0f1e3d;
       flex: 1;
       display: flex;
       flex-direction: row;
@@ -158,6 +228,22 @@
       letter-spacing: 3px;
       text-transform: uppercase;
       margin-bottom: 1.5rem;
+    }
+
+    /* Educational skill tag on cards */
+    .skill-tag {
+      display: inline-block;
+      margin-top: auto;
+      margin-bottom: 0.3rem;
+      padding: 0.2rem 0.7rem;
+      border-radius: 50px;
+      font-size: 0.6rem;
+      font-weight: 900;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      background: rgba(255,255,255,0.15);
+      border: 1.5px solid rgba(255,255,255,0.3);
+      color: rgba(255,255,255,0.9);
     }
 
     /* ── Game grid ── */
@@ -203,10 +289,11 @@
     .card:hover.card-tag    { box-shadow: 0 14px 36px rgba(231,76,60,0.6); }
 
     .icon {
-      font-size: 3.5rem;
+      width: 52px;
+      height: 52px;
       display: block;
-      margin-bottom: 0.8rem;
-      filter: drop-shadow(0 3px 6px rgba(0,0,0,0.25));
+      margin: 0 auto 0.8rem;
+      filter: drop-shadow(0 3px 6px rgba(0,0,0,0.3));
     }
 
     .card-title {
@@ -222,6 +309,8 @@
       line-height: 1.55;
       font-weight: 600;
     }
+
+    .skill-tag + .badge { margin-top: 0; }
 
     .badge {
       display: block;
@@ -255,13 +344,8 @@
       gap: 0.5rem;
       cursor: default;
     }
-    .card-soon span { font-size: 1.8rem; opacity: 0.3; }
+    .card-soon img { display: block; margin: 0 auto 0.3rem; }
 
-    .card-recommended {
-      outline: 3px solid #ffd700;
-      outline-offset: 2px;
-      box-shadow: 0 0 0 3px #ffd700, 0 6px 20px rgba(39,174,96,0.45);
-    }
     .badge-mobile {
       position: absolute;
       top: 8px;
@@ -280,22 +364,6 @@
       z-index: 2;
     }
 
-    .card-recommended::before {
-      content: '★ Recommended';
-      position: absolute;
-      top: 8px; left: 50%;
-      transform: translateX(-50%);
-      background: #ffd700;
-      color: #1a1a1a;
-      font-size: 0.55rem;
-      font-weight: 900;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      padding: 2px 8px;
-      border-radius: 20px;
-      white-space: nowrap;
-      z-index: 2;
-    }
   </style>
 </head>
 <body>
@@ -305,8 +373,15 @@
     <div class="cloud c2"></div>
     <div class="cloud c3"></div>
     <div class="cloud c4"></div>
-    <div class="logo">ARCADE</div>
-    <p class="tagline">pick a game and play</p>
+    <div class="cloud c5"></div>
+    <div class="bird b1"></div>
+    <div class="bird b2"></div>
+    <div class="bird b3"></div>
+    <div class="bird b4"></div>
+    <div class="bird b5"></div>
+    <div class="logo">EduArcade</div>
+    <p class="tagline">learn through play</p>
+    <a class="mission-btn" href="mission.html">Our Mission</a>
   </div>
 
   <div class="grass"></div>
@@ -315,61 +390,90 @@
 
     <!-- Centre: section label + game grid -->
     <div class="ground-main">
-      <p class="section-label">2 Player Games</p>
+
+      <!-- ── Motor Skills & Coordination ── -->
+      <p class="section-label">Motor Skills &amp; Coordination</p>
       <div class="grid">
 
         <a class="card card-tag" href="tag.html">
-          <span class="icon">🏃</span>
+          <img class="icon" src="icons/runner.svg" alt="Running figure">
           <div class="card-title">Tag</div>
-          <span class="badge">2 Players</span>
-        </a>
-
-        <a class="card card-tag" href="battle.html" style="background:linear-gradient(160deg,#e67e22,#ca6f1e);box-shadow:0 6px 20px rgba(230,126,34,0.45)">
-          <span class="badge-mobile">📱 Mobile</span>
-          <span class="icon">⚔️</span>
-          <div class="card-title">Battle</div>
-          <span class="badge">2 Players</span>
-        </a>
-
-        <a class="card card-tag" href="sniper.html" style="background:linear-gradient(160deg,#27ae60,#1e8449);box-shadow:0 6px 20px rgba(39,174,96,0.45)">
-          <span class="icon">🎯</span>
-          <div class="card-title">Sniper</div>
+          <span class="skill-tag">Agility &amp; Awareness</span>
           <span class="badge">2 Players</span>
         </a>
 
         <a class="card card-tag" href="boxing.html" style="background:linear-gradient(160deg,#e74c3c,#8e0000);box-shadow:0 6px 20px rgba(231,76,60,0.45)">
-          <span class="icon">🥊</span>
+          <img class="icon" src="icons/boxing.svg" alt="Boxing glove">
           <div class="card-title">Boxing</div>
+          <span class="skill-tag">Motor Skills</span>
+          <span class="badge">2 Players</span>
+        </a>
+
+        <a class="card card-tag" href="sniper.html" style="background:linear-gradient(160deg,#27ae60,#1e8449);box-shadow:0 6px 20px rgba(39,174,96,0.45)">
+          <img class="icon" src="icons/target.svg" alt="Crosshair target">
+          <div class="card-title">Laser Tag</div>
+          <span class="skill-tag">Focus &amp; Precision</span>
+          <span class="badge">2 Players</span>
+        </a>
+
+        <a class="card card-tag" href="starclicker.html" style="background:linear-gradient(160deg,#1a1a4e,#0a0820);box-shadow:0 6px 20px rgba(100,80,255,0.45)">
+          <img class="icon" src="icons/star.svg" alt="Star">
+          <div class="card-title">Star Clicker</div>
+          <span class="skill-tag">Motor Skills</span>
+          <span class="badge">1 Player</span>
+        </a>
+
+        <div class="card-soon"><img src="icons/runner.svg" width="28" height="28" alt="" style="opacity:0.3;margin-bottom:0.3rem;">More games<br>coming soon</div>
+
+      </div>
+
+      <!-- ── Strategy & Critical Thinking ── -->
+      <p class="section-label" style="margin-top:2.5rem;">Strategy &amp; Critical Thinking</p>
+      <div class="grid">
+
+        <a class="card card-tag" href="battle.html" style="background:linear-gradient(160deg,#e67e22,#ca6f1e);box-shadow:0 6px 20px rgba(230,126,34,0.45)">
+          <span class="badge-mobile">📱 Mobile</span>
+          <img class="icon" src="icons/swords.svg" alt="Crossed swords">
+          <div class="card-title">Battle</div>
+          <span class="skill-tag">Strategic Thinking</span>
           <span class="badge">2 Players</span>
         </a>
 
         <a class="card card-tag" href="chess.html" style="background:linear-gradient(160deg,#5d4037,#3e2723);box-shadow:0 6px 20px rgba(93,64,55,0.55)">
           <span class="badge-mobile">📱 Mobile</span>
-          <span class="icon">♟</span>
+          <img class="icon" src="icons/pawn.svg" alt="Chess pawn">
           <div class="card-title">Chess</div>
+          <span class="skill-tag">Logic &amp; Planning</span>
           <span class="badge">2 Players</span>
         </a>
 
+        <a class="card card-tag" href="survive.html" style="background:linear-gradient(160deg,#27ae60,#145a32);box-shadow:0 6px 20px rgba(39,174,96,0.45)">
+          <img class="icon" src="icons/zombie.svg" alt="Zombie">
+          <div class="card-title">Survive</div>
+          <span class="skill-tag">Problem Solving</span>
+          <span class="badge">1 Player</span>
+        </a>
+
+        <div class="card-soon"><img src="icons/gamepad.svg" width="28" height="28" alt="" style="opacity:0.3;margin-bottom:0.3rem;">More games<br>coming soon</div>
+        <div class="card-soon"><img src="icons/gamepad.svg" width="28" height="28" alt="" style="opacity:0.3;margin-bottom:0.3rem;">More games<br>coming soon</div>
+
       </div>
 
-      <p class="section-label" style="margin-top:2.5rem;">Singleplayer Games</p>
+      <!-- ── Literacy & Technology ── -->
+      <p class="section-label" style="margin-top:2.5rem;">Literacy &amp; Technology</p>
       <div class="grid">
 
-        <a class="card card-tag card-recommended" href="survive.html" style="background:linear-gradient(160deg,#27ae60,#145a32)">
-          <span class="icon">🧟</span>
-          <div class="card-title">Survive</div>
+        <a class="card card-tag" href="typing.html" style="background:linear-gradient(160deg,#6a1ab5,#2d0060);box-shadow:0 6px 20px rgba(106,26,181,0.45)">
+          <img class="icon" src="icons/keyboard.svg" alt="Keyboard">
+          <div class="card-title">Type Quest</div>
+          <span class="skill-tag">Literacy &amp; Tech</span>
           <span class="badge">1 Player</span>
         </a>
 
-        <a class="card card-tag" href="starclicker.html" style="background:linear-gradient(160deg,#1a1a4e,#0a0820);box-shadow:0 6px 20px rgba(100,80,255,0.45)">
-          <span class="icon">⭐</span>
-          <div class="card-title">Star Clicker</div>
-          <span class="badge">1 Player</span>
-        </a>
-
-        <div class="card-soon"><span>🎮</span>More games<br>coming soon</div>
-        <div class="card-soon"><span>🎮</span>More games<br>coming soon</div>
-        <div class="card-soon"><span>🎮</span>More games<br>coming soon</div>
+        <div class="card-soon"><img src="icons/pencil.svg" width="28" height="28" alt="" style="opacity:0.3;margin-bottom:0.3rem;">More games<br>coming soon</div>
+        <div class="card-soon"><img src="icons/pencil.svg" width="28" height="28" alt="" style="opacity:0.3;margin-bottom:0.3rem;">More games<br>coming soon</div>
+        <div class="card-soon"><img src="icons/pencil.svg" width="28" height="28" alt="" style="opacity:0.3;margin-bottom:0.3rem;">More games<br>coming soon</div>
+        <div class="card-soon"><img src="icons/pencil.svg" width="28" height="28" alt="" style="opacity:0.3;margin-bottom:0.3rem;">More games<br>coming soon</div>
 
       </div>
     </div>
@@ -393,7 +497,7 @@
     <a href="privacy.html" style="color:rgba(255,255,255,0.5);text-decoration:none;margin:0 0.8rem;font-weight:700;">Privacy Policy</a>
     <a href="contact.html" style="color:rgba(255,255,255,0.5);text-decoration:none;margin:0 0.8rem;font-weight:700;">Contact</a>
   </div>
-  © 2026 Unblocked Arcade · All rights reserved
+  © 2026 EduArcade · All rights reserved
 </footer>
 </body>
 </html>
