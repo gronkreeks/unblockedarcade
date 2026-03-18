@@ -8,7 +8,7 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: #2d6a1f;
+      background: #0f1e3d;
       font-family: 'Segoe UI', sans-serif;
       color: #fff;
       display: flex;
@@ -43,7 +43,7 @@
     }
     #overlay {
       position: fixed; inset: 0;
-      background: rgba(20,70,10,0.93);
+      background: rgba(10,20,50,0.97);
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       z-index: 10; gap: 0.6rem;
     }
@@ -64,6 +64,17 @@
       text-decoration: none; margin-top: 0.2rem;
     }
     #overlay a:hover { color: #fff; }
+  </style>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9603713606760464" crossorigin="anonymous"></script>
+  <style>
+    .ad-side { position: fixed; top: 50%; transform: translateY(-50%); z-index: 99; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+    .ad-left  { left: 4px; }
+    .ad-right { right: 4px; }
+    .ad-lbl   { font: 700 0.58rem/1 'Segoe UI',sans-serif; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(255,255,255,0.25); }
+    .ad-wrap  { width: 172px; height: 732px; background: rgba(10,25,60,0.55); border-radius: 12px; border: 1.5px solid rgba(100,160,255,0.35); box-shadow: 0 0 20px rgba(30,100,220,0.25), inset 0 0 16px rgba(100,160,255,0.05); position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .ad-wrap::after { content: 'AD SLOT'; font: 700 0.6rem/1 'Segoe UI',sans-serif; letter-spacing: 3px; text-transform: uppercase; color: rgba(100,160,255,0.35); white-space: nowrap; transform: rotate(90deg); pointer-events: none; }
+    .ad-wrap ins { position: absolute !important; inset: 6px; }
+    @media (max-width: 1380px) { .ad-side { display: none !important; } }
   </style>
 </head>
 <body>
@@ -184,8 +195,9 @@ function spawnParticles(x, y, col, n) {
 
 // ── Game state ───────────────────────────────────────────────────────────────
 let gameRunning = false;
-let player, cam, resources, blocks, zombies, bullets;
+let player, cam, resources, blocks, zombies, bullets, bossProjectiles;
 let waveNum, waveTimer, waveActive, zombiesLeft, spawnTimer, spawnQueue, bossQueue;
+let endlessModeActive;
 let buildMode, selectedBlock, buildAction;
 
 // ── Resource definitions ─────────────────────────────────────────────────────
@@ -244,14 +256,16 @@ function initGame() {
   blocks = [];
   zombies = [];
   bullets = [];
+  bossProjectiles = [];
   particles.length = 0;
   waveNum = 0;
-  waveTimer = 55;
+  waveTimer = 25;
   waveActive = false;
   zombiesLeft = 0;
   spawnTimer = 0;
   spawnQueue = 0;
   bossQueue = 0;
+  endlessModeActive = false;
   buildMode = false;
   selectedBlock = 0;
   buildAction = 'place';
@@ -287,11 +301,22 @@ function startWave() {
   waveNum++;
   waveActive = true;
   waveTimer = 0;
-  const count = 4 + waveNum * 3;
-  // Bosses: first at wave 10, +1 every 5 waves after
-  bossQueue = waveNum >= 10 ? Math.floor((waveNum - 10) / 5) + 1 : 0;
-  spawnQueue = count;
-  zombiesLeft = count + bossQueue;
+
+  let totalEnemies, bossFraction;
+  if (endlessModeActive) {
+    // Endless mode: very aggressive scaling from wave 11 onwards
+    const ew = waveNum - 10;  // 1, 2, 3 ...
+    totalEnemies = Math.min(50, 25 + ew * 3);
+    bossFraction = Math.min(0.95, 0.75 + ew * 0.05);
+  } else {
+    // Normal: bosses only from wave 10+, scaling hard to ~90% by wave 20
+    totalEnemies = Math.min(35, 7 + waveNum * 2);
+    bossFraction = waveNum >= 10 ? Math.min(0.90, (waveNum - 9) * 0.10) : 0;
+  }
+
+  bossQueue = Math.round(totalEnemies * bossFraction);
+  spawnQueue = totalEnemies - bossQueue;
+  zombiesLeft = totalEnemies;
   spawnTimer = 0;
 }
 
@@ -300,24 +325,25 @@ function spawnZombie(forceBoss) {
   if (forceBoss) {
     type = 'boss';
   } else {
-    // Runners: wave 5+, chance grows each wave
-    const runnerChance = waveNum >= 5 ? Math.min(0.5, (waveNum - 4) * 0.08) : 0;
+    // Runners: wave 2+, chance grows each wave
+    const runnerChance = waveNum >= 2 ? Math.min(0.65, (waveNum - 1) * 0.08) : 0;
     if (Math.random() < runnerChance) type = 'runner';
   }
 
   let speed, maxHp, r;
   if (type === 'boss') {
-    speed = Math.max(0.9, 0.9 + (waveNum - 10) * 0.03);
-    maxHp = 600 + Math.max(0, (waveNum - 10)) * 40;
+    // Bosses start at wave 10; scale aggressively from there
+    speed = Math.max(0.9, 0.9 + (waveNum - 10) * 0.07);
+    maxHp = 900 + Math.max(0, waveNum - 9) * 120;
     r = 28;
   } else if (type === 'runner') {
     // Just barely faster than player (player = 2.8)
-    speed = 2.85 + Math.min((waveNum - 5) * 0.01, 0.15);
-    maxHp = Math.max(20, 25 + (waveNum - 5) * 6);
+    speed = 2.9 + Math.min((waveNum - 5) * 0.02, 0.25);
+    maxHp = Math.max(25, 30 + (waveNum - 5) * 8);
     r = 11;
   } else {
-    speed = 0.7 + (waveNum - 1) * 0.06;
-    maxHp = 40 + (waveNum - 1) * 12;
+    speed = 0.75 + (waveNum - 1) * 0.08;
+    maxHp = 50 + (waveNum - 1) * 15;
     r = 14;
   }
 
@@ -334,6 +360,7 @@ function spawnZombie(forceBoss) {
     speed,
     type,
     attackTimer: 0,
+    rangeTimer: rand(1.5, 3.5),
     blockTarget: null,
     walkFrame: 0, walkTimer: 0,
     armSwing: 0
@@ -601,7 +628,7 @@ function update(dt) {
       if (spawnTimer <= 0) {
         spawnZombie(false);
         spawnQueue--;
-        spawnTimer = 1;
+        spawnTimer = endlessModeActive ? 0.4 : 0.65;
       }
     }
     // Spawn bosses (after regular zombies are mostly out)
@@ -614,7 +641,11 @@ function update(dt) {
     // Check wave end
     if (spawnQueue === 0 && bossQueue === 0 && zombies.length === 0) {
       waveActive = false;
-      waveTimer = 55;
+      if (waveNum === 10 && !endlessModeActive) {
+        showEndlessMode();
+      } else {
+        waveTimer = 25;
+      }
     }
   }
 
@@ -635,6 +666,29 @@ function update(dt) {
       }
     }
     if (hit) { bullets.splice(i, 1); continue; }
+  }
+
+  // Update boss projectiles
+  for (let i = bossProjectiles.length - 1; i >= 0; i--) {
+    const b = bossProjectiles[i];
+    b.x += b.vx; b.y += b.vy;
+    b.dist += Math.hypot(b.vx, b.vy);
+    if (b.dist > 650) { bossProjectiles.splice(i, 1); continue; }
+    // Block collision
+    let hitWall = false;
+    for (const blk of blocks) {
+      if (blk.hp <= 0) continue;
+      const r = blockRect(blk);
+      if (circleRect(b.x, b.y, 6, r.x, r.y, r.w, r.h)) { hitWall = true; break; }
+    }
+    if (hitWall) { spawnParticles(b.x, b.y, '#a050ff', 5); bossProjectiles.splice(i, 1); continue; }
+    // Player hit
+    if (player.invTimer <= 0 && dist(b.x, b.y, player.x, player.y) < player.r + 6) {
+      player.hp -= 10;
+      player.invTimer = 0.5;
+      spawnParticles(b.x, b.y, '#a050ff', 8);
+      bossProjectiles.splice(i, 1);
+    }
   }
 
   // Remove dead zombies
@@ -691,6 +745,16 @@ function updateZombies(dt) {
         spawnParticles(z.blockTarget.x, z.blockTarget.y, '#a44', z.type === 'boss' ? 6 : 3);
       }
     } else {
+      // Boss ranged attack — fires a purple orb toward the player
+      if (z.type === 'boss') {
+        z.rangeTimer -= dt;
+        if (z.rangeTimer <= 0 && dist(z.x, z.y, player.x, player.y) < 520) {
+          z.rangeTimer = 2.0 + Math.random() * 1.2;
+          const shootAng = Math.atan2(player.y - z.y, player.x - z.x);
+          bossProjectiles.push({ x: z.x, y: z.y, vx: Math.cos(shootAng) * 5.5, vy: Math.sin(shootAng) * 5.5, dist: 0 });
+        }
+      }
+
       const ang = Math.atan2(player.y - z.y, player.x - z.x);
       z.x += Math.cos(ang) * z.speed;
       z.y += Math.sin(ang) * z.speed;
@@ -1191,6 +1255,18 @@ function draw() {
     ctx.shadowBlur = 0;
   }
 
+  // Boss projectiles
+  for (const b of bossProjectiles) {
+    ctx.shadowColor = '#cc00ff'; ctx.shadowBlur = 18;
+    const grad = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, 8);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.4, '#cc44ff');
+    grad.addColorStop(1, 'rgba(100,0,200,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(b.x, b.y, 8, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
   // Zombies
   for (const z of zombies) drawZombie(z);
 
@@ -1362,9 +1438,33 @@ function drawHUD() {
   }
 }
 
+// ── Endless mode transition ───────────────────────────────────────────────────
+function showEndlessMode() {
+  gameRunning = false;
+  const ov = document.getElementById('overlay');
+  ov.style.background = 'rgba(10,5,30,0.96)';
+  ov.innerHTML = `
+    <h2 style="color:#c084fc;font-size:2.8rem;letter-spacing:5px;text-shadow:0 0 40px rgba(192,132,252,0.7),0 0 80px rgba(124,58,237,0.4)">ENDLESS MODE</h2>
+    <div style="font-size:1.05rem;font-weight:900;color:#fff;letter-spacing:1px">You survived the first 10 waves.</div>
+    <p style="margin-top:0.3rem">The horde has no end.<br>Bosses multiply faster. Waves never stop.<br>How long can you last?</p>
+    <p style="color:#ff6b6b;font-weight:900;font-size:0.88rem;letter-spacing:1px;margin-top:0.2rem">WARNING — difficulty scales significantly quicker from here.</p>
+    <button id="endlessBtn" style="background:linear-gradient(135deg,#7c3aed,#c084fc);box-shadow:0 4px 24px rgba(124,58,237,0.6)">Enter the Endless →</button>
+    <a href="index.html">&#8592; Back to Home</a>
+  `;
+  ov.style.display = 'flex';
+  document.getElementById('endlessBtn').addEventListener('click', () => {
+    ov.style.background = '';
+    ov.style.display = 'none';
+    endlessModeActive = true;
+    waveTimer = 15;
+    gameRunning = true;
+  });
+}
+
 // ── Game over ─────────────────────────────────────────────────────────────────
 function showGameOver() {
   const ov = document.getElementById('overlay');
+  ov.style.background = '';
   ov.innerHTML = `
     <h2>💀 GAME OVER</h2>
     <div class="survived">Survived ${waveNum > 0 ? waveNum - (waveActive?0:1) : 0} wave${(waveNum-1)===1?'':'s'}</div>
@@ -1400,5 +1500,20 @@ document.getElementById('startBtn').addEventListener('click', startGame);
 
 requestAnimationFrame(ts => { lastTime = ts; requestAnimationFrame(loop); });
 </script>
+
+<div class="ad-side ad-left">
+  <span class="ad-lbl">Ad</span>
+  <div class="ad-wrap">
+    <ins class="adsbygoogle" style="display:inline-block;width:160px;height:720px" data-ad-client="ca-pub-9603713606760464" data-ad-slot="1358802053"></ins>
+    <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+  </div>
+</div>
+<div class="ad-side ad-right">
+  <span class="ad-lbl">Ad</span>
+  <div class="ad-wrap">
+    <ins class="adsbygoogle" style="display:inline-block;width:160px;height:720px" data-ad-client="ca-pub-9603713606760464" data-ad-slot="1358802053"></ins>
+    <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+  </div>
+</div>
 </body>
 </html>
