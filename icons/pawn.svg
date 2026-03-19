@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- head -->
+  <circle cx="32" cy="13" r="10" fill="white"/>
+  <!-- neck -->
+  <rect x="28" y="22" width="8" height="8" fill="white"/>
+  <!-- body (trapezoid, wider at bottom) -->
+  <path d="M17 30 L47 30 L42 50 L22 50 Z" fill="white"/>
+  <!-- base -->
+  <rect x="12" y="50" width="40" height="9" rx="4.5" fill="white"/>
+  <!-- subtle neck/body shadow -->
+  <rect x="28" y="28" width="8" height="3" fill="rgba(0,0,0,0.07)"/>
+</svg>

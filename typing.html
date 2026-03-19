@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Type Quest</title>
+  <link rel="icon" href="favicon.ico">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+
+    body {
+      min-height: 100vh;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      transition: background 0.7s;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* ── THEMES ── */
+    .t-meadow  { background: linear-gradient(160deg,#87ceeb 0%,#c5e87a 100%); }
+    .t-forest  { background: linear-gradient(160deg,#0d2b0d 0%,#1a4a1a 100%); }
+    .t-cave    { background: linear-gradient(160deg,#1a1015 0%,#3a2530 100%); }
+    .t-keep    { background: linear-gradient(160deg,#3a4050 0%,#6a7080 100%); }
+    .t-dungeon { background: linear-gradient(160deg,#100800 0%,#2a1500 100%); }
+    .t-swamp   { background: linear-gradient(160deg,#061008 0%,#1a3010 100%); }
+    .t-desert  { background: linear-gradient(160deg,#8b5e1a 0%,#d4a042 100%); }
+    .t-summit  { background: linear-gradient(160deg,#607088 0%,#a8c8e8 100%); }
+    .t-lair    { background: linear-gradient(160deg,#1a0000 0%,#4a0000 100%); }
+    .t-throne  { background: linear-gradient(135deg,#0a0015 0%,#1a0040 40%,#2a0020 100%); }
+
+    /* ── BG DECORATION ── */
+    .deco {
+      position: fixed; inset: 0; pointer-events: none;
+      font-size: 4rem; overflow: hidden; z-index: 0;
+    }
+    .deco span {
+      position: absolute; opacity: 0.12;
+      animation: sway 8s ease-in-out infinite;
+      user-select: none;
+    }
+    @keyframes sway {
+      0%,100% { transform: translateY(0) rotate(-5deg); }
+      50% { transform: translateY(-12px) rotate(5deg); }
+    }
+
+    /* ── SCREENS ── */
+    .screen {
+      display: none; flex-direction: column; align-items: center;
+      justify-content: center; min-height: 100vh; width: 100%;
+      padding: 2rem 1rem; position: relative; z-index: 1;
+    }
+    .screen.active { display: flex; }
+
+    /* ── PANEL ── */
+    .panel {
+      background: rgba(0,0,0,0.6);
+      border-radius: 18px;
+      padding: 2.2rem 2.8rem;
+      max-width: 780px; width: 100%;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    /* theme-specific panel overrides */
+    .t-meadow  .panel { background:rgba(255,255,255,0.88); color:#1a2a10; border-color:rgba(100,160,60,0.4); }
+    .t-forest  .panel { background:rgba(0,15,0,0.85); color:#a0d090; border-color:#2a5a2a; }
+    .t-cave    .panel { background:rgba(18,10,18,0.90); color:#c0a8c0; border-color:#4a304a; }
+    .t-keep    .panel { background:rgba(35,40,50,0.88); color:#d0d4e0; border-color:#606878; }
+    .t-dungeon .panel { background:rgba(12,6,0,0.93); color:#d0a040; border-color:#6a3800; }
+    .t-swamp   .panel { background:rgba(4,12,4,0.92); color:#78b050; border-color:#2a4818; }
+    .t-desert  .panel { background:rgba(35,18,0,0.82); color:#f0d878; border-color:#c08820; }
+    .t-summit  .panel { background:rgba(235,245,255,0.88); color:#1a2840; border-color:#90b8d8; }
+    .t-lair    .panel { background:rgba(28,0,0,0.92); color:#ff8050; border-color:#8b0000; }
+    .t-throne  .panel { background:rgba(10,0,22,0.94); color:#ffd700; border-color:#8800cc; }
+
+    /* ── TYPOGRAPHY ── */
+    h1 { font-size: 3.5rem; font-weight: 900; letter-spacing: 4px; margin-bottom: 0.5rem; text-align: center; }
+    h2 { font-size: 1.8rem; font-weight: 800; margin-bottom: 0.8rem; }
+    h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: 0.4rem; opacity: 0.7; letter-spacing: 2px; text-transform: uppercase; }
+    p  { font-size: 0.95rem; line-height: 1.7; opacity: 0.85; }
+
+    .level-badge {
+      display: inline-block;
+      font-size: 0.7rem; font-weight: 900; letter-spacing: 2px;
+      text-transform: uppercase; padding: 4px 14px;
+      border-radius: 50px; margin-bottom: 1rem;
+      background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+    }
+    .t-meadow  .level-badge { background:rgba(60,120,20,0.15); border-color:rgba(60,120,20,0.4); color:#2a6010; }
+    .t-dungeon .level-badge { background:rgba(160,80,0,0.2); border-color:#8b5000; color:#d0a040; }
+    .t-throne  .level-badge { background:rgba(180,0,255,0.15); border-color:#aa00ff; color:#ffd700; }
+
+    /* ── TIP BOX ── */
+    .tip-box {
+      margin: 1.2rem 0;
+      padding: 1rem 1.3rem;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.08);
+      border-left: 4px solid rgba(255,255,255,0.3);
+      font-size: 0.9rem; line-height: 1.7;
+    }
+    .tip-box strong { display: block; margin-bottom: 0.3rem; font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase; opacity: 0.6; }
+    .t-meadow .tip-box  { background:rgba(80,160,0,0.08); border-color:#6ab030; }
+    .t-forest .tip-box  { border-color:#4a8a4a; }
+    .t-dungeon .tip-box { border-color:#8b5000; }
+    .t-throne .tip-box  { border-color:#aa00ff; background:rgba(170,0,255,0.1); }
+
+    /* ── BUTTONS ── */
+    .btn {
+      display: inline-block; margin-top: 1.4rem;
+      padding: 0.75rem 2.2rem; border-radius: 50px;
+      font-size: 1rem; font-weight: 800; letter-spacing: 2px;
+      text-transform: uppercase; cursor: pointer; border: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn:hover { transform: translateY(-3px); }
+    .btn-primary { background: #fff; color: #1a1a1a; box-shadow: 0 4px 16px rgba(0,0,0,0.25); }
+    .t-meadow  .btn-primary { background:#4a9820; color:#fff; box-shadow:0 4px 16px rgba(74,152,32,0.4); }
+    .t-forest  .btn-primary { background:#3a7a3a; color:#fff; box-shadow:0 4px 16px rgba(0,100,0,0.4); }
+    .t-cave    .btn-primary { background:#7a5a7a; color:#fff; }
+    .t-keep    .btn-primary { background:#5a6070; color:#fff; }
+    .t-dungeon .btn-primary { background:#a06010; color:#fff; box-shadow:0 4px 16px rgba(160,96,16,0.5); }
+    .t-swamp   .btn-primary { background:#4a7828; color:#fff; }
+    .t-desert  .btn-primary { background:#c07010; color:#fff; }
+    .t-summit  .btn-primary { background:#2a5888; color:#fff; }
+    .t-lair    .btn-primary { background:#8b0000; color:#fff; box-shadow:0 4px 24px rgba(255,0,0,0.3); }
+    .t-throne  .btn-primary { background:#aa00ff; color:#fff; box-shadow:0 4px 24px rgba(170,0,255,0.5); }
+    .btn-secondary { background: rgba(255,255,255,0.15); color: inherit; border: 1px solid rgba(255,255,255,0.3); }
+
+    /* ── START SCREEN ── */
+    .start-logo { width: 72px; height: 72px; display: block; margin: 0 auto 0.3rem; filter: drop-shadow(0 3px 8px rgba(0,0,0,0.3)); }
+    .start-sub  { font-size: 0.85rem; letter-spacing: 4px; text-transform: uppercase; opacity: 0.6; margin-bottom: 0.5rem; text-align: center; }
+
+    .level-list {
+      display: grid; grid-template-columns: repeat(5, 1fr);
+      gap: 0.5rem; margin: 1.5rem 0;
+    }
+    .level-pip {
+      border-radius: 8px; padding: 0.5rem 0.3rem; text-align: center;
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; opacity: 0.35;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .level-pip.unlocked { opacity: 1; cursor: pointer; }
+    .level-pip.done { opacity: 1; cursor: pointer; }
+    .level-pip .pip-icon { font-size: 1.3rem; display: block; margin-bottom: 2px; }
+    .level-pip .pip-check { display: none; }
+    .level-pip.done .pip-check { display: block; color: #4f4; font-size: 0.7rem; }
+
+    /* ── TYPING SCREEN ── */
+    .typing-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;
+    }
+    .stat-row { display: flex; gap: 1.5rem; }
+    .stat { text-align: center; }
+    .stat-val { font-size: 1.6rem; font-weight: 900; display: block; }
+    .stat-lbl { font-size: 0.6rem; letter-spacing: 2px; text-transform: uppercase; opacity: 0.5; }
+
+    .wpm-target {
+      font-size: 0.75rem; font-weight: 700; letter-spacing: 1px;
+      opacity: 0.6; text-transform: uppercase;
+    }
+
+    .text-display {
+      font-size: 1.15rem; line-height: 1.9; letter-spacing: 0.03em;
+      background: rgba(0,0,0,0.2); border-radius: 12px;
+      padding: 1.2rem 1.5rem; margin: 1rem 0;
+      font-family: 'Courier New', monospace;
+      user-select: none; cursor: text;
+      white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word;
+    }
+    .t-meadow .text-display  { background:rgba(0,0,0,0.07); }
+    .t-summit .text-display  { background:rgba(0,0,0,0.07); }
+    .t-desert .text-display  { background:rgba(0,0,0,0.15); }
+
+    .ch { position: relative; }
+    .ch.correct { color: #4f4; }
+    .ch.wrong   { color: #f44; background: rgba(255,0,0,0.15); border-radius: 2px; }
+    .ch.cursor  { background: rgba(255,255,255,0.35); border-radius: 2px; animation: blink 0.9s step-end infinite; }
+    .t-meadow .ch.correct { color: #2a7a10; }
+    .t-meadow .ch.cursor  { background: rgba(0,0,0,0.15); }
+    .t-summit .ch.correct { color: #1a5a28; }
+    .t-summit .ch.cursor  { background: rgba(0,0,60,0.15); }
+    .t-desert .ch.correct { color: #a0ff60; }
+    @keyframes blink { 50% { background: transparent; } }
+
+    .hidden-input {
+      position: absolute; opacity: 0; width: 1px; height: 1px;
+      pointer-events: none; top: 0; left: 0;
+    }
+
+    .progress-bar-wrap {
+      height: 6px; background: rgba(255,255,255,0.1);
+      border-radius: 50px; margin: 0.5rem 0;
+    }
+    .progress-bar {
+      height: 100%; background: rgba(255,255,255,0.5);
+      border-radius: 50px; transition: width 0.1s;
+      width: 0%;
+    }
+    .t-meadow  .progress-bar { background: #4a9820; }
+    .t-dungeon .progress-bar { background: #d08020; }
+    .t-throne  .progress-bar { background: #aa00ff; }
+    .t-lair    .progress-bar { background: #ff3300; }
+
+    .hint { font-size: 0.72rem; opacity: 0.45; text-align: center; margin-top: 0.4rem; letter-spacing: 1px; }
+    .home-link { display: block; text-align: center; margin-top: 0.9rem; font-size: 0.72rem; font-weight: 800; letter-spacing: 1px; color: rgba(255,255,255,0.45); text-decoration: none; }
+    .home-link:hover { color: rgba(255,255,255,0.8); }
+
+    /* ── RESULT SCREEN ── */
+    .result-big { text-align: center; margin: 0.5rem 0; }
+    .result-big img { width: 64px; height: 64px; filter: drop-shadow(0 3px 10px rgba(0,0,0,0.3)); }
+    .result-title { font-size: 2rem; font-weight: 900; text-align: center; margin-bottom: 0.3rem; }
+    .result-sub { text-align: center; opacity: 0.65; font-size: 0.9rem; margin-bottom: 1.2rem; }
+    .result-stats {
+      display: flex; gap: 1.5rem; justify-content: center;
+      margin: 1rem 0; flex-wrap: wrap;
+    }
+    .result-stat {
+      text-align: center; padding: 0.8rem 1.5rem;
+      background: rgba(255,255,255,0.1); border-radius: 12px;
+      min-width: 100px;
+    }
+    .result-stat-val { font-size: 2rem; font-weight: 900; display: block; }
+    .result-stat-lbl { font-size: 0.65rem; letter-spacing: 2px; text-transform: uppercase; opacity: 0.55; }
+    .pass-msg { color: #4f4; }
+    .fail-msg { color: #f88; }
+    .t-meadow .pass-msg { color: #2a7a10; }
+    .t-throne .pass-msg { color: #ffd700; }
+
+    .btn-row { display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap; }
+
+    /* ── LEVEL COMPLETE BANNER ── */
+    .congrats {
+      text-align: center; padding: 0.6rem;
+      font-size: 0.8rem; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; opacity: 0.7;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 600px) {
+      h1 { font-size: 2.5rem; }
+      .panel { padding: 1.5rem 1.2rem; }
+      .level-list { grid-template-columns: repeat(5,1fr); gap: 0.3rem; }
+      .stat-val { font-size: 1.3rem; }
+      .text-display { font-size: 1rem; }
+    }
+  </style>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9603713606760464" crossorigin="anonymous"></script>
+  <style>
+    .ad-side { position: fixed; top: 50%; transform: translateY(-50%); z-index: 99; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+    .ad-left  { left: 4px; }
+    .ad-right { right: 4px; }
+    .ad-lbl   { font: 700 0.58rem/1 'Segoe UI',sans-serif; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(255,255,255,0.25); }
+    .ad-wrap  { position: absolute; inset: 0; background: rgba(10,25,60,0.55); border-radius: 12px; border: 1.5px solid rgba(100,160,255,0.35); box-shadow: 0 0 20px rgba(30,100,220,0.25), inset 0 0 16px rgba(100,160,255,0.05); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .ad-outer { position: relative; width: 172px; height: 732px; }
+    .ad-ins-wrap { position: absolute; inset: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+    .ad-wrap::after { content: 'AD SLOT'; font: 700 0.6rem/1 'Segoe UI',sans-serif; letter-spacing: 3px; text-transform: uppercase; color: rgba(100,160,255,0.35); white-space: nowrap; transform: rotate(90deg); pointer-events: none; }
+    @media (max-width: 900px) { .ad-side { display: none !important; } }
+  </style>
+</head>
+<body class="t-meadow">
+
+<input class="hidden-input" id="hidden-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+<div class="deco" id="deco"></div>
+
+<!-- ── START SCREEN ── -->
+<div class="screen active" id="screen-start">
+  <div class="panel">
+    <img class="start-logo" src="icons/keyboard.svg" alt="Keyboard">
+    <h1>TYPE QUEST</h1>
+    <p class="start-sub">10 Levels · 10 Techniques · One Throne</p>
+    <p style="text-align:center; opacity:0.7; font-size:0.88rem; margin-top:0.5rem;">
+      Journey from the meadow to the throne room, mastering a new typing skill each step of the way.
+    </p>
+    <div class="level-list" id="level-list"></div>
+    <div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:0.75rem 1.2rem;text-align:left;margin-bottom:1rem;">
+      <p style="font-size:0.62rem;font-weight:900;letter-spacing:2px;text-transform:uppercase;opacity:0.55;margin-bottom:0.35rem;">What you'll learn</p>
+      <p style="font-size:0.82rem;line-height:1.6;opacity:0.82;">Builds <strong>typing speed</strong>, <strong>accuracy</strong> &amp; <strong>keyboard fluency</strong> — each level introduces a new technique, from home-row basics to full-keyboard mastery.</p>
+    </div>
+    <div style="text-align:center;">
+      <button class="btn btn-primary" onclick="startFromBeginning()">Begin Quest</button>
+      <button class="btn btn-secondary" onclick="resumeQuest()" id="resume-btn" style="display:none;">Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── INTRO SCREEN ── -->
+<div class="screen" id="screen-intro">
+  <div class="panel">
+    <div class="level-badge" id="intro-badge"></div>
+    <h2 id="intro-name"></h2>
+    <h3 id="intro-technique"></h3>
+    <div class="tip-box">
+      <strong>Technique Tip</strong>
+      <span id="intro-tip"></span>
+    </div>
+    <p id="intro-flavour" style="margin-top:0.8rem; font-style:italic; opacity:0.6;"></p>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem; flex-wrap:wrap; gap:0.5rem;">
+      <span class="wpm-target" id="intro-wpm-target"></span>
+      <div>
+        <button class="btn btn-secondary" onclick="showScreen('start')" style="margin-top:0;">Back</button>
+        <button class="btn btn-primary" onclick="startTyping()" style="margin-top:0; margin-left:0.5rem;">Start Level</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── TYPING SCREEN ── -->
+<div class="screen" id="screen-typing">
+  <div class="panel">
+    <div class="typing-header">
+      <div>
+        <div style="font-size:0.65rem; letter-spacing:2px; text-transform:uppercase; opacity:0.5;" id="typing-level-name"></div>
+        <div style="font-size:1rem; font-weight:800;" id="typing-technique"></div>
+      </div>
+      <div class="stat-row">
+        <div class="stat">
+          <span class="stat-val" id="stat-wpm">0</span>
+          <span class="stat-lbl">WPM</span>
+        </div>
+        <div class="stat">
+          <span class="stat-val" id="stat-acc">100%</span>
+          <span class="stat-lbl">Accuracy</span>
+        </div>
+        <div class="stat">
+          <span class="stat-val" id="stat-time">-:--</span>
+          <span class="stat-lbl">Time Left</span>
+        </div>
+      </div>
+    </div>
+    <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar"></div></div>
+    <div class="wpm-target" id="typing-wpm-target" style="margin-bottom:0.3rem;"></div>
+    <div class="text-display" id="text-display" onclick="focusInput()"></div>
+    <p class="hint">Click the text then start typing. Backspace to correct mistakes.</p>
+    <a href="index.html" class="home-link">← Back to Home</a>
+  </div>
+</div>
+
+<!-- ── RESULT SCREEN ── -->
+<div class="screen" id="screen-result">
+  <div class="panel">
+    <div class="result-big" id="result-emoji"></div>
+    <div class="result-title" id="result-title"></div>
+    <div class="result-sub" id="result-sub"></div>
+    <div class="result-stats">
+      <div class="result-stat">
+        <span class="result-stat-val" id="result-wpm"></span>
+        <span class="result-stat-lbl">WPM</span>
+      </div>
+      <div class="result-stat">
+        <span class="result-stat-val" id="result-acc"></span>
+        <span class="result-stat-lbl">Accuracy</span>
+      </div>
+      <div class="result-stat">
+        <span class="result-stat-val" id="result-time"></span>
+        <span class="result-stat-lbl">Time</span>
+      </div>
+      <div class="result-stat">
+        <span class="result-stat-val" id="result-target"></span>
+        <span class="result-stat-lbl">Target WPM</span>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="retryLevel()">Retry</button>
+      <button class="btn btn-primary" id="next-btn" onclick="nextLevel()">Next Level →</button>
+    </div>
+    <a href="index.html" class="home-link">← Back to Home</a>
+    <div class="congrats" id="congrats-msg"></div>
+  </div>
+</div>
+
+<script>
+// ── LEVEL DATA ──────────────────────────────────────────────────────────────
+const LEVELS = [
+  {
+    num: 1,
+    name: "The Meadow",
+    theme: "meadow",
+    wpm: 15,
+    technique: "Home Row Keys",
+    tip: "Rest your left fingers on A S D F and right fingers on J K L ; — feel the small bumps on F and J. These are your anchors. After every keystroke, your fingers must return home. Never hunt for keys; let muscle memory guide you.",
+    flavour: "The journey begins in a sun-dappled meadow. Even the mightiest typists started here.",
+    deco: ["🌼","🌿","🦋","🌻","🌾"],
+    text: "as all glad lads ask dad a flash flask falls a lass has a salad a flag fades and a hall adds a sad gal all fall"
+  },
+  {
+    num: 2,
+    name: "The Forest",
+    theme: "forest",
+    wpm: 25,
+    technique: "Top Row Reach",
+    tip: "The top row — Q W E R T Y U I O P — requires upward extension from home position. Stretch your fingers like spider legs without lifting your palms. For T and Y, your index fingers reach. Keep wrists hovering, never resting on the desk.",
+    flavour: "Ancient trees tower above. The forest demands precision — one wrong branch and you fall.",
+    deco: ["🌲","🍄","🦊","🍃","🦉"],
+    text: "the quiet wyvern perched atop the oldest tree while winter rains swept through the upper forest where owls write their quiet poetry"
+  },
+  {
+    num: 3,
+    name: "The Cave",
+    theme: "cave",
+    wpm: 35,
+    technique: "Bottom Row Reach",
+    tip: "The bottom row — Z X C V B N M — needs a downward curl from home position. Keep your wrists elevated and curl your fingers downward. Never drop your whole hand to reach Z or X. Practise: zip, mix, vex, box, numb, came.",
+    flavour: "Darkness closes in. Only the sharp tap of keys echoes through the cavern walls.",
+    deco: ["🪨","💎","🦇","🕯️","⛏️"],
+    text: "the bronze axe carved below the cavern the dark maze of vines and branches made numb men examine the crevice beneath the venomous zone"
+  },
+  {
+    num: 4,
+    name: "The Keep",
+    theme: "keep",
+    wpm: 45,
+    technique: "Shift Key & Capitals",
+    tip: "Always use the OPPOSITE hand's Shift key. To capitalise A, press Right Shift + A. To capitalise K, press Left Shift + K. This keeps both hands balanced on the keyboard. Never press Shift with the same hand as the letter — it causes cramping and slows you down.",
+    flavour: "Stone walls rise around you. The keep demands discipline — form before speed.",
+    deco: ["🏰","⚔️","🛡️","🪬","🗡️"],
+    text: "King Arthur Led His Knights Beyond the Dark River to Battle the Forces of the Ancient Enemy Seeking the Golden Crown at Dawn"
+  },
+  {
+    num: 5,
+    name: "The Dungeon",
+    theme: "dungeon",
+    wpm: 55,
+    technique: "Number Row",
+    tip: "Numbers live above the top row. Keep your fingers anchored on home row and reach up with the appropriate finger — 1 with left pinky, 5 with left index, 6 with right index, 0 with right pinky. Never look down. Eyes stay on the screen always.",
+    flavour: "Chains scrape stone. Torch flames flicker. Every keystroke echoes in the darkness below.",
+    deco: ["⛓️","🔥","💀","🗝️","🪣"],
+    text: "in 1485 some 30000 soldiers marched 17 miles for a battle that lasted 2 hours at dawn with only 3 supply wagons and 10 torches between them"
+  },
+  {
+    num: 6,
+    name: "The Swamp",
+    theme: "swamp",
+    wpm: 65,
+    technique: "Punctuation Mastery",
+    tip: "Punctuation lives on the right side: comma under your right middle finger, period under your right ring finger, semicolon under your right pinky. Apostrophe is right of L. For dashes and exclamation marks, use Right Shift. Flow through punctuation without breaking rhythm.",
+    flavour: "Murky water, tangled roots, unseen creatures. Navigate carefully — one mistake and you sink.",
+    deco: ["🐸","🌿","🐍","🪷","🐊"],
+    text: "Wait! The bridge is out... can you hear it? Yes: the iron chains have snapped. Run, move now! Through the vines, quickly, before it rises."
+  },
+  {
+    num: 7,
+    name: "The Desert",
+    theme: "desert",
+    wpm: 70,
+    technique: "Common Word Patterns",
+    tip: "Stop thinking letter-by-letter. Train your fingers to recognise 'the', 'and', 'ing', 'tion', 'ment' as single muscle movements — like chords on an instrument. The most common English words are: the, of, and, to, in, is, that, for. These should fire automatically.",
+    flavour: "Heat shimmers over endless sand. The only shade is found in the rhythm of words.",
+    deco: ["🏜️","🦂","🌵","☀️","🐪"],
+    text: "the strength of the northern expedition was changing rapidly as the ancient wind swept through the ruins that the team had been searching for all morning"
+  },
+  {
+    num: 8,
+    name: "The Summit",
+    theme: "summit",
+    wpm: 80,
+    technique: "Rhythm & Consistency",
+    tip: "Consistent rhythm beats burst speed every time. Type like a metronome — steady, even keystrokes. When you approach a hard sequence, slow down slightly rather than stumbling. A smooth 75 WPM with 99% accuracy beats an erratic 90 WPM with errors. Breathe. Flow. Repeat.",
+    flavour: "Wind howls at the peak. Your fingers must be steady as the mountain itself.",
+    deco: ["❄️","⛰️","🦅","🌨️","🏔️"],
+    text: "the cold wind carved the mountain slowly over countless seasons while eagles circled far above the frozen peaks below the pale winter stars of the northern sky"
+  },
+  {
+    num: 9,
+    name: "The Dragon's Lair",
+    theme: "lair",
+    wpm: 90,
+    technique: "Speed Bursting",
+    tip: "Identify easy sequences in text and sprint through them — short common words, familiar patterns. Then briefly slow for hard combos like 'str', 'ght', 'tion', or capital letters. This is surge typing: accelerate on the straights, brake for corners. Every skilled typist does this instinctively.",
+    flavour: "The beast stirs. FIRE erupts. There is no time for hesitation — only action.",
+    deco: ["🐉","🔥","💀","⚡","🗡️"],
+    text: "FIRE! The dragon erupted from its lair wings spread wide, claws raking the stone floor! Draw your blade NOW and charge before it rises again into the air!"
+  },
+  {
+    num: 10,
+    name: "The Throne Room",
+    theme: "throne",
+    wpm: 100,
+    technique: "Full Mastery",
+    tip: "Every technique combines now: home row anchor, opposite-hand Shift, eyes never down, rhythm over speed, common patterns flow as chords, bursts on easy words, controlled reach for numbers and punctuation. You have trained for this. Trust your fingers. The throne awaits.",
+    flavour: "The final door opens. Gold. Silence. A crown upon a stone pedestal. Prove you are worthy.",
+    deco: ["👑","⚜️","💜","✨","🌟"],
+    text: "You have mastered the ancient art of the keyboard. With swift hands and iron will, you conquered meadow, forest, cave, dungeon, swamp, desert, summit, and lair. Now you reign supreme upon the Throne of Keys, undisputed champion of the typing realm."
+  }
+];
+
+// ── STATE ───────────────────────────────────────────────────────────────────
+let state = {
+  level: 0,
+  typed: '',
+  startTime: null,
+  timerInterval: null,
+  timeLimit: 0,
+  errors: 0,
+  finished: false,
+  completedLevels: JSON.parse(localStorage.getItem('typequest_done') || '[]'),
+  bestWPM: JSON.parse(localStorage.getItem('typequest_wpm') || '{}')
+};
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+function init() {
+  buildLevelList();
+  if (state.completedLevels.length > 0) {
+    document.getElementById('resume-btn').style.display = 'inline-block';
+  }
+  applyTheme('meadow');
+}
+
+function buildLevelList() {
+  const el = document.getElementById('level-list');
+  el.innerHTML = '';
+  LEVELS.forEach((lvl, i) => {
+    const done = state.completedLevels.includes(i);
+    const unlocked = i === 0 || state.completedLevels.includes(i - 1);
+    const pip = document.createElement('div');
+    pip.className = 'level-pip' + (done ? ' done' : '') + (unlocked ? ' unlocked' : '');
+    pip.innerHTML = `<span class="pip-icon">${['🌼','🌲','🪨','🏰','⛓️','🌿','🏜️','⛰️','🐉','👑'][i]}</span>${lvl.name.replace('The ','')}<span class="pip-check">✓</span>`;
+    if (unlocked || done) pip.onclick = () => openLevel(i);
+    el.appendChild(pip);
+  });
+}
+
+// ── NAVIGATION ───────────────────────────────────────────────────────────────
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+}
+
+function openLevel(idx) {
+  state.level = idx;
+  const lvl = LEVELS[idx];
+  applyTheme(lvl.theme);
+
+  document.getElementById('intro-badge').textContent = `Level ${lvl.num} of 10`;
+  document.getElementById('intro-name').textContent = lvl.name;
+  document.getElementById('intro-technique').textContent = `⟡ ${lvl.technique}`;
+  document.getElementById('intro-tip').textContent = lvl.tip;
+  document.getElementById('intro-flavour').textContent = lvl.flavour;
+  document.getElementById('intro-wpm-target').textContent = `Target: ${lvl.wpm} WPM to pass`;
+
+  showScreen('intro');
+}
+
+function startFromBeginning() {
+  if (state.completedLevels.length > 0) {
+    if (!window.confirm('Are you sure you want to start a new quest?\n\nYour saved progress will be cleared.')) return;
+    state.completedLevels = [];
+    state.bestWPM = {};
+    localStorage.removeItem('typequest_done');
+    localStorage.removeItem('typequest_wpm');
+    document.getElementById('resume-btn').style.display = 'none';
+    buildLevelList();
+  }
+  openLevel(0);
+}
+
+function resumeQuest() {
+  const nextUndone = LEVELS.findIndex((_, i) => !state.completedLevels.includes(i));
+  openLevel(nextUndone === -1 ? 0 : nextUndone);
+}
+
+// ── TYPING ───────────────────────────────────────────────────────────────────
+function startTyping() {
+  const lvl = LEVELS[state.level];
+  state.typed = '';
+  state.startTime = null;
+  state.errors = 0;
+  state.finished = false;
+  state.timeLimit = Math.ceil((lvl.text.length / 5) / lvl.wpm * 60 * 1.5);
+
+  clearInterval(state.timerInterval);
+
+  document.getElementById('typing-level-name').textContent = `Level ${lvl.num} · ${lvl.name}`;
+  document.getElementById('typing-technique').textContent = lvl.technique;
+  document.getElementById('typing-wpm-target').textContent = `Target: ${lvl.wpm} WPM`;
+
+  renderText();
+  updateStats();
+  showScreen('typing');
+  focusInput();
+}
+
+function focusInput() {
+  const input = document.getElementById('hidden-input');
+  input.value = '';
+  input.focus();
+}
+
+function renderText() {
+  const lvl = LEVELS[state.level];
+  const target = lvl.text;
+  const typed = state.typed;
+  const display = document.getElementById('text-display');
+
+  let html = '';
+  for (let i = 0; i < target.length; i++) {
+    const ch = target[i];
+    if (i < typed.length) {
+      const cls = typed[i] === target[i] ? 'correct' : 'wrong';
+      html += `<span class="ch ${cls}">${ch}</span>`;
+    } else if (i === typed.length) {
+      html += `<span class="ch cursor">${ch}</span>`;
+    } else {
+      html += `<span class="ch">${ch}</span>`;
+    }
+  }
+  display.innerHTML = html;
+
+  // Update progress bar
+  const pct = Math.min(100, (typed.length / target.length) * 100);
+  document.getElementById('progress-bar').style.width = pct + '%';
+}
+
+function updateStats() {
+  const elapsed = state.startTime ? (Date.now() - state.startTime) / 1000 : 0;
+  const minutes = elapsed / 60 || 0.001;
+  const target = LEVELS[state.level].text;
+
+  // Count correct chars
+  let correct = 0;
+  for (let i = 0; i < state.typed.length; i++) {
+    if (state.typed[i] === target[i]) correct++;
+  }
+
+  const wpm = state.startTime ? Math.round((correct / 5) / minutes) : 0;
+  const acc = state.typed.length ? Math.round((correct / state.typed.length) * 100) : 100;
+
+  // Countdown timer
+  const remaining = state.startTime ? Math.max(0, state.timeLimit - elapsed) : state.timeLimit;
+  const remSecs = Math.ceil(remaining);
+  const timeStr = `${Math.floor(remSecs / 60)}:${String(remSecs % 60).padStart(2, '0')}`;
+
+  document.getElementById('stat-wpm').textContent = wpm;
+  document.getElementById('stat-acc').textContent = acc + '%';
+  const timeEl = document.getElementById('stat-time');
+  timeEl.textContent = timeStr;
+  timeEl.style.color = remaining <= 10 && state.startTime ? '#f88' : '';
+
+  if (state.startTime && remaining <= 0) timeFail();
+}
+
+// ── INPUT HANDLING ────────────────────────────────────────────────────────────
+document.getElementById('hidden-input').addEventListener('input', function(e) {
+  if (state.finished) return;
+
+  const target = LEVELS[state.level].text;
+  const raw = this.value;
+
+  // Start timer on first character
+  if (!state.startTime && raw.length > 0) {
+    state.startTime = Date.now();
+    state.timerInterval = setInterval(updateStats, 200);
+  }
+
+  // Limit typed to target length
+  state.typed = raw.slice(0, target.length);
+
+  // Sync input value to prevent runaway
+  if (this.value !== state.typed) this.value = state.typed;
+
+  renderText();
+  updateStats();
+
+  if (state.typed === target) finish();
+});
+
+// Handle backspace on keydown (in case input event doesn't fire correctly)
+document.getElementById('hidden-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') { showScreen('intro'); clearInterval(state.timerInterval); }
+});
+
+function finish() {
+  if (state.finished) return;
+  state.finished = true;
+  clearInterval(state.timerInterval);
+
+  const lvl = LEVELS[state.level];
+  const target = lvl.text;
+  const elapsed = (Date.now() - state.startTime) / 1000;
+  const minutes = elapsed / 60;
+
+  let correct = 0;
+  for (let i = 0; i < state.typed.length; i++) {
+    if (state.typed[i] === target[i]) correct++;
+  }
+
+  const wpm = Math.round((correct / 5) / minutes);
+  const acc = Math.round((correct / target.length) * 100);
+  const secs = Math.floor(elapsed);
+  const timeStr = `${Math.floor(secs/60)}:${String(secs%60).padStart(2,'0')}`;
+
+  const passed = wpm >= lvl.wpm && acc >= 70;
+
+  if (passed && !state.completedLevels.includes(state.level)) {
+    state.completedLevels.push(state.level);
+    localStorage.setItem('typequest_done', JSON.stringify(state.completedLevels));
+  }
+  if (!state.bestWPM[state.level] || wpm > state.bestWPM[state.level]) {
+    state.bestWPM[state.level] = wpm;
+    localStorage.setItem('typequest_wpm', JSON.stringify(state.bestWPM));
+  }
+
+  showResult(passed, wpm, acc, timeStr, lvl.wpm);
+}
+
+function timeFail() {
+  if (state.finished) return;
+  state.finished = true;
+  clearInterval(state.timerInterval);
+
+  const lvl = LEVELS[state.level];
+  const target = lvl.text;
+  const elapsed = state.startTime ? (Date.now() - state.startTime) / 1000 : state.timeLimit;
+  const minutes = elapsed / 60;
+
+  let correct = 0;
+  for (let i = 0; i < state.typed.length; i++) {
+    if (state.typed[i] === target[i]) correct++;
+  }
+
+  const wpm = state.startTime ? Math.round((correct / 5) / minutes) : 0;
+  const acc = state.typed.length ? Math.round((correct / state.typed.length) * 100) : 0;
+  const secs = Math.floor(elapsed);
+  const timeStr = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+
+  showResult(false, wpm, acc, timeStr, lvl.wpm);
+}
+
+function showResult(passed, wpm, acc, time, target) {
+  const lvl = LEVELS[state.level];
+  const isLast = state.level === LEVELS.length - 1;
+
+  document.getElementById('result-emoji').innerHTML = passed
+    ? (isLast ? '<img src="icons/crown.svg" alt="Crown">' : '<img src="icons/check.svg" alt="Level complete">')
+    : '<img src="icons/skull.svg" alt="Failed">';
+  document.getElementById('result-title').textContent = passed
+    ? (isLast ? 'You have claimed the Throne!' : `${lvl.name} Conquered!`)
+    : 'Not fast enough...';
+  document.getElementById('result-title').className = 'result-title ' + (passed ? 'pass-msg' : 'fail-msg');
+  document.getElementById('result-sub').textContent = passed
+    ? (isLast ? 'You are the master typist. The realm bows before you.' : `You typed ${wpm} WPM — clearing the ${lvl.wpm} WPM gate. Onward!`)
+    : `You reached ${wpm} WPM. You need at least ${target} WPM to pass this level.`;
+
+  document.getElementById('result-wpm').textContent = wpm;
+  document.getElementById('result-acc').textContent = acc + '%';
+  document.getElementById('result-time').textContent = time;
+  document.getElementById('result-target').textContent = target;
+
+  const nextBtn = document.getElementById('next-btn');
+  if (passed && !isLast) {
+    nextBtn.style.display = 'inline-block';
+    nextBtn.textContent = `Enter ${LEVELS[state.level + 1].name} →`;
+    document.getElementById('congrats-msg').textContent = '';
+  } else if (passed && isLast) {
+    nextBtn.style.display = 'none';
+    document.getElementById('congrats-msg').textContent = '🏆 Quest Complete · All 10 Levels Mastered';
+  } else {
+    nextBtn.style.display = 'none';
+    document.getElementById('congrats-msg').textContent = '';
+  }
+
+  showScreen('result');
+}
+
+function retryLevel() { startTyping(); }
+
+function nextLevel() {
+  if (state.level < LEVELS.length - 1) {
+    openLevel(state.level + 1);
+  }
+}
+
+// ── THEME ─────────────────────────────────────────────────────────────────────
+function applyTheme(theme) {
+  const body = document.body;
+  body.className = 't-' + theme;
+
+  const lvl = LEVELS.find(l => l.theme === theme);
+  if (!lvl) return;
+
+  const deco = document.getElementById('deco');
+  deco.innerHTML = '';
+  const positions = [
+    {top:'5%',left:'5%'},{top:'10%',left:'88%'},{top:'70%',left:'3%'},
+    {top:'75%',left:'90%'},{top:'40%',left:'50%'},{top:'20%',left:'45%'},
+    {top:'55%',left:'20%'},{top:'60%',left:'75%'},{top:'85%',left:'40%'},
+    {top:'30%',left:'15%'},{top:'88%',left:'65%'},{top:'15%',left:'70%'}
+  ];
+  lvl.deco.concat(lvl.deco).slice(0, 12).forEach((emoji, i) => {
+    const span = document.createElement('span');
+    span.textContent = emoji;
+    span.style.top = positions[i].top;
+    span.style.left = positions[i].left;
+    span.style.animationDelay = (i * 1.3) + 's';
+    span.style.fontSize = (2.5 + (i % 3)) + 'rem';
+    deco.appendChild(span);
+  });
+}
+
+// ── BOOT ──────────────────────────────────────────────────────────────────────
+init();
+</script>
+
+<div class="ad-side ad-left">
+  <span class="ad-lbl">Ad</span>
+  <div class="ad-outer">
+    <div class="ad-wrap"></div>
+    <div class="ad-ins-wrap">
+      <ins class="adsbygoogle" style="display:inline-block;width:160px;height:720px" data-ad-client="ca-pub-9603713606760464" data-ad-slot="1358802053"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+  </div>
+</div>
+<div class="ad-side ad-right">
+  <span class="ad-lbl">Ad</span>
+  <div class="ad-outer">
+    <div class="ad-wrap"></div>
+    <div class="ad-ins-wrap">
+      <ins class="adsbygoogle" style="display:inline-block;width:160px;height:720px" data-ad-client="ca-pub-9603713606760464" data-ad-slot="1358802053"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+  </div>
+</div>
+</body>
+</html>

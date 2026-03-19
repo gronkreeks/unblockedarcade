@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="favicon.ico">
+  <title>Battle</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0f1e3d;
+      font-family: 'Segoe UI', sans-serif;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0.4rem 0.5rem;
+      user-select: none;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    header {
+      width: 100%; max-width: 1100px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding-bottom: 0.3rem;
+    }
+    .back {
+      color: #fff; text-decoration: none; font-size: 0.8rem; font-weight: 700;
+      background: rgba(0,0,0,0.2); padding: 0.25rem 0.7rem;
+      border-radius: 20px; border: 1px solid rgba(255,255,255,0.3);
+    }
+    .back:hover { background: rgba(0,0,0,0.35); }
+    h1 { font-size: 1.7rem; font-weight: 900; letter-spacing: 4px; text-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+
+    canvas { border-radius: 12px; display: block; width: 100%; max-width: 1100px; }
+
+    .controls {
+      width: 100%; max-width: 1100px;
+      display: flex; justify-content: space-between;
+      padding: 0.5rem 0.2rem 0;
+      gap: 1rem;
+    }
+    .ctrl-panel {
+      display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;
+    }
+    .spawn-btn {
+      border: none; border-radius: 10px; cursor: pointer;
+      font-weight: 800; font-size: 0.78rem; padding: 0.4rem 0.7rem;
+      transition: transform 0.1s, opacity 0.1s;
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      color: #fff; min-width: 64px;
+    }
+    .spawn-btn:hover:not(:disabled) { transform: scale(1.06); }
+    .spawn-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .spawn-btn .key  { font-size: 0.65rem; opacity: 0.7; font-weight: 600; }
+    .spawn-btn .cost { font-size: 0.65rem; opacity: 0.85; }
+    .btn-sword  { background: #e74c3c; }
+    .btn-archer { background: #27ae60; }
+    .btn-knight { background: #3498db; }
+    .gold-bar {
+      font-size: 0.85rem; font-weight: 800;
+      background: rgba(0,0,0,0.25); padding: 0.3rem 0.8rem;
+      border-radius: 20px; display: flex; align-items: center; gap: 0.4rem;
+    }
+
+    /* Overlay */
+    #overlay {
+      position: fixed; inset: 0; background: rgba(10,20,50,0.97);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 10; gap: 0.5rem;
+    }
+    #overlay h2 { font-size: 3rem; font-weight: 900; letter-spacing: 3px; text-shadow: 0 3px 10px rgba(0,0,0,0.3); }
+    #overlay p  { color: rgba(255,255,255,0.7); font-size: 0.9rem; }
+    #overlay .winner { font-size: 2rem; font-weight: 900; margin: 0.5rem 0; }
+    #overlay table { border-collapse: collapse; margin: 0.5rem 0; font-size: 0.85rem; }
+    #overlay td, #overlay th { padding: 0.3rem 1rem; text-align: left; }
+    #overlay th { color: rgba(255,255,255,0.5); font-weight: 700; font-size: 0.75rem; text-transform: uppercase; }
+    #overlay button {
+      margin-top: 1rem; padding: 0.75rem 2.5rem;
+      background: linear-gradient(135deg, #e74c3c, #f39c12);
+      color: #fff; border: none; border-radius: 50px;
+      font-size: 1.1rem; font-weight: 900; cursor: pointer; letter-spacing: 1px;
+    }
+    #overlay button:hover { transform: scale(1.05); }
+    .home-btn {
+      display: inline-block; margin-top: 0.5rem; padding: 0.5rem 1.8rem;
+      background: rgba(255,255,255,0.12); color: #fff; border-radius: 50px;
+      border: 2px solid rgba(255,255,255,0.35); text-decoration: none;
+      font-size: 0.85rem; font-weight: 700; letter-spacing: 1px;
+      transition: background 0.15s, transform 0.15s;
+    }
+    .home-btn:hover { background: rgba(255,255,255,0.22); transform: scale(1.04); }
+  </style>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9603713606760464" crossorigin="anonymous"></script>
+  <style>
+    .ad-side { position: fixed; top: 50%; transform: translateY(-50%); z-index: 99; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+    .ad-left  { left: 4px; }
+    .ad-right { right: 4px; }
+    .ad-lbl   { font: 700 0.58rem/1 'Segoe UI',sans-serif; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(255,255,255,0.25); }
+    .ad-wrap  { position: absolute; inset: 0; background: rgba(10,25,60,0.55); border-radius: 12px; border: 1.5px solid rgba(100,160,255,0.35); box-shadow: 0 0 20px rgba(30,100,220,0.25), inset 0 0 16px rgba(100,160,255,0.05); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .ad-outer { position: relative; width: 172px; height: 732px; }
+    .ad-ins-wrap { position: absolute; inset: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+    .ad-wrap::after { content: 'AD SLOT'; font: 700 0.6rem/1 'Segoe UI',sans-serif; letter-spacing: 3px; text-transform: uppercase; color: rgba(100,160,255,0.35); white-space: nowrap; transform: rotate(90deg); pointer-events: none; }
+    @media (max-width: 900px) { .ad-side { display: none !important; } }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="back" href="index.html">← Back</a>
+  <h1>BATTLE</h1>
+  <span style="width:80px"></span>
+</header>
+
+<canvas id="c" width="1100" height="420"></canvas>
+
+<div class="controls">
+  <!-- P1 controls -->
+  <div style="display:flex;gap:0.6rem;align-items:center">
+    <div class="gold-bar"><span id="gold0">50</span>g</div>
+    <div class="ctrl-panel">
+      <button class="spawn-btn btn-sword"  onclick="spawn(0,'sword')" id="b0s">
+        Sword<span class="key">Q</span><span class="cost">30g</span>
+      </button>
+      <button class="spawn-btn btn-archer" onclick="spawn(0,'archer')" id="b0a">
+        Archer<span class="key">W</span><span class="cost">50g</span>
+      </button>
+      <button class="spawn-btn btn-knight" onclick="spawn(0,'knight')" id="b0k">
+        Knight<span class="key">E</span><span class="cost">80g</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- P2 controls -->
+  <div style="display:flex;gap:0.6rem;align-items:center">
+    <div class="ctrl-panel">
+      <button class="spawn-btn btn-sword"  onclick="spawn(1,'sword')" id="b1s">
+        Sword<span class="key">U</span><span class="cost">30g</span>
+      </button>
+      <button class="spawn-btn btn-archer" onclick="spawn(1,'archer')" id="b1a">
+        Archer<span class="key">I</span><span class="cost">50g</span>
+      </button>
+      <button class="spawn-btn btn-knight" onclick="spawn(1,'knight')" id="b1k">
+        Knight<span class="key">O</span><span class="cost">80g</span>
+      </button>
+    </div>
+    <div class="gold-bar"><span id="gold1">50</span>g</div>
+  </div>
+</div>
+
+<div id="overlay">
+  <h2><img src="icons/swords.svg" alt="" style="width:48px;height:48px;vertical-align:middle;margin-right:0.5rem;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.3))">BATTLE</h2>
+  <p>Spawn units to attack the enemy castle. Destroy it to win!</p>
+  <p style="margin-top:0.5rem">
+    <b style="color:#88ccff">P1 (left):</b> Q = Swordsman &nbsp; W = Archer &nbsp; E = Knight<br>
+    <b style="color:#ff8888">P2 (right):</b> U = Swordsman &nbsp; I = Archer &nbsp; O = Knight
+  </p>
+  <table>
+    <tr><th>Unit</th><th>Cost</th><th>HP</th><th>Damage</th><th>Range</th></tr>
+    <tr><td>Swordsman</td><td>30g</td><td>80</td><td>12</td><td>Melee</td></tr>
+    <tr><td>Archer</td>   <td>50g</td><td>40</td><td>20</td><td>Ranged</td></tr>
+    <tr><td>Knight</td>   <td>80g</td><td>160</td><td>16</td><td>Melee</td></tr>
+  </table>
+  <div class="winner" id="winner-text"></div>
+  <div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:0.75rem 1.2rem;max-width:420px;text-align:left;margin-bottom:0.4rem;">
+    <p style="font-size:0.62rem;font-weight:900;letter-spacing:2px;text-transform:uppercase;opacity:0.55;margin-bottom:0.35rem;">What you'll learn</p>
+    <p style="font-size:0.82rem;line-height:1.6;opacity:0.82;">Develops <strong>strategic thinking</strong>, <strong>resource management</strong> &amp; the ability to read and counter your opponent's tactics.</p>
+  </div>
+  <button onclick="startGame()">Start Battle!</button>
+  <a class="home-btn" href="index.html">⬅ Back to Home</a>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+const GROUND_Y   = 340;
+const BASE_W     = 72;
+const BASE_H     = 120;
+const MAX_UNITS  = 10;
+const GOLD_RATE  = 7;     // per second
+const START_GOLD = 50;
+
+const TYPES = {
+  sword:  { label:'Sword',  hp: 80,  dmg: 12, spd: 0.75, range: 30,  rate: 1.2, cost: 30,  col:'#e74c3c', dark:'#a93226' },
+  archer: { label:'Archer', hp: 40,  dmg: 20, spd: 0.55, range: 115, rate: 1.9, cost: 50,  col:'#27ae60', dark:'#1a7a42' },
+  knight: { label:'Knight', hp: 160, dmg: 16, spd: 0.42, range: 30,  rate: 2.1, cost: 80,  col:'#3498db', dark:'#1f6aa5' },
+};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let units, bases, gold, projectiles, running, raf, lastT;
+
+function makeBases() {
+  return [
+    { x: 0,          y: GROUND_Y - BASE_H, hp: 500, maxHp: 500, owner: 0 },
+    { x: W - BASE_W, y: GROUND_Y - BASE_H, hp: 500, maxHp: 500, owner: 1 },
+  ];
+}
+
+function spawn(owner, typeKey) {
+  if (!running) return;
+  const t = TYPES[typeKey];
+  if (gold[owner] < t.cost) return;
+  if (units.filter(u => u.owner === owner).length >= MAX_UNITS) return;
+  gold[owner] -= t.cost;
+  const spawnX = owner === 0 ? BASE_W + 2 : W - BASE_W - 2;
+  const yJitter = (Math.random() - 0.5) * 18;
+  units.push({
+    type: typeKey, owner,
+    x: spawnX, y: GROUND_Y + yJitter,
+    hp: t.hp, maxHp: t.hp,
+    atkCd: 0, frame: 0, moving: false,
+  });
+}
+
+function startGame() {
+  document.getElementById('overlay').style.display = 'none';
+  document.getElementById('winner-text').textContent = '';
+  units       = [];
+  bases       = makeBases();
+  gold        = [START_GOLD, START_GOLD];
+  projectiles = [];
+  running     = true;
+  lastT       = null;
+  if (raf) cancelAnimationFrame(raf);
+  raf = requestAnimationFrame(loop);
+}
+
+function endGame(winner) {
+  running = false;
+  const ov = document.getElementById('overlay');
+  ov.style.display = 'flex';
+  const wt = document.getElementById('winner-text');
+  wt.textContent = `Player ${winner + 1} wins!`;
+  wt.style.color = winner === 0 ? '#88ccff' : '#ff8888';
+  ov.querySelector('button').textContent = 'Play Again';
+}
+
+// ── Update ────────────────────────────────────────────────────────────────────
+function update(dt) {
+  const fps60 = Math.min(dt * 60, 2.5);
+  // Gold income
+  gold[0] = Math.min(gold[0] + GOLD_RATE * dt, 999);
+  gold[1] = Math.min(gold[1] + GOLD_RATE * dt, 999);
+
+  for (const u of units) {
+    const t   = TYPES[u.type];
+    const dir = u.owner === 0 ? 1 : -1;
+    const enemies = units.filter(e => e.owner !== u.owner);
+
+    // Find nearest enemy unit
+    let nearest = null, nearestDist = Infinity;
+    for (const e of enemies) {
+      const d = Math.abs(e.x - u.x);
+      if (d < nearestDist) { nearestDist = d; nearest = e; }
+    }
+
+    const enemyBase = bases[1 - u.owner];
+    const baseDist  = Math.abs((enemyBase.x + BASE_W / 2) - u.x);
+
+    u.atkCd = Math.max(0, u.atkCd - dt);
+
+    if (nearest && nearestDist <= t.range) {
+      u.moving = false;
+      if (u.atkCd === 0) {
+        if (u.type === 'archer') {
+          projectiles.push({ x: u.x, y: u.y - 15, target: nearest, spd: 280, dmg: t.dmg });
+        } else {
+          nearest.hp -= t.dmg;
+        }
+        u.atkCd = t.rate;
+      }
+    } else if (!nearest && baseDist <= t.range + BASE_W / 2) {
+      u.moving = false;
+      if (u.atkCd === 0) {
+        enemyBase.hp -= t.dmg;
+        u.atkCd = t.rate;
+      }
+    } else {
+      const targetX = nearest
+        ? nearest.x - dir * (t.range * 0.9)
+        : enemyBase.x + (u.owner === 0 ? 0 : BASE_W);
+      if (Math.abs(targetX - u.x) > 2) {
+        u.x += dir * t.spd * fps60;
+        u.frame += fps60;
+        u.moving = true;
+      } else {
+        u.moving = false;
+      }
+    }
+  }
+
+  // Projectiles
+  for (const p of projectiles) {
+    if (!p.target || p.target.hp <= 0) { p.done = true; continue; }
+    const dx = p.target.x - p.x, dy = (p.target.y - 15) - p.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 8) {
+      p.target.hp -= p.dmg;
+      p.done = true;
+    } else {
+      p.x += (dx / dist) * p.spd * dt;
+      p.y += (dy / dist) * p.spd * dt;
+    }
+  }
+  projectiles = projectiles.filter(p => !p.done);
+
+  // Remove dead units
+  units = units.filter(u => u.hp > 0);
+
+  // Win check
+  if (bases[0].hp <= 0) { endGame(1); return; }
+  if (bases[1].hp <= 0) { endGame(0); return; }
+
+  // Update UI buttons
+  updateButtons();
+}
+
+function updateButtons() {
+  for (const [owner, keys] of [[0,['b0s','b0a','b0k']],[1,['b1s','b1a','b1k']]]) {
+    const costs = [30, 50, 80];
+    const count = units.filter(u => u.owner === owner).length;
+    keys.forEach((id, i) => {
+      const el = document.getElementById(id);
+      el.disabled = gold[owner] < costs[i] || count >= MAX_UNITS;
+    });
+  }
+  document.getElementById('gold0').textContent = Math.floor(gold[0]);
+  document.getElementById('gold1').textContent = Math.floor(gold[1]);
+}
+
+// ── Drawing ───────────────────────────────────────────────────────────────────
+function drawCloud(x, y, s) {
+  ctx.fillStyle = 'rgba(255,255,255,0.88)';
+  ctx.beginPath();
+  ctx.arc(x,          y,       28 * s, 0, Math.PI * 2);
+  ctx.arc(x + 32 * s, y - 10 * s, 36 * s, 0, Math.PI * 2);
+  ctx.arc(x + 70 * s, y,       26 * s, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawBG() {
+  // Sky
+  const sky = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+  sky.addColorStop(0, '#5bc8f5');
+  sky.addColorStop(1, '#a8dff7');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, GROUND_Y);
+  drawCloud(80,  55, 0.9);
+  drawCloud(330, 35, 0.75);
+  drawCloud(600, 60, 1.0);
+  drawCloud(870, 38, 0.85);
+
+  // Grass
+  ctx.fillStyle = '#4caf50';
+  ctx.fillRect(0, GROUND_Y, W, 9);
+  ctx.fillStyle = '#388e3c';
+  ctx.fillRect(0, GROUND_Y + 9, W, 4);
+  // Dirt
+  const dirt = ctx.createLinearGradient(0, GROUND_Y + 13, 0, H);
+  dirt.addColorStop(0, '#8B5E3C');
+  dirt.addColorStop(1, '#6b4423');
+  ctx.fillStyle = dirt;
+  ctx.fillRect(0, GROUND_Y + 13, W, H - GROUND_Y - 13);
+  // Grass blades
+  ctx.fillStyle = '#66bb6a';
+  for (let gx = 6; gx < W; gx += 14) {
+    ctx.fillRect(gx,     GROUND_Y - 5, 3, 6);
+    ctx.fillRect(gx + 6, GROUND_Y - 3, 2, 4);
+  }
+}
+
+function drawBase(b) {
+  const col  = b.owner === 0 ? '#4d96ff' : '#ff6b6b';
+  const stone = '#8a8a9a';
+  const dark  = '#5a5a6a';
+
+  // Stone body
+  ctx.fillStyle = stone;
+  ctx.fillRect(b.x, b.y, BASE_W, BASE_H);
+
+  // Stone bricks (lines)
+  ctx.strokeStyle = dark;
+  ctx.lineWidth = 1;
+  for (let row = 0; row < 5; row++) {
+    const ry = b.y + row * (BASE_H / 5);
+    ctx.beginPath(); ctx.moveTo(b.x, ry); ctx.lineTo(b.x + BASE_W, ry); ctx.stroke();
+    const offset = row % 2 === 0 ? BASE_W / 3 : BASE_W / 6;
+    ctx.beginPath(); ctx.moveTo(b.x + offset, ry); ctx.lineTo(b.x + offset, ry + BASE_H / 5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(b.x + offset + BASE_W / 3, ry); ctx.lineTo(b.x + offset + BASE_W / 3, ry + BASE_H / 5); ctx.stroke();
+  }
+
+  // Battlements
+  const teeth = 4, tw = BASE_W / teeth;
+  ctx.fillStyle = stone;
+  for (let i = 0; i < teeth; i += 2) {
+    ctx.fillRect(b.x + i * tw, b.y - 14, tw - 2, 14);
+    ctx.strokeStyle = dark; ctx.lineWidth = 1;
+    ctx.strokeRect(b.x + i * tw, b.y - 14, tw - 2, 14);
+  }
+
+  // Door
+  ctx.fillStyle = '#5D4037';
+  const dw = 22, dh = 36;
+  const dx = b.x + BASE_W / 2 - dw / 2;
+  ctx.fillRect(dx, b.y + BASE_H - dh, dw, dh);
+  ctx.strokeStyle = '#3e2a1a'; ctx.lineWidth = 1.5;
+  ctx.strokeRect(dx, b.y + BASE_H - dh, dw, dh);
+  // Door arch
+  ctx.fillStyle = '#4a3020';
+  ctx.beginPath();
+  ctx.arc(dx + dw / 2, b.y + BASE_H - dh, dw / 2, Math.PI, 0);
+  ctx.fill();
+
+  // Flag pole + flag
+  const px = b.x + BASE_W / 2;
+  const py = b.y - 14;
+  ctx.strokeStyle = '#aaa'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, py - 28); ctx.stroke();
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.moveTo(px, py - 28);
+  ctx.lineTo(px + (b.owner === 0 ? 18 : -18), py - 22);
+  ctx.lineTo(px, py - 16);
+  ctx.fill();
+
+  // HP bar
+  const barY  = b.y - 26;
+  const hpPct = Math.max(0, b.hp / b.maxHp);
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillRect(b.x, barY, BASE_W, 7);
+  ctx.fillStyle = hpPct > 0.5 ? '#2ecc71' : hpPct > 0.25 ? '#f39c12' : '#e74c3c';
+  ctx.fillRect(b.x, barY, BASE_W * hpPct, 7);
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1;
+  ctx.strokeRect(b.x, barY, BASE_W, 7);
+
+  // HP text
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 9px Segoe UI';
+  ctx.textAlign = 'center';
+  ctx.fillText(`${Math.ceil(b.hp)}`, b.x + BASE_W / 2, barY - 3);
+}
+
+// ── Character Drawing ─────────────────────────────────────────────────────────
+
+function drawCharacter(u) {
+  const t       = TYPES[u.type];
+  const legSwing = u.moving ? Math.sin(u.frame * 0.3) : 0;
+  const atkAmt   = u.atkCd > 0 ? Math.sin((1 - u.atkCd / t.rate) * Math.PI) : 0;
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  // Mirror P2 so they face left
+  if (u.owner === 1) {
+    ctx.translate(u.x, 0);
+    ctx.scale(-1, 1);
+    ctx.translate(-u.x, 0);
+  }
+
+  if      (u.type === 'sword')  drawSwordsman(u.x, u.y, legSwing, atkAmt);
+  else if (u.type === 'archer') drawArcher(u.x, u.y, legSwing, atkAmt);
+  else                          drawKnight(u.x, u.y, legSwing, atkAmt);
+
+  ctx.restore();
+
+  // HP bar & team dot (not mirrored)
+  const hpPct   = u.hp / u.maxHp;
+  const teamCol = u.owner === 0 ? '#4d96ff' : '#ff6b6b';
+  const barY    = u.y - 54;
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillRect(u.x - 13, barY, 26, 4);
+  ctx.fillStyle = hpPct > 0.5 ? '#2ecc71' : hpPct > 0.25 ? '#f39c12' : '#e74c3c';
+  ctx.fillRect(u.x - 13, barY, 26 * hpPct, 4);
+  ctx.fillStyle = teamCol;
+  ctx.beginPath();
+  ctx.arc(u.x, barY - 5, 3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// All characters drawn facing RIGHT. x = center, gy = feet.
+
+function drawSwordsman(x, gy, walk, atk) {
+  const lsw = walk * 9, rsw = -walk * 9;
+
+  // Legs
+  ctx.fillStyle = '#7f5a3c';
+  ctx.beginPath(); ctx.moveTo(x-5,gy-16); ctx.lineTo(x-7+lsw*.4,gy-6); ctx.lineTo(x-1+lsw*.4,gy-6); ctx.lineTo(x-1,gy-16); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x+1,gy-16); ctx.lineTo(x+1+rsw*.4,gy-6); ctx.lineTo(x+7+rsw*.4,gy-6); ctx.lineTo(x+5,gy-16); ctx.closePath(); ctx.fill();
+  // Boots
+  ctx.fillStyle = '#4a2e0d';
+  ctx.fillRect(x-8+lsw*.4, gy-6, 7, 6);
+  ctx.fillRect(x+1+rsw*.4, gy-6, 7, 6);
+
+  // Shield (back arm)
+  ctx.fillStyle = '#717d7e';
+  ctx.fillRect(x-16, gy-29, 7, 13);
+  ctx.fillStyle = '#aab7b8';
+  ctx.fillRect(x-15, gy-28, 2, 11);
+  ctx.fillStyle = '#c0392b'; ctx.fillRect(x-12, gy-25, 3, 3);
+
+  // Body
+  ctx.fillStyle = '#c0392b';
+  ctx.fillRect(x-7, gy-28, 14, 12);
+  ctx.fillStyle = '#922b21'; ctx.fillRect(x-7, gy-23, 14, 2);
+  ctx.fillStyle = '#e74c3c'; ctx.fillRect(x-6, gy-28, 5, 5);
+
+  // Sword arm + sword
+  const tipX = x + 9 + atk * 5;
+  const tipY = gy - 22 - atk * 12;
+  ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(x+5, gy-25); ctx.lineTo(x+8, gy-20); ctx.stroke();
+  ctx.strokeStyle = '#d5d8dc'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(x+9, gy-21); ctx.lineTo(tipX+14, tipY-8); ctx.stroke();
+  ctx.strokeStyle = '#aaa'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x+6,gy-23); ctx.lineTo(x+13,gy-19); ctx.stroke(); // guard
+  ctx.strokeStyle = '#8B6914'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(x+5,gy-19); ctx.lineTo(x+10,gy-22); ctx.stroke(); // handle
+
+  // Helmet dome
+  ctx.fillStyle = '#aab7b8';
+  ctx.beginPath(); ctx.arc(x, gy-34, 8, 0, Math.PI*2); ctx.fill();
+  // Visor band
+  ctx.fillStyle = '#1c2833'; ctx.fillRect(x-8, gy-35, 16, 5);
+  ctx.fillStyle = '#717d7e'; ctx.fillRect(x-6, gy-35, 4, 3); ctx.fillRect(x+1, gy-35, 4, 3);
+  // Plume
+  ctx.fillStyle = '#e74c3c'; ctx.fillRect(x-1, gy-43, 3, 9); ctx.fillRect(x-3, gy-43, 7, 3);
+}
+
+function drawArcher(x, gy, walk, atk) {
+  const lsw = walk * 8, rsw = -walk * 8;
+  const pull = atk * 9;
+
+  // Legs
+  ctx.fillStyle = '#6d4c41';
+  ctx.beginPath(); ctx.moveTo(x-4,gy-14); ctx.lineTo(x-6+lsw*.4,gy-5); ctx.lineTo(x-1+lsw*.4,gy-5); ctx.lineTo(x-1,gy-14); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x+1,gy-14); ctx.lineTo(x+1+rsw*.4,gy-5); ctx.lineTo(x+6+rsw*.4,gy-5); ctx.lineTo(x+4,gy-14); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#4e342e';
+  ctx.fillRect(x-7+lsw*.4, gy-5, 6, 5); ctx.fillRect(x+1+rsw*.4, gy-5, 6, 5);
+
+  // Quiver (back)
+  ctx.fillStyle = '#8d6e63'; ctx.fillRect(x-12, gy-28, 5, 13);
+  ctx.strokeStyle = '#d7ccc8'; ctx.lineWidth = 1;
+  for (let i=0; i<3; i++) { ctx.beginPath(); ctx.moveTo(x-10+i*1.5, gy-28); ctx.lineTo(x-10+i*1.5, gy-37); ctx.stroke(); }
+
+  // Body
+  ctx.fillStyle = '#388e3c'; ctx.fillRect(x-6, gy-26, 12, 12);
+  ctx.fillStyle = '#2e7d32'; ctx.fillRect(x-6, gy-21, 12, 3);
+  ctx.fillStyle = '#43a047'; ctx.fillRect(x-5, gy-26, 5, 5);
+
+  // Draw arm (pulls back when attacking)
+  ctx.strokeStyle = '#388e3c'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(x-4, gy-22); ctx.lineTo(x-2-pull, gy-20); ctx.stroke();
+
+  // Bow (held in forward hand)
+  const bx = x+10;
+  ctx.strokeStyle = '#795548'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(bx, gy-22); ctx.quadraticCurveTo(bx+9, gy-29, bx, gy-37); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(bx, gy-22); ctx.quadraticCurveTo(bx+9, gy-15, bx, gy-8);  ctx.stroke();
+  // String
+  ctx.strokeStyle = '#d7ccc8'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(bx, gy-37); ctx.lineTo(bx-pull, gy-22); ctx.lineTo(bx, gy-8); ctx.stroke();
+  // Arrow
+  ctx.strokeStyle = '#8d6e63'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(bx-pull, gy-22); ctx.lineTo(bx+14, gy-22); ctx.stroke();
+  ctx.fillStyle = '#aaa';
+  ctx.beginPath(); ctx.moveTo(bx+14,gy-24); ctx.lineTo(bx+18,gy-22); ctx.lineTo(bx+14,gy-20); ctx.closePath(); ctx.fill();
+
+  // Face
+  ctx.fillStyle = '#ffcc80'; ctx.beginPath(); ctx.arc(x, gy-31, 7, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#37474f'; ctx.fillRect(x-4,gy-32,3,2); ctx.fillRect(x+1,gy-32,3,2);
+  ctx.strokeStyle = '#37474f'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(x+1,gy-30,2,0.2,Math.PI-0.2); ctx.stroke();
+  // Hood
+  ctx.fillStyle = '#2e7d32';
+  ctx.beginPath(); ctx.moveTo(x-8,gy-29); ctx.lineTo(x+1,gy-44); ctx.lineTo(x+7,gy-29); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#1b5e20';
+  ctx.beginPath(); ctx.moveTo(x-1,gy-29); ctx.lineTo(x+2,gy-42); ctx.lineTo(x+6,gy-29); ctx.closePath(); ctx.fill();
+}
+
+function drawKnight(x, gy, walk, atk) {
+  const lsw = walk * 6, rsw = -walk * 6;
+
+  // Plate legs (wider)
+  ctx.fillStyle = '#4a6fa5';
+  ctx.beginPath(); ctx.moveTo(x-7,gy-17); ctx.lineTo(x-9+lsw*.4,gy-6); ctx.lineTo(x-2+lsw*.4,gy-6); ctx.lineTo(x-2,gy-17); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x+2,gy-17); ctx.lineTo(x+2+rsw*.4,gy-6); ctx.lineTo(x+9+rsw*.4,gy-6); ctx.lineTo(x+7,gy-17); ctx.closePath(); ctx.fill();
+  // Sabatons
+  ctx.fillStyle = '#aab7b8';
+  ctx.fillRect(x-10+lsw*.4, gy-6, 9, 6); ctx.fillRect(x+1+rsw*.4, gy-6, 9, 6);
+  ctx.fillStyle = '#d5d8dc';
+  ctx.fillRect(x-9+lsw*.4, gy-6, 3, 2); ctx.fillRect(x+2+rsw*.4, gy-6, 3, 2);
+
+  // Shield (forward arm, right side)
+  ctx.fillStyle = '#1a5276'; ctx.fillRect(x+8, gy-34, 11, 20);
+  ctx.strokeStyle = '#aab7b8'; ctx.lineWidth = 1.5; ctx.strokeRect(x+8, gy-34, 11, 20);
+  ctx.strokeStyle = '#d5d8dc'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(x+13,gy-34); ctx.lineTo(x+13,gy-14); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x+8,gy-25); ctx.lineTo(x+19,gy-25); ctx.stroke();
+
+  // Body plate
+  ctx.fillStyle = '#2471a3'; ctx.fillRect(x-9, gy-31, 18, 14);
+  ctx.fillStyle = '#1a5276'; ctx.fillRect(x-9, gy-27, 18, 3);
+  ctx.fillStyle = '#2e86c1'; ctx.fillRect(x-8, gy-31, 8, 5);
+  // Pauldrons
+  ctx.fillStyle = '#aab7b8'; ctx.fillRect(x-13, gy-32, 6, 5); ctx.fillRect(x+7, gy-32, 6, 5);
+
+  // Sword arm (back arm, left side) — swings upward when attacking
+  const swy = gy - 28 - atk * 10;
+  ctx.strokeStyle = '#aab7b8'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(x-8, gy-27); ctx.lineTo(x-11, gy-22); ctx.stroke();
+  ctx.strokeStyle = '#d5d8dc'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(x-11, gy-22); ctx.lineTo(x-15, swy); ctx.stroke();
+  ctx.strokeStyle = '#888'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x-7, gy-22); ctx.lineTo(x-15, gy-22); ctx.stroke(); // guard
+
+  // Full helmet (rect)
+  ctx.fillStyle = '#aab7b8'; ctx.fillRect(x-10, gy-46, 20, 17);
+  ctx.fillStyle = '#c0c0c0'; ctx.fillRect(x-10, gy-46, 20, 6);
+  // Visor T-slit
+  ctx.fillStyle = '#1c2833'; ctx.fillRect(x-2, gy-44, 5, 12); ctx.fillRect(x-9, gy-40, 19, 3);
+  // Highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.fillRect(x-9, gy-46, 4, 7);
+}
+
+function drawProjectile(p) {
+  ctx.save();
+  ctx.shadowColor = '#ffe04d';
+  ctx.shadowBlur = 6;
+  ctx.fillStyle = '#ffe04d';
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawHitEffect() {} // kept for future
+
+// ── Loop ──────────────────────────────────────────────────────────────────────
+function loop(ts) {
+  if (!running) return;
+  const dt = lastT ? Math.min((ts - lastT) / 1000, 0.05) : 0;
+  lastT = ts;
+
+  update(dt);
+
+  // Render
+  drawBG();
+  for (const b of bases)       drawBase(b);
+  for (const u of units)       drawCharacter(u);
+  for (const p of projectiles) drawProjectile(p);
+
+  raf = requestAnimationFrame(loop);
+}
+
+// ── Input ─────────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  const map = { q:'sword', w:'archer', e:'knight', u:'sword', i:'archer', o:'knight' };
+  const key = e.key.toLowerCase();
+  if (!map[key]) return;
+  const owner = ['q','w','e'].includes(key) ? 0 : 1;
+  spawn(owner, map[key]);
+  e.preventDefault();
+});
+</script>
+
+<div class="ad-side ad-left">
+  <span class="ad-lbl">Ad</span>
+  <div class="ad-outer">
+    <div class="ad-wrap"></div>
+    <div class="ad-ins-wrap">
+      <ins class="adsbygoogle" style="display:inline-block;width:160px;height:720px" data-ad-client="ca-pub-9603713606760464" data-ad-slot="1358802053"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+  </div>
+</div>
+<div class="ad-side ad-right">
+  <span class="ad-lbl">Ad</span>
+  <div class="ad-outer">
+    <div class="ad-wrap"></div>
+    <div class="ad-ins-wrap">
+      <ins class="adsbygoogle" style="display:inline-block;width:160px;height:720px" data-ad-client="ca-pub-9603713606760464" data-ad-slot="1358802053"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+  </div>
+</div>
+</body>
+</html>

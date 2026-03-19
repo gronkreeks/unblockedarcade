@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" stroke-linecap="round">
+  <!-- Sword 1: tip NW, handle SE -->
+  <line x1="6" y1="6" x2="46" y2="46" stroke="white" stroke-width="3"/>
+  <!-- guard 1 (perpendicular cross-piece) -->
+  <line x1="16" y1="38" x2="24" y2="30" stroke="white" stroke-width="5.5"/>
+  <!-- handle 1 -->
+  <line x1="46" y1="46" x2="58" y2="58" stroke="white" stroke-width="5.5"/>
+  <!-- pommel 1 -->
+  <circle cx="58" cy="58" r="4" fill="white"/>
+
+  <!-- Sword 2: tip NE, handle SW -->
+  <line x1="58" y1="6" x2="18" y2="46" stroke="white" stroke-width="3"/>
+  <!-- guard 2 -->
+  <line x1="48" y1="38" x2="40" y2="30" stroke="white" stroke-width="5.5"/>
+  <!-- handle 2 -->
+  <line x1="18" y1="46" x2="6" y2="58" stroke="white" stroke-width="5.5"/>
+  <!-- pommel 2 -->
+  <circle cx="6" cy="58" r="4" fill="white"/>
+</svg>

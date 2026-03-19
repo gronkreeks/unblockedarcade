@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- crown band -->
+  <path d="M6 52 L6 36 L16 44 L32 10 L48 44 L58 36 L58 52 Z" fill="white"/>
+  <!-- base rim -->
+  <rect x="6" y="50" width="52" height="8" rx="3" fill="white"/>
+  <!-- left jewel -->
+  <circle cx="16" cy="53" r="3.5" fill="rgba(0,0,0,0.15)"/>
+  <!-- centre jewel -->
+  <circle cx="32" cy="53" r="3.5" fill="rgba(0,0,0,0.15)"/>
+  <!-- right jewel -->
+  <circle cx="48" cy="53" r="3.5" fill="rgba(0,0,0,0.15)"/>
+  <!-- tip dot left -->
+  <circle cx="6" cy="36" r="3" fill="white"/>
+  <!-- tip dot centre -->
+  <circle cx="32" cy="10" r="4" fill="white"/>
+  <!-- tip dot right -->
+  <circle cx="58" cy="36" r="3" fill="white"/>
+</svg>

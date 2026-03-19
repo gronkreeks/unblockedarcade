@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- head -->
+  <circle cx="46" cy="10" r="7" fill="white"/>
+  <!-- torso, leaning forward -->
+  <line x1="43" y1="17" x2="29" y2="38" stroke="white" stroke-width="4.5" stroke-linecap="round"/>
+  <!-- trailing arm (back) -->
+  <line x1="38" y1="25" x2="55" y2="30" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- leading arm (forward) -->
+  <line x1="38" y1="25" x2="20" y2="18" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- back leg (extended behind) -->
+  <line x1="29" y1="38" x2="47" y2="54" stroke="white" stroke-width="4" stroke-linecap="round"/>
+  <!-- front leg (bent at knee) -->
+  <line x1="29" y1="38" x2="14" y2="50" stroke="white" stroke-width="4" stroke-linecap="round"/>
+  <line x1="14" y1="50" x2="6" y2="44" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+</svg>
