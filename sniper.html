@@ -64,18 +64,6 @@
     }
     .home-btn:hover { background: rgba(255,255,255,0.22); transform: scale(1.04); }
   </style>
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9603713606760464" crossorigin="anonymous"></script>
-  <style>
-    .ad-side { position: fixed; top: 50%; transform: translateY(-50%); z-index: 99; display: flex; flex-direction: column; align-items: center; gap: 5px; }
-    .ad-left  { left: 4px; }
-    .ad-right { right: 4px; }
-    .ad-lbl   { font: 700 0.58rem/1 'Segoe UI',sans-serif; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(255,255,255,0.25); }
-    .ad-wrap  { position: absolute; inset: 0; background: rgba(10,25,60,0.55); border-radius: 12px; border: 1.5px solid rgba(100,160,255,0.35); box-shadow: 0 0 20px rgba(30,100,220,0.25), inset 0 0 16px rgba(100,160,255,0.05); display: flex; align-items: center; justify-content: center; overflow: hidden; }
-    .ad-outer { position: relative; width: 172px; height: 732px; }
-    .ad-ins-wrap { position: absolute; inset: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-    .ad-wrap::after { content: 'AD SLOT'; font: 700 0.6rem/1 'Segoe UI',sans-serif; letter-spacing: 3px; text-transform: uppercase; color: rgba(100,160,255,0.35); white-space: nowrap; transform: rotate(90deg); pointer-events: none; }
-    @media (max-width: 900px) { .ad-side { display: none !important; } }
-  </style>
 </head>
 <body>
 
@@ -659,25 +647,5 @@ document.addEventListener('keydown', e => {
 document.addEventListener('keyup', e => { keys[e.key] = false; });
 </script>
 
-<div class="ad-side ad-left">
-  <span class="ad-lbl">Ad</span>
-  <div class="ad-outer">
-    <div class="ad-wrap"></div>
-    <div class="ad-ins-wrap">
-      <ins class="adsbygoogle" style="display:inline-block;width:160px;height:720px" data-ad-client="ca-pub-9603713606760464" data-ad-slot="1358802053"></ins>
-      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-    </div>
-  </div>
-</div>
-<div class="ad-side ad-right">
-  <span class="ad-lbl">Ad</span>
-  <div class="ad-outer">
-    <div class="ad-wrap"></div>
-    <div class="ad-ins-wrap">
-      <ins class="adsbygoogle" style="display:inline-block;width:160px;height:720px" data-ad-client="ca-pub-9603713606760464" data-ad-slot="1358802053"></ins>
-      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-    </div>
-  </div>
-</div>
 </body>
 </html>

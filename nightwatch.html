@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="favicon.ico">
+  <title>Night Watch</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0f1e3d;
+      font-family: 'Segoe UI', sans-serif;
+      color: #fff;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 0.4rem 0.5rem;
+      min-height: 100vh; overflow: hidden;
+      user-select: none;
+    }
+    header {
+      width: 100%; max-width: 920px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding-bottom: 0.35rem;
+    }
+    .back {
+      color: #fff; text-decoration: none; font-size: 0.8rem; font-weight: 700;
+      background: rgba(0,0,0,0.2); padding: 0.25rem 0.7rem;
+      border-radius: 20px; border: 1px solid rgba(255,255,255,0.3);
+    }
+    .back:hover { background: rgba(0,0,0,0.35); }
+    h1 { font-size: 1.7rem; font-weight: 900; letter-spacing: 4px; text-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+    canvas { border-radius: 12px; display: block; cursor: crosshair; }
+
+    /* ── HUD overlaid on canvas ── */
+    #wrap { position: relative; }
+    #hud {
+      position: absolute; top: 0; left: 0; right: 0;
+      display: flex; justify-content: space-between; align-items: flex-start;
+      padding: 10px 14px;
+      pointer-events: none;
+    }
+    #pw { display: flex; flex-direction: column; gap: 3px; }
+    #pw-lbl { font-size: 8px; font-weight: 700; letter-spacing: 2px; color: rgba(255,255,255,0.3); text-transform: uppercase; }
+    #pw-bar { width: 110px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
+    #pw-fill { height: 100%; background: #00e676; border-radius: 3px; transition: width 0.9s, background 0.5s; }
+    #pw-pct { font-size: 9px; color: rgba(255,255,255,0.4); }
+    #time { font-size: 13px; font-weight: 700; letter-spacing: 3px; color: rgba(255,255,255,0.5); }
+
+    /* ── Overlay ── */
+    #overlay {
+      position: fixed; inset: 0;
+      background: rgba(10,20,50,0.97);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 30; gap: 0.8rem;
+    }
+    #overlay h2 { font-size: 2.8rem; font-weight: 900; letter-spacing: 8px; color: #fff; text-shadow: 0 2px 12px rgba(0,0,0,0.4); }
+    #ov-sub { font-size: 0.88rem; color: rgba(255,255,255,0.6); max-width: 420px; text-align: center; line-height: 1.9; }
+    .lbox { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 0.7rem 1.1rem; max-width: 360px; }
+    .lbox-lbl { display: block; font-size: 8px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.35); margin-bottom: 0.3rem; }
+    .lbox p { font-size: 0.78rem; line-height: 1.65; color: rgba(255,255,255,0.75); }
+    #ov-result { font-size: 1.3rem; font-weight: 900; letter-spacing: 3px; display: none; }
+    #ov-result.win  { color: #2ecc71; }
+    #ov-result.lose { color: #e74c3c; }
+    #overlay button {
+      margin-top: 0.3rem; padding: 0.7rem 2.5rem;
+      background: linear-gradient(135deg, #27ae60, #2ecc71);
+      color: #fff; border: none; border-radius: 50px; font-size: 1rem;
+      font-weight: 900; cursor: pointer; letter-spacing: 2px;
+      font-family: 'Segoe UI', sans-serif;
+      box-shadow: 0 4px 18px rgba(39,174,96,0.5); transition: transform 0.12s;
+    }
+    #overlay button:hover { transform: scale(1.05); }
+    #overlay a { color: rgba(255,255,255,0.4); font-size: 0.78rem; text-decoration: none; letter-spacing: 1px; font-weight: 700; }
+    #overlay a:hover { color: #fff; }
+  </style>
+</head>
+<body>
+
+<div id="overlay">
+  <h2>NIGHT WATCH</h2>
+  <p id="ov-sub">You're the new night guard. Check the cameras.<br>Manage the doors. Survive until 6 AM.</p>
+  <div class="lbox">
+    <span class="lbox-lbl">What you'll learn</span>
+    <p>Builds <strong>resource management</strong>, <strong>multitasking</strong> &amp; <strong>strategic decision-making</strong> as you balance limited power against multiple threats at once.</p>
+  </div>
+  <p id="ov-result"></p>
+  <button id="ov-btn">BEGIN SHIFT</button>
+  <a href="index.html">← Back to Home</a>
+</div>
+
+<header>
+  <a class="back" href="index.html">&#8592; Back</a>
+  <h1>NIGHT WATCH</h1>
+  <div style="width:80px"></div>
+</header>
+
+<div id="wrap">
+  <canvas id="c" width="920" height="530"></canvas>
+  <div id="hud">
+    <div id="pw">
+      <span id="pw-lbl">Power</span>
+      <div id="pw-bar"><div id="pw-fill"></div></div>
+      <span id="pw-pct">100%</span>
+    </div>
+    <span id="time">12:00 AM</span>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const W = 920, H = 530;
+
+// ── Layout ────────────────────────────────────────────────────────────────
+const CEIL  = 88;           // ceiling bottom edge y
+const FLOOR = 420;          // floor/desk top edge y
+const LHW   = 270;          // left  hallway: x=0   → x=LHW
+const RHX   = 650;          // right hallway: x=RHX → x=W
+
+// Clickable regions (office view)
+const R = {
+  lLight: { x:246, y:218, w:22, h:30 },
+  lDoor:  { x:246, y:256, w:22, h:42 },
+  rLight: { x:652, y:218, w:22, h:30 },
+  rDoor:  { x:652, y:256, w:22, h:42 },
+  monitor:{ x:352, y:192, w:216, h:162 },
+};
+
+// Camera tablet constants
+const T = {
+  x:100, y:48, w:720, h:434,
+  sx:124, sy:82, sw:510, sh:268,   // screen area
+  gx:124, gy:362, cw:124, ch:46, gg:6,  // grid (2×2)
+  lbx:762, lby:56, lbw:46, lbh:22, // LOWER button
+};
+// Grid position [col,row] for each camera
+const CGRID = { 1:[0,0], 2:[1,0], 3:[0,1], 4:[1,1] };
+const CLBL  = { 1:'STAGE', 2:'DINING', 3:'L. HALL', 4:'R. HALL' };
+
+// ── Game state ────────────────────────────────────────────────────────────
+let running=false, gameOver=false;
+let power=100, gameTime=0;
+const HR = 45; // seconds per game-hour
+let camUp=false, activeCam=1;
+let doors  = {left:false, right:false};
+let lTimer = {left:0, right:0}; // light flash frames remaining
+let eTimer = {left:-1,  right:-1}; // entry countdown seconds
+
+const ANIM = {
+  bonnie:{ name:'Bonnie', col:'#7c44ee', pos:'stage', path:['stage','dining','left_hall','left_door'],  door:'left',  mhz:0.06,  on:true,  doorSit:0 },
+  chica: { name:'Chica',  col:'#d49400', pos:'stage', path:['stage','dining','right_hall','right_door'], door:'right', mhz:0.048, on:false, ahr:1, doorSit:0 },
+  foxy:  { name:'Foxy',   col:'#bb2200', pos:'stage', path:['stage','left_hall','left_door'],            door:'left',  mhz:0.0,   on:false, ahr:2, neg:0, doorSit:0 },
+};
+
+const CAM_ROOMS = {1:['stage'],2:['dining'],3:['left_hall'],4:['right_hall']};
+const CAM_NAMES = {1:'SHOW STAGE',2:'DINING AREA',3:'LEFT HALL',4:'RIGHT HALL'};
+
+let tickId=null, rafId=null, lastF=0;
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+const hr  = () => Math.floor(gameTime / HR);
+const atRoom = r => Object.values(ANIM).filter(a=>a.on && a.pos===r);
+const atDoor = s => Object.values(ANIM).filter(a=>a.on && a.pos===s+'_door');
+const ptIn   = (px,py,r) => px>=r.x && px<=r.x+r.w && py>=r.y && py<=r.y+r.h;
+const rr = (x,y,w,h,rad) => {
+  ctx.beginPath();
+  ctx.moveTo(x+rad,y); ctx.lineTo(x+w-rad,y); ctx.quadraticCurveTo(x+w,y,x+w,y+rad);
+  ctx.lineTo(x+w,y+h-rad); ctx.quadraticCurveTo(x+w,y+h,x+w-rad,y+h);
+  ctx.lineTo(x+rad,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-rad);
+  ctx.lineTo(x,y+rad); ctx.quadraticCurveTo(x,y,x+rad,y);
+  ctx.closePath();
+};
+
+// ── Tick ──────────────────────────────────────────────────────────────────
+function tick() {
+  if (!running||gameOver) return;
+  gameTime++;
+  const h = hr();
+
+  for (const a of Object.values(ANIM))
+    if (!a.on && a.ahr!==undefined && h>=a.ahr) a.on=true;
+
+  let drain = 0;
+  if (doors.left)         drain += 0.55;
+  if (doors.right)        drain += 0.55;
+  if (camUp)              drain += 0.20;
+  if (lTimer.left  > 0)  drain += 0.25;
+  if (lTimer.right > 0)  drain += 0.25;
+  power = Math.max(0, power - drain);
+
+  // Foxy neglect
+  if (ANIM.foxy.on) {
+    const watched = camUp && (activeCam===1||activeCam===3);
+    ANIM.foxy.neg = watched ? Math.max(0,ANIM.foxy.neg-2) : ANIM.foxy.neg+1;
+    ANIM.foxy.mhz = Math.min(0.22, 0.01 + ANIM.foxy.neg*0.006);
+  }
+
+  // Movement
+  for (const a of Object.values(ANIM)) {
+    if (!a.on || a.pos===a.door+'_door') continue;
+    if (Math.random() < a.mhz*(1+h*0.22)) {
+      const i = a.path.indexOf(a.pos);
+      if (i>=0 && i<a.path.length-1) a.pos = a.path[i+1];
+    }
+  }
+
+  // Entry timers
+  for (const s of ['left','right']) {
+    const present = atDoor(s).length>0;
+    if (present && !doors[s]) {
+      if (eTimer[s]<0) eTimer[s]=2; else eTimer[s]--;
+      if (eTimer[s]<=0) { endGame(false,s); return; }
+    } else {
+      eTimer[s]=-1;
+    }
+  }
+
+  // Door-camping retreat: tracked per-animatronic (fixes cross-door reset bug)
+  // After 5s at the door they give up and wander back to stage or dining
+  for (const a of Object.values(ANIM)) {
+    if (!a.on || a.pos !== a.door+'_door') { a.doorSit=0; continue; }
+    a.doorSit++;
+    if (a.doorSit >= 5) {
+      a.doorSit = 0;
+      // Return to stage (path[0]) or dining/second room (path[1]) at random
+      a.pos = a.path[Math.random() < 0.5 && a.path.length > 2 ? 1 : 0];
+    }
+  }
+
+  if (power<=0) { endGame(false,'power'); return; }
+  if (h>=6)     { endGame(true); return; }
+  hudUpdate();
+}
+
+// ── Office drawing ────────────────────────────────────────────────────────
+function drawOffice() {
+  // Sky-black fill
+  ctx.fillStyle='#020408'; ctx.fillRect(0,0,W,H);
+
+  // Ceiling
+  const cg = ctx.createLinearGradient(0,0,0,CEIL);
+  cg.addColorStop(0,'#0c1018'); cg.addColorStop(1,'#181f28');
+  ctx.fillStyle=cg; ctx.fillRect(0,0,W,CEIL);
+  // Fluorescent strip (flickers slightly)
+  const flick = 0.06 + Math.random()*0.03;
+  ctx.fillStyle=`rgba(170,210,255,${flick})`; ctx.fillRect(W/2-90,10,180,10);
+  ctx.fillStyle=`rgba(170,210,255,${flick*0.5})`; ctx.fillRect(W/2-140,16,280,5);
+
+  // Back wall
+  const bwg = ctx.createLinearGradient(0,CEIL,0,FLOOR);
+  bwg.addColorStop(0,'#111a22'); bwg.addColorStop(1,'#0d141c');
+  ctx.fillStyle=bwg; ctx.fillRect(LHW,CEIL,RHX-LHW,FLOOR-CEIL);
+  // Wall panel seams
+  ctx.strokeStyle='rgba(255,255,255,0.022)'; ctx.lineWidth=1;
+  for (let y=CEIL+55; y<FLOOR; y+=55) {
+    ctx.beginPath(); ctx.moveTo(LHW,y); ctx.lineTo(RHX,y); ctx.stroke();
+  }
+  // Edge pillars
+  ctx.fillStyle='#0b1018'; ctx.fillRect(LHW,CEIL,8,FLOOR-CEIL);
+  ctx.fillStyle='#0b1018'; ctx.fillRect(RHX-8,CEIL,8,FLOOR-CEIL);
+
+  // ── Left hallway ──
+  drawHallway('left');
+  drawHallway('right');
+
+  // ── Doors ──
+  if (doors.left) {
+    const dg=ctx.createLinearGradient(0,0,LHW,0);
+    dg.addColorStop(0,'#090f18'); dg.addColorStop(1,'#14202e');
+    ctx.fillStyle=dg; ctx.fillRect(0,CEIL,LHW,FLOOR-CEIL);
+    ctx.strokeStyle='rgba(60,120,200,0.12)'; ctx.lineWidth=2;
+    for (let y=CEIL+55; y<FLOOR; y+=55) { ctx.beginPath(); ctx.moveTo(8,y); ctx.lineTo(LHW-4,y); ctx.stroke(); }
+    ctx.fillStyle='rgba(30,80,180,0.1)'; ctx.fillRect(LHW-5,CEIL,5,FLOOR-CEIL);
+  }
+  if (doors.right) {
+    const dg=ctx.createLinearGradient(RHX,0,W,0);
+    dg.addColorStop(0,'#14202e'); dg.addColorStop(1,'#090f18');
+    ctx.fillStyle=dg; ctx.fillRect(RHX,CEIL,W-RHX,FLOOR-CEIL);
+    ctx.strokeStyle='rgba(60,120,200,0.12)'; ctx.lineWidth=2;
+    for (let y=CEIL+55; y<FLOOR; y+=55) { ctx.beginPath(); ctx.moveTo(RHX+4,y); ctx.lineTo(W-8,y); ctx.stroke(); }
+    ctx.fillStyle='rgba(30,80,180,0.1)'; ctx.fillRect(RHX,CEIL,5,FLOOR-CEIL);
+  }
+
+  // ── Light flashes ──
+  for (const s of ['left','right']) {
+    if (lTimer[s]>0) {
+      const al = Math.min(1, lTimer[s]/10);
+      const isLeft = s==='left';
+      // Wide warm cone emanating from the button side
+      const g = ctx.createLinearGradient(isLeft?LHW:RHX, 0, isLeft?0:W, 0);
+      g.addColorStop(0,   `rgba(255,245,190,${0.82*al})`);
+      g.addColorStop(0.35,`rgba(255,230,150,${0.55*al})`);
+      g.addColorStop(0.7, `rgba(255,210,100,${0.18*al})`);
+      g.addColorStop(1,   `rgba(255,190,80,${0.03*al})`);
+      ctx.fillStyle=g;
+      ctx.fillRect(isLeft?0:RHX, CEIL, isLeft?LHW:W-RHX, FLOOR-CEIL);
+      // Subtle floor/ceiling bounce
+      const bg = ctx.createLinearGradient(isLeft?LHW:RHX, 0, isLeft?0:W, 0);
+      bg.addColorStop(0,`rgba(255,240,160,${0.12*al})`);
+      bg.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=bg;
+      ctx.fillRect(isLeft?0:RHX, CEIL, isLeft?LHW:W-RHX, 22);   // ceiling strip
+      ctx.fillRect(isLeft?0:RHX, FLOOR-18, isLeft?LHW:W-RHX, 18); // floor strip
+      if (atDoor(s).length>0) drawHallSilhouette(s, al);
+    }
+  }
+
+  // ── Buttons ──
+  drawWallBtn(R.lLight, lTimer.left>0  ? '#ddb030' : '#2a1e00', 'LIGHT');
+  drawWallBtn(R.lDoor,  doors.left     ? '#1850bb' : '#102040', 'DOOR');
+  drawWallBtn(R.rLight, lTimer.right>0 ? '#ddb030' : '#2a1e00', 'LIGHT');
+  drawWallBtn(R.rDoor,  doors.right    ? '#1850bb' : '#102040', 'DOOR');
+
+  // ── Security monitor ──
+  drawMonitor();
+
+  // ── Desk / floor ──
+  const fg=ctx.createLinearGradient(0,FLOOR,0,H);
+  fg.addColorStop(0,'#1c2535'); fg.addColorStop(0.15,'#151e2a'); fg.addColorStop(1,'#0c1018');
+  ctx.fillStyle=fg; ctx.fillRect(0,FLOOR,W,H-FLOOR);
+  ctx.fillStyle='rgba(255,255,255,0.035)'; ctx.fillRect(0,FLOOR,W,2); // desk edge
+  // Desk items
+  ctx.fillStyle='rgba(255,255,255,0.03)'; ctx.fillRect(LHW+40,FLOOR+14,90,52); // papers
+  ctx.fillStyle='rgba(255,255,255,0.025)'; ctx.fillRect(LHW+148,FLOOR+18,22,42); // cup
+  ctx.fillStyle='rgba(255,255,255,0.02)'; ctx.fillRect(RHX-130,FLOOR+22,70,38); // folder
+}
+
+function drawHallway(side) {
+  const isL = side==='left';
+  const nearX = isL ? LHW : RHX;
+  const farX  = isL ? 0   : W;
+  const nT=CEIL, nB=FLOOR, fT=CEIL+88, fB=FLOOR-88;
+
+  // Main corridor fill — very dark so the light button actually pops
+  const g=ctx.createLinearGradient(nearX,0,farX,0);
+  g.addColorStop(0,'#040810'); g.addColorStop(1,'#010204');
+  ctx.fillStyle=g;
+  ctx.beginPath();
+  ctx.moveTo(nearX,nT); ctx.lineTo(farX,fT);
+  ctx.lineTo(farX,fB);  ctx.lineTo(nearX,nB);
+  ctx.closePath(); ctx.fill();
+
+  // Ceiling & floor faces
+  ctx.fillStyle='#020306';
+  ctx.beginPath();
+  ctx.moveTo(isL?0:W,0); ctx.lineTo(nearX,0);
+  ctx.lineTo(nearX,nT); ctx.lineTo(farX,fT);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#020408';
+  ctx.beginPath();
+  ctx.moveTo(isL?0:W,H); ctx.lineTo(nearX,H);
+  ctx.lineTo(nearX,nB); ctx.lineTo(farX,fB);
+  ctx.closePath(); ctx.fill();
+
+  // Depth panel lines
+  ctx.strokeStyle='rgba(255,255,255,0.015)'; ctx.lineWidth=1;
+  for (let i=1;i<=3;i++) {
+    const t=i/4;
+    const x=nearX+(farX-nearX)*t;
+    const top=nT+(fT-nT)*t, bot=nB+(fB-nB)*t;
+    ctx.beginPath(); ctx.moveTo(x,top); ctx.lineTo(x,bot); ctx.stroke();
+    // Baseboard
+    ctx.beginPath(); ctx.moveTo(x,bot); ctx.lineTo(x,bot+6*(1-t)); ctx.stroke();
+  }
+
+  // Barely-visible ambient lamp at far end — keep it very dim
+  const glx=isL?farX+20:farX-20, gly=(fT+fB)/2;
+  const gl=ctx.createRadialGradient(glx,gly,0,glx,gly,70);
+  gl.addColorStop(0,'rgba(180,150,80,0.025)'); gl.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=gl; ctx.fillRect(isL?0:RHX, CEIL, isL?LHW:W-RHX, FLOOR-CEIL);
+}
+
+function drawHallSilhouette(side, alpha) {
+  const isL = side==='left';
+  const cx  = isL ? 32 : W-32;
+  const cy  = (CEIL+FLOOR)/2 + 18;
+  ctx.save();
+  ctx.globalAlpha = Math.min(0.88, alpha*1.1);
+  ctx.fillStyle='#050608';
+  ctx.shadowBlur=0;
+  // head
+  ctx.beginPath(); ctx.arc(cx,cy-58,20,0,Math.PI*2); ctx.fill();
+  // body
+  ctx.fillRect(cx-14,cy-38,28,48);
+  // legs
+  ctx.fillRect(cx-14,cy+10,11,36); ctx.fillRect(cx+3,cy+10,11,36);
+  ctx.restore();
+}
+
+function drawWallBtn(reg, col, label) {
+  ctx.fillStyle='#080c10'; rr(reg.x-2,reg.y-2,reg.w+4,reg.h+4,4); ctx.fill();
+  ctx.fillStyle=col; rr(reg.x,reg.y,reg.w,reg.h,3); ctx.fill();
+  ctx.save();
+  ctx.fillStyle='rgba(255,255,255,0.55)'; ctx.font='bold 6.5px Courier New'; ctx.textAlign='center';
+  ctx.fillText(label, reg.x+reg.w/2, reg.y+reg.h/2+2.5);
+  ctx.textAlign='left'; ctx.restore();
+}
+
+function drawMonitor() {
+  const m=R.monitor;
+  // Bezel
+  ctx.fillStyle='#080c10'; rr(m.x-7,m.y-7,m.w+14,m.h+14,9); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.05)'; ctx.lineWidth=1.5;
+  rr(m.x-7,m.y-7,m.w+14,m.h+14,9); ctx.stroke();
+  // Screen bg
+  ctx.fillStyle='#030e08'; rr(m.x,m.y,m.w,m.h,5); ctx.fill();
+  // Phosphor glow
+  const sg=ctx.createRadialGradient(m.x+m.w/2,m.y+m.h/2,0,m.x+m.w/2,m.y+m.h/2,m.w*0.55);
+  sg.addColorStop(0,'rgba(0,190,70,0.13)'); sg.addColorStop(1,'rgba(0,190,70,0)');
+  ctx.fillStyle=sg; rr(m.x,m.y,m.w,m.h,5); ctx.fill();
+  // Screen text
+  ctx.save(); ctx.textAlign='center';
+  ctx.fillStyle='rgba(0,210,80,0.65)'; ctx.font='bold 8.5px Courier New';
+  ctx.fillText('CAMERA SYSTEM', m.x+m.w/2, m.y+m.h/2-8);
+  ctx.fillStyle='rgba(0,210,80,0.35)'; ctx.font='7px Courier New';
+  ctx.fillText(camUp?'[ ONLINE ]':'[ CLICK TO VIEW ]', m.x+m.w/2, m.y+m.h/2+10);
+  ctx.textAlign='left'; ctx.restore();
+  // Stand
+  ctx.fillStyle='#0a0d12';
+  ctx.fillRect(m.x+m.w/2-13,m.y+m.h,26,9); ctx.fillRect(m.x+m.w/2-22,m.y+m.h+9,44,5);
+}
+
+// ── Camera tablet ─────────────────────────────────────────────────────────
+function drawTablet() {
+  // Dim office behind
+  ctx.fillStyle='rgba(0,0,0,0.62)'; ctx.fillRect(0,0,W,H);
+
+  // Tablet body
+  ctx.fillStyle='#0e1218'; rr(T.x,T.y,T.w,T.h,16); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.07)'; ctx.lineWidth=1.5;
+  rr(T.x,T.y,T.w,T.h,16); ctx.stroke();
+  // Inner bezel
+  ctx.fillStyle='#080b0e'; rr(T.sx-8,T.sy-8,T.sw+16,T.sh+16,6); ctx.fill();
+
+  // Camera feed
+  drawCamFeed(T.sx, T.sy, T.sw, T.sh);
+
+  // ── Camera selector grid (2×2 spatial arrangement) ──
+  // Label
+  ctx.fillStyle='rgba(255,255,255,0.15)'; ctx.font='bold 7.5px Courier New'; ctx.textAlign='center';
+  ctx.fillText('SELECT CAMERA', T.gx + T.cw + T.gg/2 + 2, T.gy - 8);
+  ctx.textAlign='left';
+
+  for (let cam=1; cam<=4; cam++) {
+    const [col,row] = CGRID[cam];
+    const gx = T.gx + col*(T.cw+T.gg);
+    const gy = T.gy + row*(T.ch+T.gg);
+    const active = cam===activeCam;
+    ctx.fillStyle = active ? 'rgba(0,180,70,0.18)' : 'rgba(255,255,255,0.04)';
+    rr(gx,gy,T.cw,T.ch,7); ctx.fill();
+    ctx.strokeStyle = active ? 'rgba(0,200,80,0.55)' : 'rgba(255,255,255,0.08)';
+    ctx.lineWidth=1; rr(gx,gy,T.cw,T.ch,7); ctx.stroke();
+    ctx.save(); ctx.textAlign='center';
+    ctx.fillStyle = active ? '#00c860' : 'rgba(255,255,255,0.35)';
+    ctx.font='bold 8.5px Courier New';
+    ctx.fillText(`CAM ${cam}`, gx+T.cw/2, gy+16);
+    ctx.fillStyle = active ? 'rgba(0,200,80,0.6)' : 'rgba(255,255,255,0.2)';
+    ctx.font='7.5px Courier New';
+    ctx.fillText(CLBL[cam], gx+T.cw/2, gy+30);
+    ctx.textAlign='left'; ctx.restore();
+  }
+
+  // LOWER button
+  ctx.fillStyle='rgba(255,255,255,0.06)'; rr(T.lbx,T.lby,T.lbw,T.lbh,5); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.13)'; ctx.lineWidth=1; rr(T.lbx,T.lby,T.lbw,T.lbh,5); ctx.stroke();
+  ctx.save(); ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.font='bold 7.5px Courier New'; ctx.textAlign='center';
+  ctx.fillText('LOWER', T.lbx+T.lbw/2, T.lby+T.lbh/2+3); ctx.textAlign='left'; ctx.restore();
+}
+
+// Room drawing functions (for camera feed)
+const RDRAW = {
+  stage(cx,cy,cw,ch) {
+    ctx.fillStyle='#0a1018'; ctx.fillRect(cx,cy,cw,ch);
+    ctx.fillStyle='#1a2a3a'; ctx.fillRect(cx+cw*0.08,cy+ch*0.58,cw*0.84,ch*0.28);
+    ctx.fillStyle='#243444'; ctx.fillRect(cx+cw*0.08,cy+ch*0.54,cw*0.84,ch*0.07);
+    ctx.fillStyle='#3a0808'; ctx.fillRect(cx+4,cy+ch*0.18,cw*0.08,ch*0.6);
+    ctx.fillStyle='#3a0808'; ctx.fillRect(cx+cw*0.9,cy+ch*0.18,cw*0.08,ch*0.6);
+    for (let i=0;i<3;i++) {
+      const lx=cx+cw*(0.25+i*0.25);
+      ctx.fillStyle='rgba(255,220,80,0.1)';
+      ctx.beginPath(); ctx.moveTo(lx,cy); ctx.lineTo(lx-16,cy+ch*0.58); ctx.lineTo(lx+16,cy+ch*0.58); ctx.closePath(); ctx.fill();
+      ctx.fillStyle='#ffd740'; ctx.beginPath(); ctx.arc(lx,cy+5,5,0,Math.PI*2); ctx.fill();
+    }
+  },
+  dining(cx,cy,cw,ch) {
+    ctx.fillStyle='#080e14'; ctx.fillRect(cx,cy,cw,ch);
+    const tables=[[0.08,0.42],[0.36,0.42],[0.62,0.42],[0.22,0.64],[0.50,0.64]];
+    for (const [tx,ty] of tables) {
+      ctx.fillStyle='#1e2e3e'; ctx.fillRect(cx+cw*tx,cy+ch*ty,cw*0.2,ch*0.2);
+      ctx.fillStyle='#14202c';
+      ctx.fillRect(cx+cw*tx+cw*0.02, cy+ch*ty-ch*0.1, cw*0.06, ch*0.1);
+      ctx.fillRect(cx+cw*tx+cw*0.12, cy+ch*ty-ch*0.1, cw*0.06, ch*0.1);
+    }
+    ctx.fillStyle='rgba(255,255,255,0.03)'; ctx.fillRect(cx+cw*0.35,cy+ch*0.05,cw*0.3,ch*0.22);
+    ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.lineWidth=1; ctx.strokeRect(cx+cw*0.35,cy+ch*0.05,cw*0.3,ch*0.22);
+  },
+  left_hall(cx,cy,cw,ch) {
+    ctx.fillStyle='#060c10'; ctx.fillRect(cx,cy,cw,ch);
+    ctx.fillStyle='#0a1420';
+    ctx.beginPath(); ctx.moveTo(cx,cy+ch); ctx.lineTo(cx+cw,cy+ch);
+    ctx.lineTo(cx+cw*0.62,cy+ch*0.52); ctx.lineTo(cx+cw*0.38,cy+ch*0.52); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#050a0e';
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+cw,cy);
+    ctx.lineTo(cx+cw*0.62,cy+ch*0.52); ctx.lineTo(cx+cw*0.38,cy+ch*0.52); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.035)'; ctx.lineWidth=1;
+    for (let i=1;i<=3;i++) {
+      const t=i/4;
+      const x1=cx+cw*0.38+(cx-cx*1)*(0), x2=cx+cw*0.62;
+      ctx.beginPath(); ctx.moveTo(cx+cw*0.38,cy+ch*0.52); ctx.lineTo(cx,cy+ch); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx+cw*0.62,cy+ch*0.52); ctx.lineTo(cx+cw,cy+ch); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx+cw*0.38,cy+ch*0.52); ctx.lineTo(cx,cy); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx+cw*0.62,cy+ch*0.52); ctx.lineTo(cx+cw,cy); ctx.stroke();
+      break; // only once
+    }
+    const g2=ctx.createRadialGradient(cx+cw/2,cy+ch/2,0,cx+cw/2,cy+ch/2,cw*0.4);
+    g2.addColorStop(0,'rgba(200,170,100,0.09)'); g2.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g2; ctx.fillRect(cx,cy,cw,ch);
+  },
+  right_hall(cx,cy,cw,ch) {
+    RDRAW.left_hall(cx,cy,cw,ch);
+    ctx.fillStyle='rgba(200,80,40,0.07)'; ctx.fillRect(cx+cw*0.72,cy+ch*0.18,cw*0.14,ch*0.38);
+    ctx.strokeStyle='rgba(200,80,40,0.12)'; ctx.lineWidth=1;
+    ctx.strokeRect(cx+cw*0.72,cy+ch*0.18,cw*0.14,ch*0.38);
+  },
+};
+
+function drawCamFeed(sx,sy,sw,sh) {
+  const room = ['stage','dining','left_hall','right_hall'][activeCam-1];
+  ctx.save();
+  ctx.beginPath(); rr(sx,sy,sw,sh,4); ctx.clip();
+
+  RDRAW[room](sx,sy,sw,sh);
+
+  // Animatronics
+  const anims = atRoom(room);
+  const positions = [[sx+sw*0.5,sy+sh*0.78],[sx+sw*0.28,sy+sh*0.78],[sx+sw*0.72,sy+sh*0.78]];
+  anims.forEach((a,i) => {
+    const [ax,ay]=positions[i]||positions[0];
+    const sc=room.includes('hall')?1.1:0.78;
+    drawAnimOnFeed(a,ax,ay,sc);
+  });
+
+  // Scanlines
+  for (let y=sy;y<sy+sh;y+=3) { ctx.fillStyle='rgba(0,0,0,0.14)'; ctx.fillRect(sx,y,sw,1.5); }
+  // Noise
+  ctx.globalAlpha=0.07;
+  for (let i=0;i<180;i++) { const b=Math.random()*160|0; ctx.fillStyle=`rgb(${b},${b},${b})`; ctx.fillRect(sx+Math.random()*sw,sy+Math.random()*sh,1.5,1.5); }
+  ctx.globalAlpha=1;
+  // Vignette
+  const vg=ctx.createRadialGradient(sx+sw/2,sy+sh/2,sh*0.14,sx+sw/2,sy+sh/2,sh*0.7);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.7)');
+  ctx.fillStyle=vg; ctx.fillRect(sx,sy,sw,sh);
+
+  ctx.restore();
+
+  // Overlay labels (outside clip)
+  ctx.fillStyle='rgba(0,200,80,0.6)'; ctx.font='bold 9.5px Courier New';
+  ctx.fillText(`CAM ${activeCam}  ${CAM_NAMES[activeCam]}`, sx+8, sy+15);
+  if (Math.floor(Date.now()/700)%2===0) {
+    ctx.fillStyle='#e03030'; ctx.beginPath(); ctx.arc(sx+sw-14,sy+10,4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.font='bold 8px Courier New';
+    ctx.fillText('REC',sx+sw-40,sy+13);
+  }
+}
+
+function drawAnimOnFeed(a,x,y,s) {
+  ctx.save(); ctx.translate(x,y);
+  ctx.shadowBlur=12; ctx.shadowColor=a.col;
+  ctx.fillStyle=a.col; ctx.globalAlpha=0.88;
+  if (a.name==='Bonnie') {
+    ctx.fillRect(-5*s,-28*s,4*s,16*s); ctx.fillRect(2*s,-28*s,4*s,16*s);
+    ctx.beginPath(); ctx.arc(0,-10*s,11*s,0,Math.PI*2); ctx.fill();
+    ctx.fillRect(-9*s,1*s,18*s,20*s);
+    ctx.fillRect(-9*s,21*s,7*s,9*s); ctx.fillRect(2*s,21*s,7*s,9*s);
+  } else if (a.name==='Chica') {
+    ctx.fillStyle='#c87800';
+    ctx.beginPath(); ctx.moveTo(9*s,-9*s); ctx.lineTo(18*s,-7*s); ctx.lineTo(9*s,-4*s); ctx.fill();
+    ctx.fillStyle=a.col;
+    ctx.beginPath(); ctx.arc(0,-10*s,12*s,0,Math.PI*2); ctx.fill();
+    ctx.fillRect(-11*s,2*s,22*s,20*s);
+    ctx.fillRect(-10*s,22*s,8*s,9*s); ctx.fillRect(2*s,22*s,8*s,9*s);
+  } else if (a.name==='Foxy') {
+    ctx.beginPath(); ctx.moveTo(-10*s,-24*s); ctx.lineTo(-4*s,-35*s); ctx.lineTo(0,-24*s); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(2*s,-24*s); ctx.lineTo(8*s,-35*s); ctx.lineTo(12*s,-24*s); ctx.fill();
+    ctx.beginPath(); ctx.arc(0,-10*s,11*s,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(-3*s,-11*s,5*s,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=a.col; ctx.fillRect(-7*s,1*s,14*s,20*s);
+    ctx.fillRect(-7*s,21*s,6*s,9*s); ctx.fillRect(1*s,21*s,6*s,9*s);
+    ctx.strokeStyle='#aaa'; ctx.lineWidth=2.5*s;
+    ctx.beginPath(); ctx.moveTo(7*s,4*s); ctx.lineTo(20*s,15*s); ctx.lineTo(20*s,25*s); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ── Render loop ───────────────────────────────────────────────────────────
+function loop(ts) {
+  if (gameOver) return;
+  rafId = requestAnimationFrame(loop);
+  if (ts-lastF < 50) return; // ~20fps
+  lastF=ts;
+  for (const s of ['left','right']) if(lTimer[s]>0) lTimer[s]--;
+  drawOffice();
+  if (camUp) drawTablet();
+}
+
+// ── HUD update ────────────────────────────────────────────────────────────
+const HLBLS=['12:00 AM','1:00 AM','2:00 AM','3:00 AM','4:00 AM','5:00 AM','6:00 AM'];
+function hudUpdate() {
+  const p=Math.max(0,Math.round(power));
+  document.getElementById('pw-pct').textContent=p+'%';
+  document.getElementById('pw-fill').style.width=p+'%';
+  document.getElementById('pw-fill').style.background=p>50?'#00e676':p>25?'#e6a800':'#cc3030';
+  document.getElementById('time').textContent=HLBLS[Math.min(hr(),6)];
+}
+
+// ── End game ──────────────────────────────────────────────────────────────
+function endGame(win, reason) {
+  gameOver=true; running=false;
+  clearInterval(tickId); if(rafId)cancelAnimationFrame(rafId);
+  const res=document.getElementById('ov-result');
+  const sub=document.getElementById('ov-sub');
+  res.style.display='block';
+  document.getElementById('ov-btn').textContent='Try Again';
+  if (win) {
+    res.textContent='6:00 AM — You made it.'; res.className='win';
+    sub.textContent='The day shift arrived. You survived the entire night.';
+  } else if (reason==='power') {
+    res.textContent='Power failure.'; res.className='lose';
+    sub.textContent='Everything went dark. You were not alone.';
+  } else {
+    res.textContent='Something got in.'; res.className='lose';
+    sub.textContent=`The ${reason} door was open too long.`;
+  }
+  document.getElementById('overlay').style.display='flex';
+}
+
+// ── Start ─────────────────────────────────────────────────────────────────
+function startGame() {
+  power=100; gameTime=0; camUp=false; activeCam=1;
+  doors={left:false,right:false};
+  lTimer={left:0,right:0};
+  eTimer={left:-1,right:-1};
+  gameOver=false; running=true;
+  ANIM.bonnie.pos='stage'; ANIM.bonnie.on=true;  ANIM.bonnie.doorSit=0;
+  ANIM.chica.pos='stage';  ANIM.chica.on=false;  ANIM.chica.doorSit=0;
+  ANIM.foxy.pos='stage';   ANIM.foxy.on=false;   ANIM.foxy.neg=0; ANIM.foxy.doorSit=0;
+  document.getElementById('overlay').style.display='none';
+  document.getElementById('ov-result').style.display='none';
+  if(tickId)clearInterval(tickId);
+  if(rafId)cancelAnimationFrame(rafId);
+  tickId=setInterval(tick,1000);
+  lastF=0; rafId=requestAnimationFrame(loop);
+  hudUpdate();
+}
+
+// ── Input ─────────────────────────────────────────────────────────────────
+canvas.addEventListener('click', e => {
+  if (!running) return;
+  const rc=canvas.getBoundingClientRect();
+  const mx=(e.clientX-rc.left)*(W/rc.width);
+  const my=(e.clientY-rc.top)*(H/rc.height);
+
+  if (camUp) {
+    if (ptIn(mx,my,{x:T.lbx,y:T.lby,w:T.lbw,h:T.lbh})) { camUp=false; return; }
+    for (let cam=1;cam<=4;cam++) {
+      const [col,row]=CGRID[cam];
+      const gx=T.gx+col*(T.cw+T.gg), gy=T.gy+row*(T.ch+T.gg);
+      if (ptIn(mx,my,{x:gx,y:gy,w:T.cw,h:T.ch})) { activeCam=cam; return; }
+    }
+    return;
+  }
+
+  if (ptIn(mx,my,R.monitor))  { camUp=true;          return; }
+  if (ptIn(mx,my,R.lLight))   { lTimer.left=22;       return; }
+  if (ptIn(mx,my,R.lDoor))    { doors.left=!doors.left; return; }
+  if (ptIn(mx,my,R.rLight))   { lTimer.right=22;      return; }
+  if (ptIn(mx,my,R.rDoor))    { doors.right=!doors.right; return; }
+});
+
+document.getElementById('ov-btn').addEventListener('click', startGame);
+</script>
+</body>
+</html>

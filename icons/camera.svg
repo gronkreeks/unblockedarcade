@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- camera body -->
+  <rect x="6" y="20" width="38" height="26" rx="5" fill="white"/>
+  <!-- lens ring -->
+  <circle cx="25" cy="33" r="9" fill="rgba(0,0,0,0.25)"/>
+  <!-- lens -->
+  <circle cx="25" cy="33" r="6" fill="rgba(0,0,0,0.5)"/>
+  <!-- lens shine -->
+  <circle cx="22" cy="30" r="2" fill="rgba(255,255,255,0.4)"/>
+  <!-- viewfinder bump -->
+  <rect x="44" y="26" width="14" height="8" rx="3" fill="white"/>
+  <!-- record light -->
+  <circle cx="40" cy="24" r="3" fill="rgba(255,80,80,0.9)"/>
+</svg>
