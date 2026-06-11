@@ -1,0 +1,1373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TAX QUEST: 30 Days to Lodge</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background:#04040f; display:flex; justify-content:center; align-items:center; min-height:100vh; font-family:'Courier New',monospace; overflow:hidden; }
+  canvas { display:block; image-rendering:pixelated; cursor:default; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W=800, H=520;
+canvas.width=W; canvas.height=H;
+
+// ── SOUND (Web Audio API — no files needed) ───────────────────────────────────
+let _AC=null;
+function getAC(){if(!_AC)try{_AC=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}return _AC;}
+function note(f,tp,v,st,dur){
+  const ac=getAC();if(!ac)return;
+  try{const g=ac.createGain();g.connect(ac.destination);g.gain.setValueAtTime(v,st);g.gain.exponentialRampToValueAtTime(0.0001,st+dur);
+    const o=ac.createOscillator();o.type=tp;o.frequency.value=f;o.connect(g);o.start(st);o.stop(st+dur+0.04);}catch(e){}
+}
+const VOICE={mum:370,fairy:530,boss:240,sam:295,govassist:460,atoofficer:275,teller:350,wizard:195,karen:415,ato:145};
+function sfx(type,id){
+  const ac=getAC();if(!ac)return;
+  const t=ac.currentTime;
+  switch(type){
+    case 'dlg':{const f=(VOICE[id]||330)+(Math.random()*30|0)-15;note(f,'square',0.04,t,0.042);break;}
+    case 'sel':  note(220,'square',0.07,t,0.06);break;
+    case 'conf': note(440,'square',0.08,t,0.07);note(660,'square',0.08,t+0.08,0.09);break;
+    case 'hit':  note(260,'sawtooth',0.14,t,0.06);note(130,'sawtooth',0.09,t+0.05,0.12);break;
+    case 'xp':   note(440,'square',0.06,t,0.06);note(540,'square',0.06,t+0.06,0.07);break;
+    case 'lvlup':[330,392,440,523,659].forEach((f,i)=>note(f,'square',0.09,t+i*0.08,0.1));break;
+    case 'trans':note(180,'sawtooth',0.06,t,0.14);note(280,'sawtooth',0.05,t+0.1,0.18);break;
+    case 'boss': note(110,'sawtooth',0.12,t,0.28);note(82,'sawtooth',0.1,t+0.22,0.32);break;
+    case 'win':  [440,440,440,349,440,523,523].forEach((f,i)=>note(f,'square',0.08,t+i*0.09,0.11));break;
+    case 'lose': [440,349,293,220].forEach((f,i)=>note(f,'sawtooth',0.08,t+i*0.12,0.14));break;
+    case 'portal':for(let i=0;i<6;i++)note(200+i*60,'sine',0.05,t+i*0.055,0.11);break;
+  }
+}
+
+const FLOOR=355, AREA_W=1800;
+const AR={x:210,y:148,w:380,h:155}; // battle arena
+
+// ── GAME STATE ────────────────────────────────────────────────────────────────
+const G={
+  scene:'title',
+  px:180,facing:1,walkFrame:0,walkTimer:0,isWalking:false,camX:0,
+  zoneIdx:0, visitedZones:new Set([0]),
+  days:30,xp:0,
+  tfn:false,myGovCreated:false,atoLinked:false,tfnDeclared:false,
+  bankLinked:false,myDeductionsEnabled:false,deductionsLogged:0,
+  workedShifts:0,incomeStatementChecked:false,taxEstimated:false,
+  taxLodged:false,studiedTax:false,talkedToMum:false,
+  income:0,taxWithheld:0,deductions:0,
+  dlgLines:null,dlgPage:0,dlgCb:null,dlgChar:0,dlgSpeaker:null,
+  transMsg:'',transSubMsg:'',transTimer:0,transAlpha:0,
+  notif:null,notifTimer:0,notifColor:'#00aa44',
+  keys:{},
+  btl:null,
+};
+
+// ── LEVELS ────────────────────────────────────────────────────────────────────
+const LEVELS=[{n:1,title:'Tax Baby',xp:0},{n:2,title:'Tax Toddler',xp:100},
+  {n:3,title:'Tax Apprentice',xp:230},{n:4,title:'Tax Journeyman',xp:400},{n:5,title:'Tax Legend',xp:580}];
+function curLevel(){let l=LEVELS[0];for(const x of LEVELS)if(G.xp>=x.xp)l=x;return l;}
+function nextLevel(){const c=curLevel();return LEVELS.find(l=>l.n===c.n+1)||null;}
+function gainXP(n,r){const b=curLevel();G.xp+=n;const a=curLevel();
+  if(a.n>b.n){sfx('lvlup');popup(`LEVEL UP → ${a.title}! (+${n} XP)`,'#ffcc00');}
+  else{sfx('xp');popup(`+${n} XP — ${r}`,'#00dd66');}}
+function spendDay(d){G.days=Math.max(0,G.days-d);}
+function popup(msg,c='#00aa44'){G.notif=msg;G.notifTimer=200;G.notifColor=c;}
+
+// ── DIALOG ────────────────────────────────────────────────────────────────────
+function openDlg(lines,cb,speaker){
+  G.dlgLines=lines;G.dlgPage=0;G.dlgCb=cb||null;G.dlgSpeaker=speaker||null;G.dlgChar=0;G.scene='dialog';
+}
+function advDlg(){
+  sfx('conf');G.dlgPage++;G.dlgChar=0;
+  if(G.dlgPage>=G.dlgLines.length){G.dlgLines=null;G.scene='world';if(G.dlgCb){G.dlgCb();G.dlgCb=null;}}
+}
+
+// ── ZONES (Grasslands → myGov → Woolworths → ATO → CommBank → Tax Lodge) ─────
+function makeZones(){return[
+
+  // 0: RURAL GRASSLANDS
+  {name:'Rural Grasslands',sky:['#89d4f5','#c8ebf8'],gnd:'#3a8a22',
+    drawBg(cx){
+      ctx.fillStyle='rgba(255,255,255,0.55)';
+      for(let i=0;i<6;i++){const bx=((i*310-cx*0.18+1800)%2200)-100;ctx.beginPath();ctx.ellipse(bx,70+i%3*18,44,18,0,0,Math.PI*2);ctx.ellipse(bx+38,58+i%3*18,32,15,0,0,Math.PI*2);ctx.fill();}
+      ctx.fillStyle='#4caf50';
+      for(let i=0;i<5;i++){const hx=((i*380-cx*0.45+3000)%3400)-200;ctx.beginPath();ctx.arc(hx,FLOOR+20,190+i*22,Math.PI,2*Math.PI);ctx.fill();}
+      for(let i=0;i<28;i++){const fx=((i*65+15-cx)%1900)-30;if(fx<-20||fx>W+20)continue;
+        ctx.fillStyle=i%3===0?'#ff6b6b':i%3===1?'#ffe66d':'#ff9ff3';ctx.fillRect(fx,FLOOR-12,6,6);
+        ctx.fillStyle='#2ecc71';ctx.fillRect(fx+2,FLOOR-6,2,8);}
+      ctx.save();const sg=ctx.createRadialGradient(720,55,8,720,55,38);
+      sg.addColorStop(0,'#fff176');sg.addColorStop(1,'rgba(255,220,0,0)');
+      ctx.fillStyle=sg;ctx.beginPath();ctx.arc(720,55,38,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#ffe033';ctx.beginPath();ctx.arc(720,55,22,0,Math.PI*2);ctx.fill();ctx.restore();
+    },
+    npcs:[
+      {id:'mum',x:420,label:'Mum',
+        lines:["* Mum: Register your TFN at myGov first — and keep it private. TFN fraud lets criminals lodge fake returns and steal your refund. I did not raise a fraud victim.",
+               "* Mum: Once linked, ATO Online Services shows your income, super balance, and flags fraud on your account. It's actually quite good.",
+               "* Mum: Also — if anyone calls demanding payment by gift card, that is a scam. The real ATO only contacts you through myGov. Go."]},
+      {id:'fairy',x:1100,label:'Tax Fairy',
+        lines:["* Tax Fairy: ATO Online Services protects you from fraud — employer income verified, super contributions tracked, unauthorised access flagged.",
+               "* Tax Fairy: I've watched scammers try to steal refunds from first-time taxpayers for centuries. ATO Online Services makes that much harder. Lodge on time. ✨"]}
+    ],
+    objs:[
+      {id:'mailbox',x:1500,label:'Mailbox',
+        act(){
+          if(G.studiedTax){openDlg(["* [Tax Guide — already memorised]","* Tax-free threshold: $18,200. Lodge by 31 Oct via ATO Online Services. Keep every receipt."]);}
+          else{G.studiedTax=true;spendDay(1);gainXP(10,'studying');
+            openDlg(["* [A letter from the ATO — the real ATO, not a scam.]",
+              "* 'Your TFN is your lifelong tax ID. Keep it private — TFN fraud lets criminals steal your refund. Tax-free threshold: $18,200. Lodge by 31 October via ATO Online Services.'",
+              "* 'P.S. The real ATO never calls demanding payment by gift card or crypto. That is always a scam. Report it.' — The ATO\n\n  [+10 XP]"]);}
+        }}
+    ],
+    done(){return G.studiedTax&&G.talkedToMum;},
+    hint:"Talk to Mum and read the mailbox before leaving!",
+  },
+
+  // 1: myGOV DISTRICT
+  {name:'myGov District',sky:['#000d1a','#001f4d'],gnd:'#0a1428',
+    drawBg(cx){
+      ctx.fillStyle='#001428';
+      const bldgs=[{x:50,w:80,h:180},{x:160,w:60,h:220},{x:250,w:100,h:150},{x:400,w:70,h:200},{x:510,w:90,h:170},{x:640,w:80,h:240},{x:760,w:110,h:160}];
+      for(const b of bldgs){const bx=((b.x-cx*0.25+3600)%3600)-100;ctx.fillRect(bx,FLOOR-b.h,b.w,b.h);
+        ctx.fillStyle='rgba(100,160,255,0.3)';
+        for(let wy=FLOOR-b.h+10;wy<FLOOR-20;wy+=22)for(let wx=bx+8;wx<bx+b.w-8;wx+=18)ctx.fillRect(wx,wy,10,14);
+        ctx.fillStyle='#001428';}
+      ctx.save();ctx.fillStyle='rgba(0,80,255,0.08)';ctx.beginPath();ctx.arc(W/2,180,120,0,Math.PI*2);ctx.fill();
+      ctx.font="bold 28px 'Courier New',monospace";ctx.textAlign='center';
+      ctx.fillStyle='#003087';ctx.fillText('myGov',W/2+2,192);ctx.fillStyle='#4a90ff';ctx.fillText('myGov',W/2,190);ctx.restore();
+      for(let i=0;i<80;i++){const b2=((i*47+9)%100)/100;ctx.fillStyle=`rgba(200,220,255,${b2*0.6})`;ctx.fillRect((i*97+33)%W,(i*73+11)%240,1,1);}
+    },
+    npcs:[
+      {id:'govassist',x:600,label:'ARIA-7 (Portal AI)',
+        lines:["* ARIA-7: TFN terminal. myGov kiosk. ATO link. Left to right. In order. 4,000 Jakes. 3,847 skipped a step. Don't.",
+               "* ARIA-7: ATO Online Services — once linked — gives you income statements, myTax lodgement, myDeductions via the ATO app, super balance, and fraud monitoring on your account.",
+               "* ARIA-7: It also verifies your identity. Scammers cannot access ATO Online Services without your myGov login. That is the point."]}
+    ],
+    objs:[
+      {id:'tfnterm',x:250,label:'TFN Terminal',
+        act(){
+          if(G.tfn){openDlg(["* [TFN Terminal]","* TFN: 123 456 789 ✅ — Already registered."]);}
+          else{G.tfn=true;spendDay(1);gainXP(50,'TFN registration');
+            openDlg(["* [ATO TFN Registration Terminal]",
+              "* TAX FILE NUMBER REGISTERED ✅\n  Your TFN: 123 456 789",
+              "* ⚠️  Guard this from fraud — TFN fraud lets scammers lodge fake returns in your name and steal your refund.\n\n  Only share with your employer, bank, or a government agency.\n\n  ATO Online Services monitors your TFN for unauthorised activity.\n\n  [+50 XP]"]);}
+        }},
+      {id:'mygovsign',x:850,label:'myGov Sign-up',
+        act(){
+          if(!G.tfn){openDlg(["* [myGov Kiosk]","* Register your TFN at the left terminal first — you need it to create an account."]);}
+          else if(G.myGovCreated){openDlg(["* [myGov — Active ✅]",`* Logged in as Jake. ATO linked: ${G.atoLinked?'✅':'❌ use the right terminal'}`]);}
+          else{G.myGovCreated=true;spendDay(1);gainXP(30,'myGov account');
+            openDlg(["* [myGov Account Created ✅]",
+              "* Your single secure login for ATO Online Services, Centrelink, and Medicare.",
+              "* myGov uses identity verification to protect you from fraud. The real ATO only sends official messages through your myGov inbox — never unsolicited calls or texts.\n\n  Link the ATO using the terminal to the right.\n\n  [+30 XP]"]);}
+        }},
+      {id:'atolink',x:1450,label:'ATO Link Terminal',
+        act(){
+          if(!G.myGovCreated){openDlg(["* [ATO Link Terminal]","* Create your myGov account first — use the sign-up kiosk to the left."]);}
+          else if(G.atoLinked){openDlg(["* [ATO Linked ✅]","* ATO Online Services is accessible via myGov — income statements, myTax, myDeductions, all there."]);}
+          else{G.atoLinked=true;spendDay(1);gainXP(40,'ATO linked');
+            openDlg(["* [ATO LINKED TO myGov ✅]",
+              "* ATO Online Services is now accessible! This is how Australians manage tax and super securely.",
+              "* Unlocked via ATO Online Services:\n  • Income statements (employer-lodged, fraud-checked)\n  • myTax — safe lodgement, pre-filled to reduce fraud\n  • myDeductions — via the ATO app\n  • Super balance and contribution history\n  • Fraud monitoring on your TFN and account\n\n  [+40 XP]"]);}
+        }}
+    ],
+    done(){return G.tfn&&G.atoLinked;},
+    hint:"Register your TFN and link the ATO to myGov!",
+  },
+
+  // 2: WOOLWORTHS
+  {name:'Woolworths',sky:['#0d1520','#0d1520'],gnd:'#1e1e2a',
+    drawBg(cx){
+      ctx.fillStyle='#12121e';ctx.fillRect(0,0,W,55);
+      for(let i=0;i<5;i++){const lx=80+i*155-(cx%155);ctx.fillStyle='rgba(255,255,200,0.12)';ctx.beginPath();ctx.ellipse(lx,90,22,60,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fffce0';ctx.fillRect(lx-10,30,20,10);}
+      for(let tx=0;tx<W;tx+=56){ctx.fillStyle=(Math.floor((tx+(cx%56))/56)+Math.floor(FLOOR/56))%2===0?'#252535':'#1e1e2e';ctx.fillRect(tx-(cx%56),FLOOR,56,H);}
+      ctx.fillStyle='#1a2a1a';
+      for(let s=0;s<4;s++){const sx=120+s*190-(cx*0.3%200);ctx.fillRect(sx,120,140,180);ctx.fillStyle='#2a3a2a';ctx.fillRect(sx,155,140,6);ctx.fillRect(sx,205,140,6);ctx.fillRect(sx,255,140,6);
+        for(let p=0;p<4;p++){ctx.fillStyle=['#e74c3c','#3498db','#f1c40f','#2ecc71'][p];ctx.fillRect(sx+10+p*30,162,22,40);ctx.fillRect(sx+10+p*30,212,22,40);}ctx.fillStyle='#1a2a1a';}
+      ctx.save();ctx.fillStyle='#1a6b1a';ctx.fillRect(0,0,W,38);
+      ctx.font="bold 22px 'Courier New',monospace";ctx.textAlign='center';ctx.fillStyle='#ffffff';ctx.fillText('WOOLWORTHS',W/2,26);ctx.restore();
+    },
+    npcs:[
+      {id:'boss',x:550,label:'Boss',
+        lines:["* Boss: TFN sorted. Good. Keep it private — last employee handed theirs to a scammer. Full identity fraud. Nightmare.",
+               "* Boss: Register 3. Karen awaits. Good luck out there. I'm sorry."]},
+      {id:'sam',x:1300,label:'Coworker Sam',
+        lines:["* Sam: Three words: keep your receipts. Log them in the ATO app — syncs straight to ATO Online Services.",
+               "* Sam: The ATO app has myDeductions. Use it. Documented claims = refund money. Undocumented = fraud flag in an audit. Learn from my mistakes."]}
+    ],
+    objs:[
+      {id:'tfndecl',x:300,label:'TFN Declaration',
+        act(){
+          if(!G.tfn){openDlg(["* [TFN Declaration form]","* You need a TFN before you can fill this in — head to myGov District."]);}
+          else if(G.tfnDeclared){openDlg(["* [TFN Declaration — SUBMITTED ✅]","* You've claimed the tax-free threshold — Woolworths withholds at the correct rate now."]);}
+          else{G.tfnDeclared=true;spendDay(1);gainXP(30,'TFN Declaration');
+            openDlg(["* [You submit the TFN Declaration!]","* TFN 123 456 789 on file with Woolworths ✅\n\n  You've claimed the TAX-FREE THRESHOLD — no tax on your first $18,200. PAYG withholding is now set correctly.\n\n  [+30 XP]"]);}
+        }},
+      {id:'register',x:850,label:'Work Register (BATTLE)',
+        act(){
+          if(!G.tfn){openDlg(["* [Work Register]","* You need a TFN before you can work — head to myGov District first."]);}
+          else if(G.workedShifts>=5){openDlg(["* [Work Register]","* You've worked enough shifts — move on."]);}
+          else{startBattle();}
+        }}
+    ],
+    done(){return G.tfnDeclared&&G.workedShifts>=3;},
+    hint:"Submit the TFN Declaration and survive 3 shifts at the register!",
+  },
+
+  // 3: ATO HEIGHTS
+  {name:'ATO Heights',sky:['#100020','#1a0038'],gnd:'#120820',
+    drawBg(cx){
+      ctx.fillStyle='#1e0835';
+      for(let i=0;i<8;i++){const colx=((i*200-cx*0.4+3200)%3200)-60;ctx.fillRect(colx,60,40,FLOOR-60);ctx.fillStyle='#2a1050';ctx.fillRect(colx-8,55,56,18);ctx.fillStyle='#1e0835';}
+      ctx.save();ctx.fillStyle='#0e0025';ctx.fillRect(0,0,W,60);
+      ctx.font="bold 20px 'Courier New',monospace";ctx.textAlign='center';
+      ctx.fillStyle='#6a1b9a';ctx.fillText('AUSTRALIAN TAXATION OFFICE',W/2+2,36);
+      ctx.fillStyle='#ce93d8';ctx.fillText('AUSTRALIAN TAXATION OFFICE',W/2,34);ctx.restore();
+      ctx.save();ctx.globalAlpha=0.15;ctx.fillStyle='#9c27b0';ctx.fillRect(0,FLOOR-20,W,30);ctx.restore();
+    },
+    npcs:[
+      {id:'atoofficer',x:400,label:'Officer Hensley',
+        lines:["* Hensley: ATO Online Services already received your income data from Woolworths. We cross-check it for fraud and pre-fill it into your return. I'm just waiting for you to agree.",
+               "* Hensley: Activate myDeductions in the ATO app. Log your three expenses. Check the pre-filled income statement — verify your super contributions too.",
+               "* Hensley: Then run the estimator. Undeclared income is fraud. Yours is declared. That is refreshing. You may then pass."]}
+    ],
+    objs:[
+      {id:'myded',x:240,label:'myDeductions',
+        act(){
+          if(G.myDeductionsEnabled){openDlg(["* [myDeductions ✅]",`* ${G.deductionsLogged}/3 deductions logged — $${G.deductions} total claimed.`]);}
+          else{G.myDeductionsEnabled=true;spendDay(1);gainXP(25,'myDeductions');
+            openDlg(["* [myDeductions ACTIVATED via ATO app ✅]",
+              "* The ATO app lets you log work expenses throughout the year. At tax time they sync directly into ATO Online Services and auto-import into myTax.",
+              "* Keep every receipt — undocumented claims can trigger a fraud flag during an audit. ATO Online Services cross-checks your claims against employer and bank data.\n\n  [+25 XP]"]);}
+        }},
+      {id:'ded1',x:580,label:'Work Boots ($55)',
+        act(){
+          if(!G.myDeductionsEnabled){openDlg(["* [Work boots]","* Activate myDeductions first."]);}
+          else if(G.deductionsLogged>=1){openDlg(["* [Boots — CLAIMED ✅]","* $55 logged."]);}
+          else{G.deductionsLogged=1;G.deductions+=55;spendDay(1);gainXP(20,'deduction');
+            openDlg(["* [Non-slip work boots — $55 claimed!]",`* Deductions reduce your taxable income directly — $55 off means less tax owed, more refund back.\n\n  Total: $${G.deductions}  [+20 XP]`]);}
+        }},
+      {id:'ded2',x:880,label:'Dry Cleaning ($40)',
+        act(){
+          if(!G.myDeductionsEnabled){openDlg(["* [Uniform]","* Activate myDeductions first."]);}
+          else if(G.deductionsLogged<1){openDlg(["* [Uniform]","* Log the boots deduction first."]);}
+          else if(G.deductionsLogged>=2){openDlg(["* [Dry cleaning — CLAIMED ✅]","* $40 logged."]);}
+          else{G.deductionsLogged=2;G.deductions+=40;spendDay(1);gainXP(20,'deduction');
+            openDlg(["* [Uniform dry cleaning — $40 claimed!]",`* Total deductions: $${G.deductions}  [+20 XP]`]);}
+        }},
+      {id:'ded3',x:1100,label:'Bus Travel ($60)',
+        act(){
+          if(!G.myDeductionsEnabled){openDlg(["* [Bus pass]","* Activate myDeductions first."]);}
+          else if(G.deductionsLogged<2){openDlg(["* [Bus pass]","* Log the previous deductions first."]);}
+          else if(G.deductionsLogged>=3){openDlg(["* [Bus travel — CLAIMED ✅]","* $60 logged."]);}
+          else{G.deductionsLogged=3;G.deductions+=60;spendDay(1);gainXP(20,'deduction');
+            openDlg(["* [Public transport — $60 claimed!]",`* All 3 deductions complete! Total: $${G.deductions}  [+20 XP]`]);}
+        }},
+      {id:'incstmt',x:1360,label:'Income Statement',
+        act(){
+          if(G.workedShifts<3){openDlg(["* [Income Statement Terminal]",`* Only ${G.workedShifts} shift(s) on record — work at least 3 at Woolworths first.`]);}
+          else if(G.incomeStatementChecked){openDlg(["* [Income Statement ✅]",`* Gross: $${G.income}  Withheld: $${G.taxWithheld}  Super: $${Math.round(G.income*0.115)}`]);}
+          else{G.incomeStatementChecked=true;spendDay(1);gainXP(35,'income statement');
+            openDlg(["* [INCOME STATEMENT — via ATO Online Services ✅]",
+              `* Gross: $${G.income}  PAYG withheld: $${G.taxWithheld}  Super: $${Math.round(G.income*0.115)}`,
+              "* Woolworths lodged this data directly with ATO Online Services. It's pre-filled into myTax AND cross-checked for payroll fraud and errors.\n\n  If the amounts look wrong, it may indicate fraud or a payroll mistake. Always review before lodging.\n\n  [+35 XP]"]);}
+        }},
+      {id:'taxest',x:1620,label:'Tax Estimator',
+        act(){
+          if(!G.incomeStatementChecked){openDlg(["* [Tax Estimator]","* Check your income statement first."]);}
+          else if(G.taxEstimated){const tx=Math.max(0,G.income-G.deductions),ow=tx>18200?Math.round((tx-18200)*0.16):0;openDlg([`* Estimated refund: $${Math.max(0,G.taxWithheld-ow)} 🎉`]);}
+          else{G.taxEstimated=true;spendDay(1);gainXP(25,'estimate');
+            const tx=Math.max(0,G.income-G.deductions),ow=tx>18200?Math.round((tx-18200)*0.16):0,ref=G.taxWithheld-ow;
+            openDlg(["* [ATO Income Tax Estimator 2025–26]",`* Gross: $${G.income}  Deductions: -$${G.deductions}  Taxable: $${tx}`,`* Tax owed (16% above $18,200): $${ow}  Already withheld: $${G.taxWithheld}\n\n  ESTIMATED REFUND: $${Math.max(0,ref)} 🎉\n\n  [+25 XP]`]);}
+        }}
+    ],
+    done(){return G.myDeductionsEnabled&&G.deductionsLogged>=3&&G.incomeStatementChecked&&G.taxEstimated;},
+    hint:"Activate myDeductions, log all 3 deductions, check income statement & run estimator!",
+  },
+
+  // 4: COMMBANK VALLEY
+  {name:'CommBank Valley',sky:['#120c00','#1e1400'],gnd:'#150f00',
+    drawBg(cx){
+      ctx.save();ctx.globalAlpha=0.08;ctx.fillStyle='#ff8800';ctx.fillRect(0,0,W,H);ctx.restore();
+      ctx.fillStyle='#1a1200';
+      for(let i=0;i<5;i++){const px2=((i*250+80-cx*0.35+3000)%3000)-50;ctx.fillRect(px2,80,28,FLOOR-80);ctx.fillStyle='#2a2000';ctx.fillRect(px2-6,74,40,16);ctx.fillStyle='#1a1200';}
+      ctx.save();ctx.fillStyle='#1a0e00';ctx.fillRect(0,0,W,55);
+      ctx.font="bold 20px 'Courier New',monospace";ctx.textAlign='center';
+      ctx.fillStyle='#7a5a00';ctx.fillText('COMMONWEALTH BANK',W/2+2,35);ctx.fillStyle='#f5a623';ctx.fillText('COMMONWEALTH BANK',W/2,33);ctx.restore();
+      for(let i=0;i<14;i++){const coinx=((i*130+40-cx*0.7+2000)%2000)-30;const coiny=FLOOR-8-i%4*5;ctx.fillStyle='#d4a017';ctx.beginPath();ctx.ellipse(coinx,coiny,7,5,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#f5c542';ctx.beginPath();ctx.ellipse(coinx-1,coiny-1,4,3,0,0,Math.PI*2);ctx.fill();}
+    },
+    npcs:[
+      {id:'teller',x:550,label:'Bank Teller',
+        lines:["* Teller: No bank details in ATO Online Services means the ATO mails a cheque — and scammers love intercepted cheques.",
+               "* Teller: Keep your bank details current in ATO Online Services. Tax refund fraud often targets people with outdated accounts. I once waited 11 weeks. Never again."]}
+    ],
+    objs:[
+      {id:'banklink',x:280,label:'Register Bank Details',
+        act(){
+          if(!G.atoLinked){openDlg(["* [Bank Registration]","* Link your ATO to myGov first."]);}
+          else if(G.bankLinked){openDlg(["* [Bank Account ✅]","* BSB: 062-000  Account: 12345678 — refund will deposit here within 2 weeks of lodging."]);}
+          else{G.bankLinked=true;spendDay(1);gainXP(20,'bank linked');
+            openDlg(["* [Bank Account Registered via ATO Online Services ✅]",
+              "* BSB: 062-000 / Account: 12345678 — refund deposits directly, usually within 2 weeks.",
+              "* Update bank details regularly through ATO Online Services. Tax refund fraud often targets outdated accounts. ATO Online Services lets you manage this securely year-round.\n\n  [+20 XP]"]);}
+        }}
+    ],
+    done(){return G.bankLinked;},
+    hint:"Register your bank account with the ATO at the terminal!",
+  },
+
+  // 5: TAX LODGE
+  {name:'Tax Lodge',sky:['#020d02','#041504'],gnd:'#071007',
+    drawBg(cx){
+      const t=Date.now()/1200;
+      for(let i=0;i<60;i++){const px2=((i*130+Math.sin(t+i)*30+2400)%2400)-50;const py2=100+Math.sin(t*1.3+i*0.9)*80+i%4*40;ctx.fillStyle=`rgba(50,255,100,${0.1+Math.sin(t*2+i)*0.08})`;ctx.fillRect(px2,py2,2,2);}
+      ctx.fillStyle='#071207';
+      for(let i=0;i<4;i++){const px2=((i*400+100-cx*0.5+3200)%3200)-60;ctx.fillRect(px2,50,50,FLOOR-50);ctx.fillStyle='#0a1a0a';ctx.fillRect(px2-10,44,70,22);ctx.fillStyle='rgba(0,255,80,0.2)';for(let r=0;r<4;r++)ctx.fillRect(px2+10,80+r*50,30,12);ctx.fillStyle='#071207';}
+      ctx.save();ctx.fillStyle='#020902';ctx.fillRect(0,0,W,52);
+      ctx.font="bold 18px 'Courier New',monospace";ctx.textAlign='center';
+      ctx.fillStyle='#1a4a1a';ctx.fillText('— TAX LODGE —',W/2+2,32);ctx.fillStyle='#44ff88';ctx.fillText('— TAX LODGE —',W/2,30);ctx.restore();
+    },
+    npcs:[
+      {id:'wizard',x:380,label:'myTax Wizard',
+        lines:["* Wizard: ATO Online Services secured your entire journey — income verified by employer, super tracked, fraud flagged, deductions logged via the ATO app.",
+               "* Wizard: Lodging through ATO Online Services via myTax is the safest method — pre-filled data reduces errors and fraud risk. Jake... lodge. Be free."]}
+    ],
+    objs:[
+      {id:'lodge',x:1500,label:'myTax — Lodge Return!',
+        act(){
+          const miss=[];
+          if(!G.incomeStatementChecked)miss.push('• Check income statement (ATO Heights)');
+          if(!G.bankLinked)miss.push('• Link bank account (CommBank Valley)');
+          if(miss.length){openDlg(["* [myTax Portal — NOT READY]","* Still missing:\n\n"+miss.join('\n')]);}
+          else{sfx('portal');startBattle('ato');}
+        }}
+    ],
+    done(){return G.taxLodged;},
+    hint:"Lodge your return at the portal!",
+  },
+
+];}
+
+let ZONES=makeZones();
+// Days lost on FIRST entry to each zone
+const ZONE_COST=[0,2,2,3,3,3];
+
+// ── DRAW HELPERS ──────────────────────────────────────────────────────────────
+function txt(t,x,y,sz,col,al='left'){ctx.save();ctx.font=`${sz}px 'Courier New',monospace`;ctx.fillStyle=col;ctx.textAlign=al;ctx.fillText(t,x,y);ctx.restore();}
+function rr(x,y,w,h,r,fill,stroke,sw=2){if(w<=0||h<=0)return;ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);ctx.lineTo(x+r,y+h);ctx.arcTo(x,y+h,x,y+h-r,r);ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);ctx.closePath();if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=sw;ctx.stroke();}}
+function wrapText(str,maxW,sz=15){ctx.font=`${sz}px 'Courier New',monospace`;const out=[];for(const para of str.split('\n')){if(!para.trim()){out.push('');continue;}let line='';for(const w of para.split(' ')){const t=line?line+' '+w:w;if(ctx.measureText(t).width>maxW&&line){out.push(line);line=w;}else line=t;}if(line)out.push(line);}return out;}
+
+// Inline-colour renderer — auto-highlights key terms wherever they appear in dialog
+// Blue   (#4488ff): ATO Online Services, ATO app  (important service names)
+// Gold   (#ffd700): $amounts, percentages, $18,200 threshold
+// Cyan   (#55eeff): TFN, ATO, myGov, myTax, myDeductions, PAYG, CommBank, Woolworths
+// Red-orange (#ff5533): fraud, scam, identity theft, unauthorised  (danger!)
+// Orange (#ff7744): penalty, withheld, audit  (cost / warning words)
+// Yellow (#ffee44): * speech prefix, MUST, deadline, October
+// Brackets [text] → cyan
+function richLine(line,lx,ly,sz,defaultCol){
+  ctx.save();ctx.font=`${sz}px 'Courier New',monospace`;ctx.textAlign='left';
+  const segs=[];let s=line;
+  if(s.startsWith('* ')){segs.push(['* ','#ffee44']);s=s.slice(2);}
+  // IMPORTANT: longer phrases must come FIRST so they match before single-word fallbacks
+  const re=/(ATO Online Services|ATO app)|(\$[\d,]+(?:\.\d+)?)|(\[.*?\])|\b(TFN|ATO|myGov|myTax|myDeductions|PAYG|Medicare|CommBank|Woolworths|superannuation|super)\b|\b(fraud|scam\w*|identity\s*theft|unauthorised|stolen)\b|\b(penalty|penalt\w*|withheld|withhold\w*|audit\w*)\b|\b(MUST|deadline|October|31st)\b|(\d+%|\$18[,.]?200|\$18200)/g;
+  let last=0,m;
+  while((m=re.exec(s))!==null){
+    if(m.index>last)segs.push([s.slice(last,m.index),defaultCol]);
+    const tok=m[0];
+    let col=defaultCol;
+    if     (m[1])       col='#4488ff';   // ATO Online Services / ATO app → brand blue
+    else if(m[2]||m[9]) col='#ffd700';  // money / % / threshold → gold
+    else if(m[3]||m[4]) col='#55eeff';  // bracket / tax/super term → cyan
+    else if(m[5])       col='#ff5533';  // fraud / scam → red-orange
+    else if(m[6])       col='#ff7744';  // danger word → orange
+    else if(m[7])       col='#ffee44';  // imperative → yellow
+    segs.push([tok,col]);
+    last=m.index+tok.length;
+  }
+  if(last<s.length)segs.push([s.slice(last),defaultCol]);
+  let cx=lx;
+  for(const[t,c]of segs){ctx.fillStyle=c;ctx.fillText(t,cx,ly);cx+=ctx.measureText(t).width;}
+  ctx.restore();
+}
+
+// ── DRAW PLAYER ───────────────────────────────────────────────────────────────
+function drawPlayer(sx,sy){
+  const s=2.5;ctx.save();
+  if(G.facing<0){ctx.translate(sx,0);ctx.scale(-1,1);ctx.translate(-sx,0);}
+  const swing=G.isWalking?Math.sin(G.walkFrame*0.28)*6:0,s2=-swing,bob=G.isWalking?Math.abs(Math.sin(G.walkFrame*0.28))*2:0,by=sy-bob;
+  ctx.fillStyle='rgba(0,0,0,0.22)';ctx.beginPath();ctx.ellipse(sx,sy+3,16,5,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#212121';ctx.fillRect(sx-5*s+swing,by-4*s,6*s,2*s);ctx.fillRect(sx+0*s+s2,by-4*s,6*s,2*s);
+  ctx.fillStyle='#37474f';ctx.fillRect(sx-4.5*s+swing,by-12*s,4*s,9*s);ctx.fillRect(sx+0.5*s+s2,by-12*s,4*s,9*s);
+  ctx.fillStyle='#1565c0';ctx.fillRect(sx-5*s,by-21*s,10*s,10*s);
+  ctx.fillStyle='#f5cba7';ctx.fillRect(sx-8*s,by-20*s+s2,3*s,8*s);ctx.fillRect(sx+5*s,by-20*s+swing,3*s,8*s);
+  ctx.fillStyle='#f5cba7';ctx.fillRect(sx-4*s,by-30*s,8*s,9*s);
+  ctx.fillStyle='#2a2a2a';ctx.fillRect(sx-2.5*s,by-27*s,2*s,2*s);ctx.fillRect(sx+0.5*s,by-27*s,2*s,2*s);
+  ctx.fillStyle='#3b2314';ctx.fillRect(sx-4.5*s,by-33*s,9*s,4*s);
+  ctx.restore();
+}
+
+// ── ENTITY MODELS ─────────────────────────────────────────────────────────────
+function drawEntityModel(sx,id){
+  const by=FLOOR;
+  function person(baseY,hair,shirt,pants,skin,s){
+    if(!skin)skin='#f5cba7';if(!s)s=2.0;
+    ctx.fillStyle='#212121';ctx.fillRect(sx-4*s,baseY-3*s,4.5*s,2.5*s);ctx.fillRect(sx+0.5*s,baseY-3*s,4.5*s,2.5*s);
+    ctx.fillStyle=pants;ctx.fillRect(sx-4*s,baseY-11*s,3.5*s,8.5*s);ctx.fillRect(sx+0.5*s,baseY-11*s,3.5*s,8.5*s);
+    ctx.fillStyle=shirt;ctx.fillRect(sx-4.5*s,baseY-21*s,9*s,10.5*s);
+    ctx.fillStyle=skin;ctx.fillRect(sx-7*s,baseY-20*s,2.5*s,8*s);ctx.fillRect(sx+4.5*s,baseY-20*s,2.5*s,8*s);
+    ctx.fillStyle=skin;ctx.fillRect(sx-3.5*s,baseY-29*s,7*s,8.5*s);
+    ctx.fillStyle='#333';ctx.fillRect(sx-2*s,baseY-27*s,1.5*s,1.5*s);ctx.fillRect(sx+0.5*s,baseY-27*s,1.5*s,1.5*s);
+    ctx.fillStyle=hair;ctx.fillRect(sx-4*s,baseY-32*s,8*s,3.5*s);
+  }
+  switch(id){
+    case 'mum':{const s=2.6;person(by,'#6B3A2A','#e91e8c','#7b1fa2','#f5cba7',s);
+      ctx.fillStyle='#6B3A2A';ctx.fillRect(sx-5.5*s,by-32*s,1.5*s,10*s);ctx.fillRect(sx+4*s,by-32*s,1.5*s,10*s);
+      ctx.fillStyle='#f48fb1';ctx.fillRect(sx-3.5*s,by-14*s,7*s,4.5*s);
+      ctx.fillStyle='#c0806a';ctx.fillRect(sx-1.5*s,by-23.5*s,3*s,1.5*s);break;}
+    case 'fairy':{const s=1.5,fy=by-10;
+      ctx.save();ctx.globalAlpha=0.13+Math.sin(Date.now()/400)*0.06;ctx.fillStyle='#e040fb';ctx.beginPath();ctx.ellipse(sx,fy-18*s,18,26,0,0,Math.PI*2);ctx.fill();ctx.restore();
+      ctx.fillStyle='rgba(220,160,255,0.55)';ctx.fillRect(sx-9*s,fy-23*s,7*s,10*s);ctx.fillRect(sx+2*s,fy-23*s,7*s,10*s);
+      ctx.fillStyle='rgba(175,95,255,0.35)';ctx.fillRect(sx-7*s,fy-20*s,5*s,7*s);ctx.fillRect(sx+2*s,fy-20*s,5*s,7*s);
+      person(fy,'#f8e047','#e040fb','#ce93d8','#ffe0b2',s);
+      ctx.fillStyle='#ffd700';ctx.fillRect(sx-0.5*s,fy-37*s,1*s,5*s);ctx.fillRect(sx-1.5*s,fy-38.5*s,3*s,2*s);break;}
+    case 'boss':{const s=2.0;person(by,'#111','#37474f','#212121');
+      ctx.fillStyle='#ffffff';ctx.fillRect(sx-2.5*s,by-21*s,5*s,3.5*s);ctx.fillStyle='#b71c1c';ctx.fillRect(sx-0.75*s,by-21*s,1.5*s,7*s);
+      ctx.fillStyle='#111';ctx.fillRect(sx-3*s,by-28.5*s,3*s,1.5*s);ctx.fillRect(sx+0*s,by-28.5*s,3*s,1.5*s);break;}
+    case 'sam':{const s=2.0;person(by,'#5D4037','#1b5e20','#37474f');
+      ctx.fillStyle='#2e7d32';ctx.fillRect(sx-4.5*s,by-18*s,9*s,2.5*s);ctx.fillStyle='#ffffff';ctx.fillRect(sx-2.5*s,by-16*s,5*s,2.5*s);ctx.fillStyle='#4caf50';ctx.fillRect(sx-2*s,by-15.5*s,4*s,1.5*s);break;}
+    case 'govassist':{const s=2.0;
+      ctx.fillStyle='#37474f';ctx.fillRect(sx-4.5*s,by-3*s,4*s,3*s);ctx.fillRect(sx+0.5*s,by-3*s,4*s,3*s);
+      ctx.fillStyle='#546e7a';ctx.fillRect(sx-3.5*s,by-12*s,3*s,9.5*s);ctx.fillRect(sx+0.5*s,by-12*s,3*s,9.5*s);
+      ctx.fillStyle='#607d8b';ctx.fillRect(sx-5*s,by-23*s,10*s,11.5*s);ctx.fillStyle='#00bcd4';ctx.fillRect(sx-3.5*s,by-22*s,7*s,5.5*s);ctx.fillStyle='rgba(0,229,255,0.3)';ctx.fillRect(sx-3*s,by-21.5*s,6*s,4.5*s);
+      ctx.fillStyle='#546e7a';ctx.fillRect(sx-7.5*s,by-22*s,2.5*s,8.5*s);ctx.fillRect(sx+5*s,by-22*s,2.5*s,8.5*s);
+      ctx.fillStyle='#607d8b';ctx.fillRect(sx-4.5*s,by-33*s,9*s,10*s);ctx.fillStyle='#00e5ff';ctx.fillRect(sx-3.5*s,by-31*s,7*s,2.5*s);
+      ctx.fillStyle='#78909c';ctx.fillRect(sx-0.5*s,by-37*s,1*s,4*s);ctx.fillStyle='#00e5ff';ctx.fillRect(sx-1.5*s,by-38.5*s,3*s,2*s);break;}
+    case 'atoofficer':{const s=2.0;person(by,'#212121','#4a148c','#311b92');
+      ctx.fillStyle='#ffd700';ctx.fillRect(sx-4*s,by-19*s,4*s,4*s);ctx.fillStyle='#ff8f00';ctx.fillRect(sx-3.5*s,by-18.5*s,3*s,3*s);
+      ctx.fillStyle='#ffffff';ctx.fillRect(sx-2*s,by-21*s,4*s,2.5*s);ctx.fillStyle='#222';ctx.fillRect(sx-3*s,by-28.5*s,3*s,1.5*s);ctx.fillRect(sx+0*s,by-28.5*s,3*s,1.5*s);break;}
+    case 'teller':{const s=2.0;person(by,'#4a2500','#b71c1c','#3e2723');
+      ctx.fillStyle='#f5a623';ctx.fillRect(sx-4.5*s,by-21*s,9*s,10.5*s);ctx.fillStyle='#ffffff';ctx.fillRect(sx-2.5*s,by-21*s,5*s,3*s);
+      ctx.fillStyle='#ffffff';ctx.fillRect(sx-3*s,by-16*s,6*s,3*s);ctx.fillStyle='#f5a623';ctx.fillRect(sx-2.5*s,by-15.5*s,5*s,2*s);break;}
+    case 'wizard':{const s=2.0;person(by,'#4a148c','#1a237e','#0d47a1');
+      ctx.fillStyle='#1a237e';ctx.fillRect(sx-6*s,by-13*s,12*s,4*s);
+      ctx.fillStyle='#050020';ctx.fillRect(sx-6.5*s,by-32.5*s,13*s,2.5*s);ctx.fillRect(sx-4*s,by-41*s,8*s,9*s);ctx.fillRect(sx-2.5*s,by-47*s,5*s,6*s);ctx.fillRect(sx-1*s,by-50*s,2*s,3*s);
+      ctx.fillStyle='#ffd700';ctx.fillRect(sx-3*s,by-39*s,2*s,2*s);ctx.fillRect(sx+1.5*s,by-45*s,2*s,2*s);
+      ctx.fillStyle='#e0e0e0';ctx.fillRect(sx-3*s,by-24*s,6*s,4.5*s);ctx.fillStyle='#ffffff';ctx.fillRect(sx-2.5*s,by-23.5*s,5*s,3.5*s);break;}
+    case 'mailbox':{ctx.fillStyle='#6d4c41';ctx.fillRect(sx-3,by-44,6,44);ctx.fillStyle='#c62828';ctx.fillRect(sx-22,by-86,44,44);ctx.fillStyle='#b71c1c';ctx.fillRect(sx-22,by-92,44,10);ctx.fillRect(sx-18,by-94,36,6);ctx.fillStyle='#ffc107';ctx.fillRect(sx-22,by-89,44,5);ctx.fillStyle='#7f0000';ctx.fillRect(sx-13,by-70,26,7);ctx.fillStyle='#4a0000';ctx.fillRect(sx-11,by-69,22,5);break;}
+    case 'tfndecl':{ctx.fillStyle='#5d4037';ctx.fillRect(sx-4,by-10,8,10);ctx.fillRect(sx-14,by-13,28,5);ctx.fillStyle='#8d6e63';ctx.fillRect(sx-23,by-84,46,72);ctx.fillStyle='#616161';ctx.fillRect(sx-9,by-88,18,9);ctx.fillRect(sx-6,by-86,12,7);ctx.fillStyle='#fffde7';ctx.fillRect(sx-19,by-80,38,64);ctx.fillStyle='#4a148c';ctx.fillRect(sx-15,by-76,30,9);ctx.fillStyle='#ece7f2';ctx.fillRect(sx-13,by-75,26,7);ctx.fillStyle='#bdbdbd';for(let li=0;li<5;li++)ctx.fillRect(sx-13,by-63+li*9,26,3);ctx.fillStyle='#e8eaf6';ctx.fillRect(sx-13,by-20,26,13);ctx.fillStyle='#3949ab';ctx.fillRect(sx-11,by-18,22,9);break;}
+    case 'register':{ctx.fillStyle='#1a237e';ctx.fillRect(sx-36,by-22,72,22);ctx.fillStyle='#283593';ctx.fillRect(sx-30,by-66,60,44);ctx.fillStyle='#1a1a2e';ctx.fillRect(sx-25,by-63,50,26);ctx.fillStyle='#0d2b4e';ctx.fillRect(sx-23,by-61,46,22);ctx.fillStyle='#00ff88';ctx.fillRect(sx-18,by-58,14,4);ctx.fillRect(sx-18,by-52,22,4);ctx.fillRect(sx+2,by-58,16,4);ctx.fillStyle='#1565c0';for(let bi=0;bi<4;bi++)for(let bj=0;bj<2;bj++)ctx.fillRect(sx-26+bi*13,by-36+bj*9,10,6);ctx.fillStyle='#3949ab';ctx.fillRect(sx-26,by-20,52,7);ctx.fillStyle='#7986cb';ctx.fillRect(sx-5,by-17,10,4);
+      // battle indicator glow
+      const bt=Date.now()/500;ctx.save();ctx.globalAlpha=0.4+Math.sin(bt)*0.3;ctx.fillStyle='#ff4444';ctx.fillRect(sx-26,by-66,52,4);ctx.restore();break;}
+    case 'tfnterm':case 'mygovsign':case 'atolink':case 'incstmt':case 'taxest':{
+      const col=id==='tfnterm'?'#00bcd4':id==='mygovsign'?'#1565c0':id==='atolink'?'#9c27b0':id==='incstmt'?'#2e7d32':'#ff6f00';
+      ctx.fillStyle='#37474f';ctx.fillRect(sx-5,by-20,10,20);ctx.fillRect(sx-24,by-14,48,9);ctx.fillStyle='#263238';ctx.fillRect(sx-34,by-87,68,69);ctx.fillStyle='#0d1117';ctx.fillRect(sx-30,by-83,60,56);ctx.fillStyle=col+'18';ctx.fillRect(sx-29,by-82,58,54);
+      if(id==='tfnterm'){ctx.fillStyle='#00bcd4';ctx.fillRect(sx-20,by-77,40,9);ctx.fillStyle='#e0f7fa';for(let l=0;l<3;l++)ctx.fillRect(sx-20,by-64+l*9,40,5);ctx.fillStyle='#00e5ff';ctx.fillRect(sx-12,by-40,24,8);}
+      else if(id==='mygovsign'){ctx.fillStyle='#1565c0';ctx.fillRect(sx-22,by-78,44,16);ctx.fillStyle='#ffffff';ctx.fillRect(sx-18,by-76,36,12);ctx.fillStyle='#1565c0';ctx.fillRect(sx-14,by-74,28,8);ctx.fillStyle='#64b5f6';for(let l=0;l<4;l++)ctx.fillRect(sx-18,by-56+l*9,36,5);}
+      else if(id==='atolink'){ctx.fillStyle='#9c27b0';ctx.fillRect(sx-24,by-76,48,12);ctx.fillStyle='#e040fb';ctx.fillRect(sx-20,by-74,40,8);ctx.fillStyle='#ce93d8';ctx.fillRect(sx-16,by-60,11,11);ctx.fillRect(sx+5,by-60,11,11);ctx.fillRect(sx-4,by-58,8,5);ctx.fillRect(sx-3,by-52,6,8);}
+      else if(id==='incstmt'){ctx.fillStyle='#1b5e20';ctx.fillRect(sx-24,by-76,48,3);ctx.fillStyle='#4caf50';ctx.fillRect(sx-22,by-70,11,18);ctx.fillRect(sx-8,by-76,11,24);ctx.fillRect(sx+4,by-64,11,12);ctx.fillRect(sx+17,by-72,11,20);ctx.fillStyle='#00e676';ctx.fillRect(sx-24,by-38,48,3);ctx.fillStyle='#a5d6a7';for(let l=0;l<3;l++)ctx.fillRect(sx-22,by-32+l*8,44,4);}
+      else{ctx.fillStyle='#ff6f00';ctx.fillRect(sx-24,by-78,48,14);ctx.fillStyle='#ffe082';ctx.fillRect(sx-20,by-76,40,10);ctx.fillStyle='#ff6f00';for(let ki=0;ki<3;ki++)for(let kj=0;kj<3;kj++)ctx.fillRect(sx-18+ki*13,by-61+kj*9,10,6);ctx.fillRect(sx-5,by-34,10,7);}
+      ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.strokeRect(sx-30,by-83,60,56);ctx.strokeStyle='';break;}
+    case 'myded':{ctx.fillStyle='#263238';ctx.fillRect(sx-17,by-76,34,72);ctx.fillStyle='#37474f';ctx.fillRect(sx-19,by-74,38,68);ctx.fillStyle='#263238';ctx.fillRect(sx-17,by-74,34,68);ctx.fillStyle='#0d1117';ctx.fillRect(sx-14,by-70,28,56);ctx.fillStyle='#1a237e';ctx.fillRect(sx-13,by-69,26,54);ctx.fillStyle='#9c27b0';ctx.fillRect(sx-9,by-62,18,18);ctx.fillStyle='#ffd700';ctx.fillRect(sx-7,by-60,14,3);ctx.fillRect(sx-7,by-55,14,3);ctx.fillRect(sx-7,by-50,9,3);ctx.fillStyle='rgba(80,200,100,0.45)';ctx.fillRect(sx-11,by-40,22,14);ctx.fillStyle='#00e676';ctx.fillRect(sx-9,by-38,18,3);ctx.fillRect(sx-9,by-33,12,3);ctx.fillStyle='#37474f';ctx.fillRect(sx-5,by-11,10,7);ctx.fillStyle='#546e7a';ctx.fillRect(sx-3,by-10,6,5);ctx.fillStyle='#546e7a';ctx.fillRect(sx-3,by-73,6,3);break;}
+    case 'ded1':{ctx.fillStyle='#5d4037';ctx.fillRect(sx-30,by-14,60,8);ctx.fillRect(sx-24,by-8,48,8);ctx.fillStyle='#3e2723';ctx.fillRect(sx-30,by-20,26,8);ctx.fillStyle='#4e342e';ctx.fillRect(sx-26,by-42,22,22);ctx.fillRect(sx-22,by-56,16,16);ctx.fillStyle='#bdbdbd';ctx.fillRect(sx-21,by-52,11,2);ctx.fillRect(sx-21,by-46,11,2);ctx.fillRect(sx-21,by-40,11,2);ctx.fillStyle='#3e2723';ctx.fillRect(sx+4,by-20,26,8);ctx.fillStyle='#4e342e';ctx.fillRect(sx+4,by-42,22,22);ctx.fillRect(sx+6,by-56,16,16);ctx.fillStyle='#bdbdbd';ctx.fillRect(sx+9,by-52,11,2);ctx.fillRect(sx+9,by-46,11,2);ctx.fillRect(sx+9,by-40,11,2);ctx.fillStyle='#fff9c4';ctx.fillRect(sx-5,by-62,10,9);ctx.fillStyle='#f57f17';ctx.fillRect(sx-4,by-61,8,4);break;}
+    case 'ded2':{ctx.fillStyle='#9e9e9e';ctx.fillRect(sx-1,by-96,2,12);ctx.fillRect(sx-1,by-97,2,2);ctx.fillStyle='#bdbdbd';ctx.fillRect(sx-30,by-88,60,3);ctx.fillRect(sx-30,by-88,4,10);ctx.fillRect(sx+26,by-88,4,10);ctx.fillStyle='#1565c0';ctx.fillRect(sx-23,by-82,46,56);ctx.fillStyle='#0d47a1';ctx.fillRect(sx-9,by-82,18,10);ctx.fillStyle='#1565c0';ctx.fillRect(sx-5,by-84,10,8);ctx.fillStyle='#1976d2';ctx.fillRect(sx-35,by-82,14,24);ctx.fillRect(sx+21,by-82,14,24);ctx.fillStyle='#0d47a1';ctx.fillRect(sx-17,by-70,13,11);ctx.fillRect(sx+4,by-70,13,11);ctx.fillStyle='#4caf50';ctx.fillRect(sx-7,by-64,14,5);break;}
+    case 'ded3':{ctx.fillStyle='#f5a623';ctx.fillRect(sx-4,by-90,8,90);ctx.fillStyle='#e65100';ctx.fillRect(sx-30,by-94,60,30);ctx.fillStyle='#ff8f00';ctx.fillRect(sx-28,by-92,56,26);ctx.fillStyle='#ffffff';ctx.fillRect(sx-20,by-89,40,15);ctx.fillStyle='#ff8f00';ctx.fillRect(sx-18,by-87,10,8);ctx.fillRect(sx-4,by-87,10,8);ctx.fillRect(sx+14,by-87,8,8);ctx.fillStyle='#e65100';ctx.fillRect(sx-18,by-78,8,5);ctx.fillRect(sx+10,by-78,8,5);ctx.fillStyle='#b71c1c';ctx.fillRect(sx-30,by-66,60,9);ctx.fillStyle='#ffffff';ctx.fillRect(sx-20,by-65,9,7);ctx.fillRect(sx-8,by-65,9,7);ctx.fillRect(sx+4,by-65,9,7);ctx.fillStyle='#795548';ctx.fillRect(sx-14,by-8,28,8);break;}
+    case 'banklink':{ctx.fillStyle='#1a1200';ctx.fillRect(sx-32,by-8,64,8);ctx.fillStyle='#f5a623';ctx.fillRect(sx-30,by-106,60,98);ctx.fillStyle='#e65100';ctx.fillRect(sx-30,by-106,60,11);ctx.fillStyle='#1a1a2e';ctx.fillRect(sx-24,by-97,48,42);ctx.fillStyle='#1565c0';ctx.fillRect(sx-22,by-95,44,38);ctx.fillStyle='#ffffff';ctx.fillRect(sx-18,by-92,14,5);ctx.fillRect(sx+4,by-92,14,5);ctx.fillStyle='#64b5f6';ctx.fillRect(sx-18,by-84,36,5);ctx.fillRect(sx-18,by-76,28,5);ctx.fillStyle='#00e676';ctx.fillRect(sx-9,by-68,18,8);ctx.fillStyle='#8d6e63';ctx.fillRect(sx-17,by-54,34,7);ctx.fillStyle='#3e2723';ctx.fillRect(sx-15,by-53,30,5);ctx.fillStyle='#bf360c';for(let ki=0;ki<3;ki++)for(let kj=0;kj<3;kj++)ctx.fillRect(sx-20+ki*14,by-42+kj*11,10,8);ctx.fillRect(sx-6,by-8,12,8);ctx.fillStyle='#ffd600';ctx.fillRect(sx-30,by-12,60,5);break;}
+    case 'lodge':{ctx.fillStyle='#0a2010';ctx.fillRect(sx-44,by-14,88,14);ctx.fillStyle='#0d2a14';ctx.fillRect(sx-34,by-28,68,14);ctx.fillStyle='#112e18';ctx.fillRect(sx-26,by-42,52,14);ctx.fillStyle='#163820';ctx.fillRect(sx-22,by-50,44,10);
+      const pt=Date.now()/750;ctx.save();ctx.globalAlpha=0.18+Math.sin(pt)*0.08;ctx.fillStyle='#00ff88';ctx.beginPath();ctx.ellipse(sx,by-76,24,36,0,0,Math.PI*2);ctx.fill();ctx.restore();ctx.save();ctx.globalAlpha=0.5+Math.sin(pt*1.2)*0.12;ctx.fillStyle='#00cc66';ctx.beginPath();ctx.ellipse(sx,by-76,15,24,0,0,Math.PI*2);ctx.fill();ctx.restore();ctx.save();ctx.globalAlpha=0.75+Math.sin(pt*0.8)*0.1;ctx.fillStyle='#44ff88';ctx.beginPath();ctx.ellipse(sx,by-76,7,12,0,0,Math.PI*2);ctx.fill();ctx.restore();
+      ctx.strokeStyle='#00ff88';ctx.lineWidth=2.5;ctx.beginPath();ctx.ellipse(sx,by-76,22,32,0,0,Math.PI*2);ctx.stroke();ctx.strokeStyle='#88ffcc';ctx.lineWidth=1.5;ctx.beginPath();ctx.ellipse(sx,by-76,12,20,0,0,Math.PI*2);ctx.stroke();ctx.strokeStyle='';
+      const oy=Math.sin(pt*1.4)*5;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(sx,by-76+oy,6,0,Math.PI*2);ctx.fill();ctx.fillStyle='#00ff88';ctx.beginPath();ctx.arc(sx,by-76+oy,4,0,Math.PI*2);ctx.fill();break;}
+  }
+}
+const ETOP={mum:92,fairy:74,boss:66,sam:66,govassist:80,atoofficer:66,teller:66,wizard:100,
+  mailbox:96,tfndecl:90,register:68,tfnterm:89,mygovsign:89,atolink:89,
+  myded:78,ded1:64,ded2:99,ded3:96,banklink:108,lodge:90,incstmt:89,taxest:89};
+function drawEntity(wx,id,label){
+  const sx=wx-G.camX;if(sx<-90||sx>W+90)return;
+  ctx.fillStyle='rgba(0,0,0,0.28)';ctx.beginPath();ctx.ellipse(sx,FLOOR+3,22,6,0,0,Math.PI*2);ctx.fill();
+  drawEntityModel(sx,id);
+  const labelY=FLOOR-(ETOP[id]||72)-8;
+  ctx.save();ctx.font=`11px 'Courier New',monospace`;ctx.textAlign='center';ctx.fillStyle='#dddddd';ctx.fillText(label,sx,labelY);ctx.restore();
+  if(Math.abs(sx-(G.px-G.camX))<62){
+    const p=Math.sin(Date.now()/380)*0.4+0.6;
+    ctx.save();ctx.font=`12px 'Courier New',monospace`;ctx.textAlign='center';ctx.fillStyle=`rgba(255,255,80,${p})`;ctx.fillText('[Z]',sx,labelY-14);ctx.restore();
+  }
+}
+
+// ── KAREN PORTRAIT ────────────────────────────────────────────────────────────
+function drawKaren(cx,cy,s){
+  if(!s)s=1;
+  // Big blonde Karen hair
+  ctx.fillStyle='#f5c518';
+  ctx.fillRect(cx-18*s,cy-30*s,36*s,14*s);ctx.fillRect(cx-22*s,cy-26*s,6*s,18*s);ctx.fillRect(cx+16*s,cy-26*s,6*s,18*s);
+  ctx.fillRect(cx-20*s,cy-34*s,9*s,8*s);ctx.fillRect(cx+11*s,cy-34*s,9*s,8*s);ctx.fillRect(cx-4*s,cy-36*s,8*s,8*s);
+  // Head
+  ctx.fillStyle='#f5cba7';ctx.fillRect(cx-14*s,cy-24*s,28*s,24*s);
+  // Angry brows
+  ctx.fillStyle='#cc8800';ctx.fillRect(cx-13*s,cy-18*s,6*s,3*s);ctx.fillRect(cx-7*s,cy-21*s,6*s,3*s);ctx.fillRect(cx+1*s,cy-21*s,6*s,3*s);ctx.fillRect(cx+7*s,cy-18*s,6*s,3*s);
+  // Eyes (furious slits)
+  ctx.fillStyle='#222';ctx.fillRect(cx-10*s,cy-14*s,9*s,5*s);ctx.fillRect(cx+1*s,cy-14*s,9*s,5*s);
+  ctx.fillStyle='#ffffff';ctx.fillRect(cx-9*s,cy-13*s,3*s,2*s);ctx.fillRect(cx+2*s,cy-13*s,3*s,2*s);
+  // Nose
+  ctx.fillStyle='#e8a88a';ctx.fillRect(cx-2*s,cy-7*s,4*s,4*s);
+  // Mouth (screaming)
+  ctx.fillStyle='#6a0000';ctx.fillRect(cx-7*s,cy-2*s,14*s,9*s);
+  ctx.fillStyle='#ffffff';ctx.fillRect(cx-6*s,cy-1*s,12*s,3*s);
+  ctx.fillStyle='#cc0000';ctx.fillRect(cx-5*s,cy+3*s,10*s,4*s);
+  // Body (pink jacket)
+  ctx.fillStyle='#e91e63';ctx.fillRect(cx-18*s,cy+2*s,36*s,30*s);
+  ctx.fillStyle='#c2185b';ctx.fillRect(cx-8*s,cy+2*s,16*s,4*s);
+  // Arms
+  ctx.fillStyle='#f5cba7';ctx.fillRect(cx-30*s,cy+6*s,14*s,10*s);ctx.fillRect(cx+16*s,cy+6*s,14*s,10*s);ctx.fillRect(cx+30*s,cy+4*s,8*s,8*s);
+  // Complaint form in left hand
+  ctx.fillStyle='#fffde7';ctx.fillRect(cx-46*s,cy-4*s,18*s,26*s);ctx.fillStyle='#f44336';ctx.fillRect(cx-45*s,cy-3*s,16*s,6*s);
+  ctx.fillStyle='#9e9e9e';for(let li=0;li<4;li++)ctx.fillRect(cx-45*s,cy+5*s+li*6*s,16*s,2*s);
+}
+
+// ── ATO BOSS PORTRAIT ─────────────────────────────────────────────────────────
+function drawATO(cx,cy,s){
+  if(!s)s=1;
+  // Dark suit body
+  ctx.fillStyle='#1a237e';ctx.fillRect(cx-22*s,cy+2*s,44*s,32*s);
+  // White collar
+  ctx.fillStyle='#fff';ctx.fillRect(cx-8*s,cy+2*s,16*s,7*s);
+  // Gold ATO tie
+  ctx.fillStyle='#ffd700';ctx.fillRect(cx-2.5*s,cy+2*s,5*s,18*s);
+  // Badge (glowing)
+  ctx.save();ctx.globalAlpha=0.55+Math.sin(Date.now()/450)*0.2;
+  ctx.fillStyle='#ffd700';ctx.fillRect(cx-18*s,cy+9*s,12*s,9*s);ctx.restore();
+  ctx.fillStyle='#fff';ctx.fillRect(cx-17*s,cy+10*s,10*s,7*s);
+  ctx.fillStyle='#1565c0';ctx.fillRect(cx-16*s,cy+11*s,8*s,5*s);
+  // Arms
+  ctx.fillStyle='#1a237e';ctx.fillRect(cx-32*s,cy+4*s,12*s,14*s);ctx.fillRect(cx+20*s,cy+4*s,12*s,14*s);
+  ctx.fillStyle='#f5cba7';ctx.fillRect(cx-32*s,cy+16*s,12*s,9*s);ctx.fillRect(cx+20*s,cy+16*s,12*s,9*s);
+  // Giant FINE form in right hand
+  ctx.fillStyle='#fffde7';ctx.fillRect(cx+24*s,cy-6*s,18*s,32*s);
+  ctx.fillStyle='#f44336';ctx.fillRect(cx+25*s,cy-5*s,16*s,7*s);
+  ctx.save();ctx.font=`bold ${7*s}px serif`;ctx.textAlign='center';ctx.fillStyle='#b71c1c';ctx.fillText('FINE',cx+33*s,cy-1*s);ctx.restore();
+  ctx.fillStyle='#9e9e9e';for(let l=0;l<4;l++)ctx.fillRect(cx+25*s,cy+5*s+l*6*s,16*s,2*s);
+  // Head
+  ctx.fillStyle='#f5cba7';ctx.fillRect(cx-13*s,cy-28*s,26*s,28*s);
+  // Glasses (authority)
+  ctx.fillStyle='#1a237e';ctx.fillRect(cx-13*s,cy-20*s,11*s,8*s);ctx.fillRect(cx+2*s,cy-20*s,11*s,8*s);ctx.fillRect(cx-2*s,cy-17*s,4*s,3*s);
+  ctx.fillStyle='rgba(180,210,255,0.35)';ctx.fillRect(cx-12*s,cy-19*s,9*s,6*s);ctx.fillRect(cx+3*s,cy-19*s,9*s,6*s);
+  ctx.fillStyle='#222';ctx.fillRect(cx-10*s,cy-18*s,5*s,3*s);ctx.fillRect(cx+5*s,cy-18*s,5*s,3*s);
+  // Slick hair
+  ctx.fillStyle='#1a1a1a';ctx.fillRect(cx-13*s,cy-33*s,26*s,7*s);
+  // Stern mouth
+  ctx.fillStyle='#7a4a3a';ctx.fillRect(cx-7*s,cy-9*s,14*s,3*s);
+}
+
+// ── SPEAKER PORTRAIT (in dialog box) ──────────────────────────────────────────
+function drawPortrait(id,px,py){
+  const sz=58;
+  const BD={mum:'#e91e8c',boss:'#546e7a',sam:'#4caf50',fairy:'#e040fb',
+    govassist:'#00bcd4',atoofficer:'#9c27b0',teller:'#f5a623',wizard:'#3f51b5',
+    karen:'#e53935',ato:'#b71c1c'};
+  const BG={mum:'#200830',boss:'#0a0e14',sam:'#060e06',fairy:'#180820',
+    govassist:'#040c14',atoofficer:'#0c0818',teller:'#110800',wizard:'#05050e',
+    karen:'#180404',ato:'#080210'};
+  rr(px,py,sz,sz,4,BG[id]||'#0a0a14',BD[id]||'#555',2);
+  ctx.save();
+  const cx=px+sz/2,by=py+sz+2,s=0.72;
+  // shirt
+  const SC={mum:'#e91e8c',boss:'#37474f',sam:'#1b5e20',fairy:'#e040fb',
+    govassist:'#607d8b',atoofficer:'#4a148c',teller:'#f5a623',wizard:'#1a237e',
+    karen:'#e91e63',ato:'#1a237e'};
+  const HC={mum:'#6B3A2A',boss:'#111',sam:'#5D4037',fairy:'#f8e047',
+    govassist:null,atoofficer:'#212121',teller:'#4a2500',wizard:'#4a148c',
+    karen:'#f5c518',ato:'#111'};
+  if(id==='govassist'||id==='ato'){
+    // robot / ATO bureaucrat head
+    ctx.fillStyle=id==='ato'?'#1a237e':'#607d8b';ctx.fillRect(cx-6*s,by-24*s,12*s,14*s);
+    ctx.fillStyle=id==='ato'?'rgba(180,210,255,0.4)':'#00e5ff';ctx.fillRect(cx-5*s,by-22*s,10*s,4*s);
+    ctx.fillStyle=id==='ato'?'#f5cba7':'#607d8b';
+    if(id==='ato'){ctx.fillRect(cx-7*s,by-24*s,14*s,11*s);}
+    ctx.fillStyle=id==='ato'?'#1a237e':'#78909c';ctx.fillRect(cx-0.5*s,by-30*s,1*s,7*s);
+  } else {
+    ctx.fillStyle=SC[id]||'#555';ctx.fillRect(cx-7*s,by-14*s,14*s,10*s);
+    ctx.fillStyle='#f5cba7';ctx.fillRect(cx-5*s,by-25*s,10*s,11*s);
+    ctx.fillStyle='#333';ctx.fillRect(cx-3*s,by-22*s,2*s,2*s);ctx.fillRect(cx+1*s,by-22*s,2*s,2*s);
+    if(HC[id]){
+      ctx.fillStyle=HC[id];ctx.fillRect(cx-5*s,by-28*s,10*s,4*s);
+      if(id==='mum'){ctx.fillRect(cx-7*s,by-28*s,2*s,8*s);ctx.fillRect(cx+5*s,by-28*s,2*s,8*s);}
+      if(id==='wizard'){ctx.fillStyle='#050020';ctx.fillRect(cx-6*s,by-28*s,12*s,2*s);ctx.fillRect(cx-3.5*s,by-34*s,7*s,8*s);}
+      if(id==='karen'){ctx.fillStyle=HC[id];ctx.fillRect(cx-8*s,by-32*s,16*s,6*s);ctx.fillStyle='#ff2222';ctx.fillRect(cx-4*s,by-20*s,8*s,3*s);}
+      if(id==='fairy'){ctx.fillStyle='rgba(200,150,255,0.55)';ctx.fillRect(cx-11*s,by-26*s,5*s,8*s);ctx.fillRect(cx+6*s,by-26*s,5*s,8*s);}
+    }
+    if(id==='boss'){ctx.fillStyle='#b71c1c';ctx.fillRect(cx-s,by-14*s,1.5*s,5*s);}
+  }
+  // name label
+  ctx.font=`bold 8px 'Courier New',monospace`;ctx.textAlign='center';
+  ctx.fillStyle=BD[id]||'#aaa';
+  ctx.fillText({mum:'MUM',boss:'BOSS',sam:'SAM',fairy:'FAIRY',govassist:'ARIA-7',
+    atoofficer:'HENSLEY',teller:'TELLER',wizard:'WIZARD',karen:'KAREN',ato:'THE ATO'}[id]||id.toUpperCase(),px+sz/2,py+sz-4);
+  ctx.restore();
+}
+
+// ── BATTLE SYSTEM ─────────────────────────────────────────────────────────────
+function startBattle(enemy){
+  enemy=enemy||'karen';
+  sfx('boss');
+  G.btl={enemy,hp:100,maxHp:100,turn:0,maxTurns:enemy==='ato'?4:3,
+    phase:'intro',introTimer:0,
+    dodgeTimer:0,maxDodgeTime:enemy==='ato'?340:380,
+    projectiles:[],hx:AR.x+AR.w/2,hy:AR.y+AR.h/2,hitFlash:0,menuSel:0};
+  G.scene='battle';
+}
+
+function spawnProjectiles(turn){
+  const b=G.btl,ps=[];
+  const ax=AR.x,ay=AR.y,aw=AR.w,ah=AR.h;
+  if(b.enemy==='ato'){
+    // ATO final boss patterns
+    if(turn===0){ // slow PENALTY NOTICES from both sides
+      ps.push({x:ax-8,y:ay+18,vx:2.0,vy:0,w:58,h:17,col:'#ff1744',type:'manager'});
+      ps.push({x:ax+aw+8,y:ay+80,vx:-2.0,vy:0,w:58,h:17,col:'#ff1744',type:'manager'});
+      ps.push({x:ax-8,y:ay+122,vx:2.2,vy:0,w:58,h:17,col:'#ff1744',type:'manager'});
+    } else if(turn===1){ // fast tax forms rain
+      for(let i=0;i<6;i++) ps.push({x:ax+18+i*56,y:ay-18-i*14,vx:(i%2===0?0.55:-0.55),vy:2.4+i*0.18,w:22,h:30,col:'#ffffff',type:'form'});
+    } else if(turn===2){ // audit beam + forms
+      ps.push({x:ax-8,y:ay+45,vx:1.7,vy:0,w:50,h:16,col:'#ff1744',type:'manager'});
+      ps.push({x:ax+aw+8,y:ay+100,vx:-1.7,vy:0,w:50,h:16,col:'#ff1744',type:'manager'});
+      for(let i=0;i<3;i++) ps.push({x:ax+40+i*115,y:ay-12,vx:0,vy:2.1+i*0.2,w:20,h:28,col:'#ffffff',type:'form'});
+      ps.push({x:ax+aw/2-80,y:ay-20,vx:0,vy:0.75,w:160,h:13,col:'#ffcc00',type:'audit'});
+    } else { // turn 3 — everything
+      for(let i=0;i<3;i++) ps.push({x:ax-8,y:ay+12+i*52,vx:2.4,vy:0,w:44,h:14,col:'#ff1744',type:'manager'});
+      for(let i=0;i<3;i++) ps.push({x:ax+44+i*110,y:ay-10,vx:0,vy:2.7+i*0.18,w:20,h:28,col:'#ffffff',type:'form'});
+      ps.push({x:ax,y:ay+ah/2-7,vx:0.95,vy:0,w:aw,h:14,col:'#ffcc00',type:'audit'});
+    }
+  } else {
+    // Karen patterns
+    if(turn===0){ for(let i=0;i<4;i++) ps.push({x:ax+aw+10+i*110,y:ay+20+i*36,vx:-2.4,vy:0,w:34,h:14,col:'#ffcc02',type:'tag'});}
+    else if(turn===1){ for(let i=0;i<4;i++) ps.push({x:ax+40+i*80,y:ay-18-i*22,vx:(i%2===0?0.35:-0.35),vy:1.8+i*0.2,w:22,h:30,col:'#ffffff',type:'form'});}
+    else {
+      for(let i=0;i<2;i++) ps.push({x:ax-10,y:ay+30+i*70,vx:3.0,vy:0,w:30,h:14,col:'#e53935',type:'basket'});
+      for(let i=0;i<3;i++) ps.push({x:ax+50+i*110,y:ay-10,vx:0,vy:2.2+i*0.15,w:18,h:28,col:'#ffffff',type:'form'});
+      ps.push({x:ax+aw/2-34,y:ay-16,vx:0,vy:0.9,w:68,h:20,col:'#ff1744',type:'manager'});
+    }
+  }
+  b.projectiles=ps;
+}
+
+function drawProjectile(p){
+  ctx.fillStyle=p.col;
+  if(p.type==='tag'){ctx.fillRect(p.x,p.y,p.w,p.h);ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(p.x+2,p.y+4,18,5);ctx.fillStyle='#ff6600';ctx.fillRect(p.x+p.w-8,p.y+2,6,10);}
+  else if(p.type==='form'){ctx.fillRect(p.x,p.y,p.w,p.h);ctx.fillStyle='#f44336';ctx.fillRect(p.x+1,p.y+1,p.w-2,5);ctx.fillStyle='#bdbdbd';for(let li=0;li<3;li++)ctx.fillRect(p.x+2,p.y+8+li*6,p.w-4,2);}
+  else if(p.type==='basket'){ctx.fillRect(p.x,p.y,p.w,p.h);ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(p.x,p.y,p.w,4);ctx.fillStyle='rgba(255,255,255,0.2)';for(let i=0;i<3;i++)ctx.fillRect(p.x+4+i*8,p.y+4,3,p.h-5);}
+  else if(p.type==='manager'){ctx.fillRect(p.x,p.y,p.w,p.h);ctx.save();ctx.font=`bold 10px 'Courier New',monospace`;ctx.textAlign='center';ctx.fillStyle='#ffffff';ctx.fillText('MANAGER',p.x+p.w/2,p.y+14);ctx.restore();}
+  else if(p.type==='audit'){ctx.fillStyle=p.col;ctx.fillRect(p.x,p.y,p.w,p.h);ctx.save();ctx.font=`bold 9px 'Courier New',monospace`;ctx.textAlign='center';ctx.fillStyle='rgba(0,0,0,0.75)';ctx.fillText('AUDIT',p.x+p.w/2,p.y+p.h-2);ctx.restore();}
+}
+
+// heart extents from (cx,cy): left=7, right=7, top=2, bottom=11  → 14w × 13h ≈ 1:1
+const HR={L:7,R:7,T:2,B:11};
+function drawHeart(cx,cy,col){
+  ctx.fillStyle=col;
+  ctx.fillRect(cx-6,cy-2,5,4); ctx.fillRect(cx+1,cy-2,5,4); // lobes
+  ctx.fillRect(cx-7,cy+2,14,3); // wide middle
+  ctx.fillRect(cx-5,cy+5,10,2); // taper 1
+  ctx.fillRect(cx-3,cy+7,6,2);  // taper 2
+  ctx.fillRect(cx-1,cy+9,2,2);  // tip
+}
+
+function updateBattle(){
+  if(G.scene!=='battle')return;
+  const b=G.btl;
+  if(b.phase==='intro'){b.introTimer++;if(b.introTimer>80)b.phase='menu';return;}
+  if(b.phase!=='dodge')return;
+  // heart movement
+  const sp=3;
+  if(G.keys['arrowleft']||G.keys['a']) b.hx-=sp;
+  if(G.keys['arrowright']||G.keys['d']) b.hx+=sp;
+  if(G.keys['arrowup']||G.keys['w']) b.hy-=sp;
+  if(G.keys['arrowdown']||G.keys['s']) b.hy+=sp;
+  // hard barrier — clamp using exact visual extents so heart never clips the border
+  b.hx=Math.max(AR.x+HR.L, Math.min(AR.x+AR.w-HR.R, b.hx));
+  b.hy=Math.max(AR.y+HR.T, Math.min(AR.y+AR.h-HR.B, b.hy));
+  // projectile physics
+  for(const p of b.projectiles){
+    p.x+=p.vx;p.y+=p.vy;
+    if((p.type==='form'||p.type==='tag')&&(p.y+p.h>AR.y+AR.h)&&p.vy>0)p.vy=-Math.abs(p.vy);
+    if((p.type==='form')&&p.y<AR.y&&p.vy<0)p.vy=Math.abs(p.vy);
+  }
+  // collision (4px inner box — slightly forgiving vs visual)
+  if(b.hitFlash<=0){
+    for(const p of b.projectiles){
+      if(b.hx+4>p.x+2&&b.hx-4<p.x+p.w-2&&b.hy+4>p.y+2&&b.hy-4<p.y+p.h-2){
+        b.hp=Math.max(0,b.hp-14);b.hitFlash=30;sfx('hit');break;
+      }
+    }
+  }
+  if(b.hitFlash>0)b.hitFlash--;
+  b.dodgeTimer++;
+  if(b.dodgeTimer>=b.maxDodgeTime){
+    b.turn++;
+    if(b.turn>=b.maxTurns){b.phase='end';}
+    else{b.phase='between';b.hp=Math.min(b.maxHp,b.hp+35);}
+  }
+}
+
+const KAREN_TAUNTS=[
+  "Karen: 'Is ANYONE going to price-check these artisanal olives?!'",
+  "Karen: 'This is going on Google Reviews AND I want a MANAGER!'",
+  "Karen: 'I have FORTY-SEVEN ITEMS AND THEY ARE ALL THE WRONG PRICE!'",
+];
+const BETWEEN_MSG=[
+  "* Karen escalates to Assistant Manager. You take a breath. (+35 stamina)",
+  "* Karen calls corporate. You eat a snack. (+35 stamina)",
+];
+const ATO_TAUNTS=[
+  "ATO: 'We pre-filled your doom. Please review and confirm.'",
+  "ATO: 'Your non-slip boots are in our records. We see everything, Jake.'",
+  "ATO: 'PAYG was set at 47%. How... unfortunate for you.'",
+  "ATO: 'Lodge. Or $313 per 28 days begins. This is not a negotiation.'",
+];
+const ATO_BETWEEN=[
+  "* The ATO acknowledges your endurance. (+35 stamina)",
+  "* An auditor checks their notes. You breathe. (+35 stamina)",
+  "* The ATO scans its databases for more leverage. (+35 stamina)",
+];
+
+// helper: big bold centred text with optional shadow glow
+function bigTxt(t,x,y,sz,col){
+  ctx.save();
+  ctx.font=`bold ${sz}px 'Courier New',monospace`;ctx.textAlign='center';
+  ctx.fillStyle=col+'44';ctx.fillText(t,x+1,y+1); // shadow
+  ctx.fillStyle=col;ctx.fillText(t,x,y);
+  ctx.restore();
+}
+
+function drawBattleHeader(b){
+  if(b.enemy==='ato'){
+    drawATO(W/2,70,1.85);
+    txt('FINAL BOSS',W/2,6,10,'#880000','center');
+    bigTxt('THE  ATO',W/2,26,19,'#cc2222');
+  } else {
+    drawKaren(W/2,72,2);
+    txt('ANGRY CUSTOMER',W/2,6,10,'#aa2222','center');
+    bigTxt('KAREN',W/2,26,20,'#ff4444');
+  }
+  const frac=Math.max(0,1-(b.turn/b.maxTurns)-(b.dodgeTimer/(b.maxDodgeTime*b.maxTurns||1)));
+  const bx=W/2-120,bcol=b.enemy==='ato'?'#880000':'#cc1111';
+  rr(bx,31,240,14,3,'#330000','#661111',1);
+  rr(bx,31,240*Math.max(0,frac),14,3,bcol,null);
+  txt(b.enemy==='ato'?'COMPLIANCE':'PATIENCE',bx+4,42,9,'#ff8888');
+  txt(`${Math.round(frac*100)}%`,bx+236,42,9,'#ff8888','right');
+}
+
+function drawBattle(){
+  const b=G.btl;
+  ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+
+  // ── INTRO ────────────────────────────────────────────────────────────────────
+  if(b.phase==='intro'){
+    const prog=Math.min(1,b.introTimer/50);
+    const ey=Math.round(-80+prog*145);
+    ctx.save();ctx.globalAlpha=prog;
+    if(b.enemy==='ato') drawATO(W/2,ey,1.85); else drawKaren(W/2,ey,2);
+    if(b.introTimer>40){
+      ctx.save();ctx.globalAlpha=(b.introTimer-40)/40;
+      txt(b.enemy==='ato'?'FINAL BOSS':'ANGRY CUSTOMER',W/2,8,11,b.enemy==='ato'?'#880000':'#aa2222','center');
+      bigTxt(b.enemy==='ato'?'THE  ATO':'KAREN',W/2,28,b.enemy==='ato'?19:22,b.enemy==='ato'?'#cc2222':'#ff4444');
+      txt(b.enemy==='ato'?'⚔  THE FINAL CONFRONTATION':'⚔  A WILD SHIFT HAS BEGUN',W/2,48,12,b.enemy==='ato'?'#ff8844':'#ffaaaa','center');
+      ctx.restore();
+    }
+    ctx.restore();
+    return;
+  }
+
+  drawBattleHeader(b);
+
+  // ── MENU ─────────────────────────────────────────────────────────────────────
+  if(b.phase==='menu'){
+    // instructions panel
+    rr(AR.x,AR.y,AR.w,106,4,'#06060e','#334466',1);
+
+    // panel header row
+    ctx.save();
+    ctx.font="bold 14px 'Courier New',monospace";ctx.textAlign='left';
+    ctx.fillStyle='#ffcc44';ctx.fillText('⚔  HOW TO FIGHT',AR.x+12,AR.y+17);
+    ctx.font="bold 14px 'Courier New',monospace";ctx.textAlign='right';
+    const tcol=b.turn===0?'#44ff88':b.turn===1?'#ffcc44':'#ff8844';
+    ctx.fillStyle=tcol;ctx.fillText(`TURN ${b.turn+1} OF ${b.maxTurns}`,AR.x+AR.w-10,AR.y+17);
+    ctx.restore();
+    ctx.fillStyle='#2a2a44';ctx.fillRect(AR.x,AR.y+22,AR.w,2);
+
+    // hints — key phrases coloured
+    const hints=[
+      {pre:'Move with ',hi:'▲▼◀▶  /  WASD',suf:'',hcol:'#ffee44'},
+      {pre:'Keep your ',hi:'❤ heart',suf:' inside the white border',hcol:'#ff4444'},
+      {pre:'Each hit costs ',hi:'14 stamina',suf:'  —  dodge everything',hcol:'#ffaa00'},
+      {pre:'Survive all turns → earn ',hi:'$300',suf:'',hcol:'#ffd700'},
+    ];
+    for(let i=0;i<hints.length;i++){
+      const hy=AR.y+36+i*17,h=hints[i];
+      ctx.font=`12px 'Courier New',monospace`;ctx.textAlign='left';
+      ctx.fillStyle='#888';ctx.fillText('▸ ',AR.x+10,hy);
+      let cx=AR.x+22;
+      ctx.fillStyle='#aaaaaa';ctx.fillText(h.pre,cx,hy);cx+=ctx.measureText(h.pre).width;
+      ctx.save();ctx.font=`bold 12px 'Courier New',monospace`;ctx.fillStyle=h.hcol;ctx.fillText(h.hi,cx,hy);cx+=ctx.measureText(h.hi).width;ctx.restore();
+      ctx.fillStyle='#aaaaaa';ctx.fillText(h.suf,cx,hy);
+    }
+
+    // menu buttons — centered inside arena
+    const by2=AR.y+116;
+    const mid=AR.x+AR.w/2;
+    ctx.save();
+    const opts2=b.enemy==='ato'?['⚔  LODGE RETURN','✦  RETREAT']:['⚔  WORK THE SHIFT','✦  QUIT SHIFT'];
+    for(let i=0;i<2;i++){
+      const bx=mid+(i===0?-105:105),sel=i===b.menuSel;
+      const bcol=sel?(i===0?'#220000':'#001100'):'#080808';
+      const lcol=sel?(i===0?'#ff5555':'#55ff88'):'#666666';
+      rr(bx-90,by2,180,36,5,bcol,sel?'#ffffff':'#444444',sel?2:1);
+      ctx.font=`bold 14px 'Courier New',monospace`;ctx.textAlign='center';
+      ctx.fillStyle=lcol;
+      ctx.fillText((sel&&i===0?'❤ ':'')+opts2[i],bx,by2+23);
+    }
+    ctx.restore();
+
+    // dialog
+    rr(10,H-82,W-20,34,4,'#000','#ffffff',2);
+    const taunts=b.enemy==='ato'?ATO_TAUNTS:KAREN_TAUNTS;
+    const menuLine=b.turn===0
+      ?(b.enemy==='ato'
+        ?"* The ATO materialises. The air smells of form FW-419B. This is the final confrontation."
+        :"* Karen materialises at Register 3, 47 items deep, eyes blazing.")
+      :`* ${taunts[b.turn-1]||'...'}`;
+    richLine(menuLine,18,H-59,12,'#dddddd');
+    const p=Math.sin(Date.now()/400)*0.4+0.6;
+    txt('[ ◀ / ▶ ] or [ A / D ]  select     [ Z ]  confirm',W/2,H-40,10,`rgba(150,150,150,${p})`,'center');
+
+  // ── DODGE ────────────────────────────────────────────────────────────────────
+  } else if(b.phase==='dodge'){
+    // arena floor
+    ctx.fillStyle='rgba(8,8,24,0.92)';ctx.fillRect(AR.x+2,AR.y+2,AR.w-4,AR.h-4);
+
+    // timer row (above arena)
+    const tf=1-(b.dodgeTimer/b.maxDodgeTime);
+    const secsLeft=Math.ceil((b.maxDodgeTime-b.dodgeTimer)/60);
+    const tcol2=tf>0.5?'#44ff88':tf>0.25?'#ffcc00':'#ff3333';
+    rr(AR.x,AR.y-20,AR.w,16,2,'#111111','#333333',1);
+    ctx.fillStyle=tcol2;ctx.fillRect(AR.x+1,AR.y-19,Math.max(0,(AR.w-2)*tf),14);
+    // turn label left, seconds right
+    ctx.save();
+    ctx.font="bold 11px 'Courier New',monospace";ctx.textAlign='left';
+    const tc2=b.turn===0?'#44ff88':b.turn===1?'#ffcc44':'#ff8844';
+    ctx.fillStyle=tc2;ctx.fillText(`TURN ${b.turn+1}/${b.maxTurns}`,AR.x+4,AR.y-7);
+    ctx.font="bold 12px 'Courier New',monospace";ctx.textAlign='right';
+    ctx.fillStyle=tcol2;ctx.fillText(`${secsLeft}s`,AR.x+AR.w-4,AR.y-7);
+    ctx.restore();
+
+    // projectiles clipped to arena
+    ctx.save();ctx.beginPath();ctx.rect(AR.x+1,AR.y+1,AR.w-2,AR.h-2);ctx.clip();
+    for(const p of b.projectiles) drawProjectile(p);
+    if(b.hitFlash%4<3) drawHeart(Math.round(b.hx),Math.round(b.hy),b.hitFlash>0?'#ffffff':'#ff0000');
+    ctx.restore();
+
+    // arena border on top of everything (hard wall visual)
+    ctx.strokeStyle='#ffffff';ctx.lineWidth=3;ctx.strokeRect(AR.x,AR.y,AR.w,AR.h);
+
+    // stamina bar
+    const sBy=AR.y+AR.h+8;
+    rr(AR.x,sBy,AR.w,22,3,'#0a0a0a','#333333',1);
+    const scol=b.hp>50?'#00cc44':b.hp>25?'#ffaa00':'#ff3333';
+    rr(AR.x+1,sBy+1,(AR.w-2)*(b.hp/b.maxHp),20,2,scol,null);
+    txt('❤  STAMINA',AR.x+8,sBy+15,11,'#ffffff');
+    ctx.save();ctx.font=`bold 13px 'Courier New',monospace`;ctx.textAlign='right';ctx.fillStyle=scol;ctx.fillText(`${b.hp} / ${b.maxHp}`,AR.x+AR.w-6,sBy+15);ctx.restore();
+
+    // taunt
+    rr(10,H-66,W-20,18,2,'#000',b.enemy==='ato'?'#442200':'#442222',1);
+    ctx.save();ctx.font=`12px 'Courier New',monospace`;ctx.textAlign='left';
+    const tlist=b.enemy==='ato'?ATO_TAUNTS:KAREN_TAUNTS;
+    const tname=b.enemy==='ato'?'ATO':'Karen';
+    ctx.fillStyle=b.enemy==='ato'?'#ffaa44':'#ff6666';ctx.fillText(tname+': ',18,H-52);
+    const kw=ctx.measureText(tname+': ').width;
+    const tauntFull=tlist[b.turn]||'"...processing..."';const tauntQ=tauntFull.includes(': ')?`"${tauntFull.split(': ').slice(1).join(': ')}"`:tauntFull;
+    ctx.fillStyle='#ffdddd';ctx.fillText(tauntQ,18+kw,H-52);
+    ctx.font=`10px 'Courier New',monospace`;ctx.textAlign='right';ctx.fillStyle='rgba(100,100,100,0.7)';ctx.fillText('arrow keys / WASD to move ❤',W-14,H-52);
+    ctx.restore();
+
+  // ── BETWEEN TURNS ────────────────────────────────────────────────────────────
+  } else if(b.phase==='between'){
+    ctx.strokeStyle='#333';ctx.lineWidth=2;ctx.strokeRect(AR.x,AR.y,AR.w,AR.h);
+    drawPlayer(W/2,AR.y+AR.h-8);
+    const sBy=AR.y+AR.h+8;
+    rr(AR.x,sBy,AR.w,22,3,'#0a0a0a','#333333',1);
+    const scol=b.hp>50?'#00cc44':b.hp>25?'#ffaa00':'#ff3333';
+    rr(AR.x+1,sBy+1,(AR.w-2)*(b.hp/b.maxHp),20,2,scol,null);
+    txt('❤  STAMINA',AR.x+8,sBy+15,11,'#ffffff');
+    ctx.save();ctx.font=`bold 13px 'Courier New',monospace`;ctx.textAlign='right';ctx.fillStyle=scol;ctx.fillText(`${b.hp} / ${b.maxHp}`,AR.x+AR.w-6,sBy+15);ctx.restore();
+    rr(10,H-100,W-20,52,4,'#000','#ffffff',3);
+    const bmsg=b.enemy==='ato'?(ATO_BETWEEN[b.turn-1]||'* The ATO recalculates.'):(BETWEEN_MSG[b.turn-1]||'* You held your ground.');
+    richLine(bmsg,18,H-77,13,'#aaffaa');
+    ctx.save();
+    ctx.font=`12px 'Courier New',monospace`;ctx.textAlign='left';ctx.fillStyle='#888888';ctx.fillText('  Next: ',18,H-57);
+    ctx.font=`bold 12px 'Courier New',monospace`;
+    const nc=b.turn===1?'#ffcc44':'#ff8844';ctx.fillStyle=nc;
+    ctx.fillText(`Turn ${b.turn+1} of ${b.maxTurns}`,18+ctx.measureText('  Next: ').width,H-57);
+    ctx.fillStyle='#888888';ctx.fillText(' — get ready.',18+ctx.measureText(`  Next: Turn ${b.turn+1} of ${b.maxTurns}`).width,H-57);
+    ctx.restore();
+    const p=Math.sin(Date.now()/380)*0.4+0.6;
+    txt('[ Z ]  Continue',W/2,H-36,12,`rgba(200,200,200,${p})`,'center');
+
+  // ── END ──────────────────────────────────────────────────────────────────────
+  } else if(b.phase==='end'){
+    const won=b.hp>0;
+    ctx.strokeStyle=won?'#00ff88':'#ff4444';ctx.lineWidth=2;ctx.strokeRect(AR.x,AR.y,AR.w,AR.h);
+    drawPlayer(W/2,AR.y+AR.h-8);
+    rr(10,H-128,W-20,80,4,'#000','#ffffff',3);
+    if(b.enemy==='ato'){
+      if(won){bigTxt('LODGEMENT ACCEPTED',W/2,H-106,13,'#44ff88');richLine("* ATO: 'Return processed. Refund in 14 business days. Do not call us.'",18,H-86,12,'#ccffcc');}
+      else{bigTxt('LODGED WITH PENALTIES',W/2,H-106,12,'#ffaa44');richLine("* ATO: 'Filed. Interest applies. Congratulations, I suppose.'",18,H-86,12,'#ffddaa');}
+      const tx=Math.max(0,G.income-G.deductions),ow=tx>18200?Math.round((tx-18200)*0.16):0;
+      ctx.save();ctx.font=`bold 16px 'Courier New',monospace`;ctx.textAlign='center';
+      ctx.fillStyle='#ffd700';ctx.fillText(`ESTIMATED REFUND: $${Math.max(0,G.taxWithheld-ow)}`,W/2,H-63);ctx.restore();
+    } else {
+      const earned=won?300:150;
+      if(won){bigTxt('SHIFT COMPLETE!',W/2,H-106,15,'#44ff88');richLine(`* Karen storms out. Shift ${G.workedShifts+1}/3 done.`,18,H-86,12,'#ccffcc');}
+      else{bigTxt('EXHAUSTED...',W/2,H-106,15,'#ffaa44');richLine(`* You slump against the register. Half-pay this time.`,18,H-86,12,'#ffddaa');}
+      ctx.save();ctx.font=`bold 18px 'Courier New',monospace`;ctx.textAlign='center';
+      ctx.fillStyle=won?'#ffd700':'#ff9900';ctx.fillText(`$${earned} EARNED`,W/2,H-63);ctx.restore();
+      txt(`PAYG: ${G.tfnDeclared?'correct rate ✅':'⚠️  47% penalty — submit TFN Declaration!'}`,W/2,H-44,11,G.tfnDeclared?'#88ff88':'#ff8888','center');
+    }
+    const p=Math.sin(Date.now()/380)*0.4+0.6;
+    txt(b.enemy==='ato'?'[ Z ]  Lodge & Claim Refund':'[ Z ]  End Shift',W/2,H-24,13,`rgba(200,200,200,${p})`,'center');
+  }
+}
+
+// ── DRAW WORLD ────────────────────────────────────────────────────────────────
+function drawWorld(){
+  const zone=ZONES[G.zoneIdx];
+  const sky=ctx.createLinearGradient(0,0,0,FLOOR-50);
+  sky.addColorStop(0,zone.sky[0]);sky.addColorStop(1,zone.sky[1]);
+  ctx.fillStyle=sky;ctx.fillRect(0,0,W,FLOOR-50);
+  zone.drawBg(G.camX);
+  ctx.fillStyle=zone.gnd;ctx.fillRect(0,FLOOR-50,W,H-FLOOR+50);
+  ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(0,FLOOR-52,W,4);
+  for(const n of zone.npcs) drawEntity(n.x,n.id,n.label);
+  for(const o of zone.objs) drawEntity(o.x,o.id,o.label);
+  const exitSX=AREA_W-G.camX,complete=zone.done();
+  if(exitSX<W+50&&G.zoneIdx<ZONES.length-1){
+    const t=Date.now()/600,p=Math.sin(t)*0.35+0.65;
+    if(complete){ctx.save();ctx.globalAlpha=p*0.25;ctx.fillStyle='#00ff88';ctx.fillRect(exitSX-24,FLOOR-100,40,52);ctx.restore();ctx.strokeStyle=`rgba(0,255,136,${p})`;ctx.lineWidth=3;ctx.strokeRect(exitSX-24,FLOOR-100,40,52);ctx.strokeStyle='';txt('NEXT →',exitSX-4,FLOOR-108,11,`rgba(0,255,136,${p})`,'center');}
+    else{ctx.fillStyle=`rgba(80,0,0,0.12)`;ctx.fillRect(exitSX-24,FLOOR-100,40,52);ctx.strokeStyle='rgba(120,0,0,0.5)';ctx.lineWidth=2;ctx.strokeRect(exitSX-24,FLOOR-100,40,52);ctx.strokeStyle='';txt('🔒',exitSX-4,FLOOR-68,20,'rgba(180,0,0,0.6)','center');}
+  }
+  if(G.zoneIdx>0&&G.camX<30){const p=Math.sin(Date.now()/450)*0.35+0.65;txt('← BACK',38,FLOOR-75,11,`rgba(180,180,180,${p})`,'center');}
+  rr(8,8,220,26,4,'rgba(0,0,0,0.65)',null);txt(zone.name,16,27,13,'#ffffff');
+  drawPlayer(G.px-G.camX,FLOOR);
+}
+
+// ── DRAW DIALOG BOX ───────────────────────────────────────────────────────────
+function dlgTextW(){return G.dlgSpeaker?W-16-68-16-16:W-80;}
+function drawDlg(){
+  const dh=150,dy=H-dh-52;
+  rr(8,dy,W-16,dh,4,'#000000','#ffffff',3);
+  // speaker portrait
+  if(G.dlgSpeaker){
+    drawPortrait(G.dlgSpeaker,16,dy+6,58);
+  }
+  const tx=G.dlgSpeaker?16+58+10:24;
+  const tw=dlgTextW();
+  const lines=wrapText(G.dlgLines[G.dlgPage]||'',tw,15);
+  const totalChars=lines.reduce((a,l)=>a+l.length,0);
+  const showing=Math.floor(G.dlgChar);
+  // typewriter render
+  let rem=showing;
+  for(let i=0;i<Math.min(lines.length,5);i++){
+    if(rem<=0)break;
+    richLine(lines[i].slice(0,rem),tx,dy+30+i*23,15,'#dddddd');
+    rem-=lines[i].length;
+  }
+  const typing=G.dlgChar<totalChars;
+  const p=Math.sin(Date.now()/380)*0.5+0.5;
+  if(typing){
+    // blinking text cursor
+    ctx.fillStyle=`rgba(255,255,255,${p})`;ctx.fillRect(tx+ctx.measureText((lines[0]||'').slice(0,showing)).width+1,dy+18,2,16);
+  } else {
+    txt('▼',W-28,dy+dh-12,20,`rgba(255,255,255,${p})`);
+    txt(`[Z] ${G.dlgPage<G.dlgLines.length-1?'Next ▶':'Close'}`,W/2,dy+dh-5,11,'rgba(170,170,170,0.7)','center');
+  }
+  // page dots
+  const total=G.dlgLines.length;
+  if(total>1){for(let d=0;d<total;d++){ctx.fillStyle=d===G.dlgPage?'#fff':'#444';ctx.beginPath();ctx.arc(W-28-(total-1-d)*12,dy+11,3,0,Math.PI*2);ctx.fill();}}
+}
+
+// ── DRAW HUD ──────────────────────────────────────────────────────────────────
+function drawHUD(){
+  rr(0,H-50,W,50,0,'rgba(0,0,0,0.88)',null);
+  const dc=G.days<=5?'#ff3333':G.days<=10?'#ffaa00':'#44ffbb';
+  if(G.days<=5){ctx.fillStyle=`rgba(180,0,0,${Math.sin(Date.now()/160)*0.12+0.05})`;ctx.fillRect(0,H-50,W,50);}
+  txt(`⏰ ${G.days} DAYS TIL TAX TIME`,10,H-28,14,dc);
+  const lv=curLevel(),nx=nextLevel();
+  const bx=10,bw=160;rr(bx,H-18,bw,12,3,'#0a150a','#1a3a1a');
+  if(nx){const pct=(G.xp-lv.xp)/(nx.xp-lv.xp);rr(bx,H-18,bw*Math.min(pct,1),12,3,'#2e7d32',null);}
+  else{rr(bx,H-18,bw,12,3,'#ffd700',null);}
+  txt(`LV${lv.n} ${lv.title}  XP:${G.xp}`,bx,H-8,9,'#aaccaa');
+  txt(`$${G.income} income`,W-10,H-28,11,'#ffffaa','right');
+  txt(`$${G.deductions} deductions`,W-10,H-14,11,'#aaffaa','right');
+  const checks=[['TFN',G.tfn],['myGov',G.atoLinked],['Work',G.workedShifts>=3],['Deduct',G.deductionsLogged>=3],['Bank',G.bankLinked],['Lodge',G.taxLodged]];
+  let cx=W/2-(checks.length*52)/2;
+  for(const[nm,dn]of checks){ctx.fillStyle=dn?'#00aa44':'#440000';ctx.beginPath();ctx.arc(cx+14,H-36,6,0,Math.PI*2);ctx.fill();txt(nm,cx+14,H-22,9,dn?'#88ff88':'#aa3333','center');cx+=52;}
+}
+
+// ── DRAW TRANSITION ───────────────────────────────────────────────────────────
+function drawTransition(){
+  G.transTimer--;
+  if(G.transTimer>120)G.transAlpha=Math.min(1,(180-G.transTimer)/30);
+  else if(G.transTimer>50)G.transAlpha=1;
+  else G.transAlpha=G.transTimer/50;
+  ctx.fillStyle=`rgba(0,0,0,${G.transAlpha})`;ctx.fillRect(0,0,W,H);
+  if(G.transAlpha>0.4){
+    const a2=(G.transAlpha-0.4)/0.6;ctx.save();ctx.globalAlpha=a2;
+    const t=Date.now()/900,col=G.days<=7?'#ff4444':G.days<=14?'#ffaa00':'#44ffcc';
+    ctx.font=`bold ${22+Math.sin(t*2.5)*2}px 'Courier New',monospace`;ctx.textAlign='center';ctx.fillStyle=col;ctx.fillText(G.transMsg,W/2,H/2-18);
+    ctx.font=`14px 'Courier New',monospace`;ctx.fillStyle='#8888bb';ctx.fillText(G.transSubMsg,W/2,H/2+16);ctx.restore();
+  }
+  if(G.transTimer<=0)G.scene='world';
+}
+
+// ── DRAW TITLE ────────────────────────────────────────────────────────────────
+function drawTitle(){
+  const t=Date.now()/1000;
+
+  // deep space background
+  ctx.fillStyle='#020210';ctx.fillRect(0,0,W,H);
+
+  // twinkling stars
+  for(let i=0;i<260;i++){
+    const sx=(i*97+23)%W,sy=(i*113+11)%(H-40);
+    const br=0.1+0.65*Math.abs(Math.sin(t*0.65+i*0.44));
+    ctx.fillStyle=`rgba(${180+i%50},${195+i%30},255,${br})`;
+    ctx.fillRect(sx,sy,i%7===0?2:1,i%7===0?2:1);
+  }
+  // subtle scanlines
+  ctx.save();ctx.globalAlpha=0.04;
+  for(let y=0;y<H;y+=3){ctx.fillStyle='#000';ctx.fillRect(0,y,W,1);}
+  ctx.restore();
+
+  // moon (Majora's Mask-style, menacing)
+  const my=68+Math.sin(t*0.5)*5;
+  ctx.save();
+  ctx.globalAlpha=0.09+Math.sin(t*1.2)*0.03;
+  ctx.fillStyle='#ffd700';ctx.beginPath();ctx.arc(690,my,76,0,Math.PI*2);ctx.fill();
+  ctx.globalAlpha=1;
+  ctx.beginPath();ctx.arc(690,my,52,0,Math.PI*2);
+  const mg=ctx.createRadialGradient(685,my-10,5,690,my,52);
+  mg.addColorStop(0,'#fffde8');mg.addColorStop(0.65,'#f5d84a');mg.addColorStop(1,'#d4a400');
+  ctx.fillStyle=mg;ctx.fill();
+  ctx.fillStyle='#b08a00';
+  ctx.fillRect(668,my-8,13,11);ctx.fillRect(700,my-8,13,11);
+  ctx.beginPath();ctx.arc(690,my+18,18,0.15*Math.PI,0.85*Math.PI);
+  ctx.strokeStyle='#987000';ctx.lineWidth=3.5;ctx.stroke();
+  ctx.restore();
+
+  // warning pulse
+  ctx.save();ctx.globalAlpha=0.4+Math.sin(t*2.6)*0.38;
+  txt('⚠  TAX TIME APPROACHES  ⚠',W/2,24,10,'#ff8800','center');
+  ctx.restore();
+
+  // big title + shadow
+  ctx.save();
+  ctx.font="bold 56px 'Courier New',monospace";ctx.textAlign='center';
+  ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillText('TAX QUEST',W/2+3,140);
+  const grd=ctx.createLinearGradient(W/2-210,98,W/2+210,150);
+  grd.addColorStop(0,'#ffcc00');grd.addColorStop(0.38,'#ff9900');grd.addColorStop(0.62,'#ff5500');grd.addColorStop(1,'#ffcc00');
+  ctx.fillStyle=grd;ctx.fillText('TAX QUEST',W/2,137);
+  ctx.restore();
+  txt('30  DAYS  TO  LODGE',W/2,161,19,'#ff3333','center');
+  txt("Australia's Most Stressful Tax Simulator",W/2,179,10,'#2e2e4a','center');
+
+  // ── TWO INFO PANELS (story | controls) ────────────────────────────────────────
+  const py=188,ph=114,colW=(W-26)/2; // ~387px each
+
+  // Story panel
+  rr(8,py,colW,ph,5,'#040610','#182048',2);
+  ctx.save();ctx.font="bold 11px 'Courier New',monospace";ctx.textAlign='left';
+  ctx.fillStyle='#5577cc';ctx.fillText('THE STORY',18,py+15);ctx.restore();
+  ctx.fillStyle='#101830';ctx.fillRect(8,py+20,colW,1);
+  const story=[
+    '* JAKE — 18, first job at Woolworths.',
+    '* Tax time is 30 days away. The ATO watches.',
+    '* Register TFN. Work shifts. Claim deductions.',
+    '* Survive KAREN. Defeat THE ATO. Lodge on time.',
+    '* Miss the deadline = $313 fine. Every 28 days.',
+  ];
+  for(let i=0;i<story.length;i++) richLine(story[i],16,py+32+i*17,10,'#9999bb');
+
+  // Controls panel
+  rr(18+colW,py,colW,ph,5,'#040610','#182048',2);
+  ctx.save();ctx.font="bold 11px 'Courier New',monospace";ctx.textAlign='left';
+  ctx.fillStyle='#5577cc';ctx.fillText('CONTROLS',28+colW,py+15);ctx.restore();
+  ctx.fillStyle='#101830';ctx.fillRect(18+colW,py+20,colW,1);
+  const ctrls=[
+    ['#ffee44','A / D','walk left and right'],
+    ['#55eeff','Z  or  SPACE','interact with NPCs and objects'],
+    ['#ff6666','ARROW KEYS','move ❤ heart in battle — dodge!'],
+    ['#aaffaa','A / D in battle','choose menu option'],
+    ['#888899','CLICK','works for all of the above'],
+  ];
+  for(let i=0;i<ctrls.length;i++){
+    const cy2=py+32+i*17;
+    ctx.save();
+    ctx.font=`bold 10px 'Courier New',monospace`;ctx.textAlign='left';ctx.fillStyle=ctrls[i][0];ctx.fillText(ctrls[i][1],28+colW,cy2);
+    const kw=ctx.measureText(ctrls[i][1]).width;
+    ctx.font=`10px 'Courier New',monospace`;ctx.fillStyle='#3e3e58';ctx.fillText('  — '+ctrls[i][2],28+colW+kw,cy2);
+    ctx.restore();
+  }
+
+  // ── IMPORTANT TIPS ────────────────────────────────────────────────────────────
+  const ty=py+ph+7,th=122;
+  rr(8,ty,W-16,th,5,'#040409','#2a1500',2);
+  ctx.save();ctx.font="bold 11px 'Courier New',monospace";ctx.textAlign='left';
+  ctx.fillStyle='#ff8800';ctx.fillText('⚔  IMPORTANT — READ BEFORE YOU PLAY',18,ty+16);
+  ctx.restore();
+  ctx.fillStyle='#1e1000';ctx.fillRect(8,ty+21,W-16,1);
+
+  // 6 tips in 2 columns, 2-line each: bold coloured key + dim detail
+  const tips=[
+    {c:'#ff7744',k:'DODGE THE AUDIT',d:'ATO fires a WIDE YELLOW BEAM. Stay above or below it — not level.'},
+    {c:'#ffd700',k:'LOG ALL DEDUCTIONS',d:'Boots, bus fare, dry cleaning. Every $1 reduces your taxable income.'},
+    {c:'#55eeff',k:'TFN FIRST — always',d:'Without a TFN, Woolworths withholds 47% of your pay. Every shift.'},
+    {c:'#ff6666',k:'KAREN BATTLES',d:'Dodge her projectiles for 3 turns. Win = $300. Lose = $150, shame.'},
+    {c:'#ff4444',k:'LODGE BY OCT 31',d:'$313 ATO penalty per 28 days late. True in this game. True in life.'},
+    {c:'#44ffcc',k:'BANK DETAILS',d:'Link at CommBank Valley or the ATO mails a cheque. Weeks of waiting.'},
+  ];
+  const cx0=[16, W/2+4];
+  [[tips[0],tips[1],tips[2]],[tips[3],tips[4],tips[5]]].forEach((col,ci)=>{
+    col.forEach((tip,ti)=>{
+      const ry=ty+30+ti*30;
+      ctx.save();
+      ctx.font=`bold 10px 'Courier New',monospace`;ctx.textAlign='left';
+      ctx.fillStyle='#443322';ctx.fillText('▸ ',cx0[ci],ry);
+      ctx.fillStyle=tip.c;ctx.fillText(tip.k,cx0[ci]+12,ry);
+      ctx.font=`9px 'Courier New',monospace`;ctx.fillStyle='#4a4a60';
+      ctx.fillText(tip.d,cx0[ci]+4,ry+12);
+      ctx.restore();
+    });
+  });
+  // centre divider
+  ctx.fillStyle='#1e1000';ctx.fillRect(W/2,ty+22,1,th-24);
+
+  // ── PRESS START ───────────────────────────────────────────────────────────────
+  const bp=0.5+Math.sin(t*2.3)*0.45;
+  ctx.save();
+  // glow behind text
+  ctx.globalAlpha=bp*0.15;
+  ctx.fillStyle='#44aaff';ctx.fillRect(W/2-200,H-34,400,22);
+  ctx.globalAlpha=1;
+  ctx.font="bold 15px 'Courier New',monospace";ctx.textAlign='center';
+  ctx.fillStyle=`rgba(90,195,255,${bp*0.35})`;ctx.fillText('▶  CLICK  OR  PRESS  Z  TO  BEGIN  ◀',W/2,H-15);
+  ctx.fillStyle=`rgba(120,220,255,${bp})`;ctx.fillText('▶  CLICK  OR  PRESS  Z  TO  BEGIN  ◀',W/2,H-16);
+  ctx.restore();
+}
+
+// ── DRAW WIN ──────────────────────────────────────────────────────────────────
+function drawWin(){
+  ctx.fillStyle='#030d03';ctx.fillRect(0,0,W,H);
+  const t=Date.now()/1000;
+  for(let i=0;i<14;i++){ctx.save();ctx.globalAlpha=0.5+0.5*Math.sin(t*3+i);ctx.fillStyle=['#ffcc00','#ff6688','#44ffcc','#ff8800'][i%4];ctx.beginPath();ctx.arc(80+i*50,70+Math.sin(t*2+i*0.9)*35,4,0,Math.PI*2);ctx.fill();ctx.restore();}
+  txt('🎉  TAX RETURN LODGED!  🎉',W/2,72,24,'#44ff88','center');
+  txt(`You are a ${curLevel().title}!`,W/2,102,14,'#ffffcc','center');
+  const tx=Math.max(0,G.income-G.deductions),ow=tx>18200?Math.round((tx-18200)*0.16):0,ref=G.taxWithheld-ow;
+  rr(90,118,W-180,248,10,'#061a08','#2e7d32');
+  txt('── YOUR 2025–26 TAX SUMMARY ──',W/2,145,14,'#44ff88','center');
+  const rows=[['Gross Income:',`$${G.income}`],['Work Deductions:',`-$${G.deductions}`],['Taxable Income:',`$${tx}`],['Tax Owed (16%>$18,200):',`-$${ow}`],['Tax Already Withheld:',`$${G.taxWithheld}`]];
+  for(let i=0;i<rows.length;i++){txt(rows[i][0],130,176+i*28,12,'#ccffcc');txt(rows[i][1],W-130,176+i*28,12,'#ffffff','right');}
+  rr(90,338,W-180,36,6,'#0a2a0a','#66ff88');
+  txt(`ESTIMATED REFUND: $${Math.max(0,ref)}  🎊`,W/2,362,16,'#66ff88','center');
+  txt(`Days left: ${G.days}  |  XP: ${G.xp}  |  ${curLevel().title}`,W/2,396,11,'#446644','center');
+  rr(130,410,W-260,54,6,'#091a09','#1a4a1a');
+  txt('Real tip: Lodge by 31 October at ato.gov.au',W/2,432,12,'#88cc88','center');
+  txt('myTax pre-fills your income data automatically!',W/2,452,11,'#668866','center');
+  const p=Math.sin(Date.now()/500)*0.4+0.6;txt('[ Z / Click to Play Again ]',W/2,490,15,`rgba(100,255,120,${p})`,'center');
+}
+
+// ── DRAW LOSE ─────────────────────────────────────────────────────────────────
+function drawLose(){
+  ctx.fillStyle='#0d0303';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=`rgba(200,0,0,${Math.sin(Date.now()/200)*0.1+0.05})`;ctx.fillRect(0,0,W,H);
+  txt('💀  TIME HAS RUN OUT!  💀',W/2,95,28,'#ff3333','center');
+  txt('The tax lodgement deadline has passed.',W/2,135,16,'#ffaaaa','center');
+  rr(100,155,W-200,190,10,'#1a0303','#8b0000');
+  txt('── FAILURE TO LODGE ──',W/2,184,15,'#ff4444','center');
+  txt('ATO Penalty: $313 per 28-day period',W/2,215,14,'#ffaaaa','center');
+  txt('In real life: lodge by 31 OCTOBER each year',W/2,248,12,'#cccccc','center');
+  txt('Lodge via myTax at ato.gov.au/mytax',W/2,271,12,'#4a8aff','center');
+  txt(`Run stats: LV${curLevel().n} | ${G.xp} XP | $${G.income} income`,W/2,320,12,'#553333','center');
+  const p=Math.sin(Date.now()/600)*0.4+0.6;txt('[ Z / Click to Try Again ]',W/2,400,16,`rgba(255,100,100,${p})`,'center');
+}
+
+// ── DRAW NOTIF ────────────────────────────────────────────────────────────────
+function drawNotif(){
+  if(!G.notif||G.notifTimer<=0)return;
+  const a=Math.min(1,G.notifTimer/40);
+  rr(W/2-250,4,500,26,5,`rgba(6,22,6,${a*0.95})`,G.notifColor);
+  ctx.save();ctx.globalAlpha=a;txt(G.notif,W/2,21,12,'#ddffdd','center');ctx.restore();
+}
+
+// ── UPDATE WORLD ──────────────────────────────────────────────────────────────
+function updateWorld(){
+  if(G.scene!=='world')return;
+  let mv=false;
+  if(G.keys['a']||G.keys['arrowleft']){G.px-=3;G.facing=-1;mv=true;}
+  if(G.keys['d']||G.keys['arrowright']){G.px+=3;G.facing=1;mv=true;}
+  G.isWalking=mv;if(mv)G.walkFrame=++G.walkTimer;
+  G.px=Math.max(40,Math.min(AREA_W-40,G.px));
+  G.camX=Math.max(0,Math.min(AREA_W-W,G.px-W*0.38));
+
+  if(G.px>=AREA_W-44){
+    const zone=ZONES[G.zoneIdx];
+    if(zone.done()){
+      if(G.zoneIdx<ZONES.length-1){
+        const ni=G.zoneIdx+1,first=!G.visitedZones.has(ni);
+        if(first){spendDay(ZONE_COST[ni]);G.visitedZones.add(ni);}
+        sfx('trans');G.zoneIdx=ni;G.px=120;G.camX=0;
+        if(first){G.transMsg=`${G.days} days til tax time!`;G.transSubMsg=`Entering: ${ZONES[ni].name}`;G.scene='transition';G.transTimer=200;G.transAlpha=0;}
+        else{G.transMsg=ZONES[ni].name;G.transSubMsg=`${G.days} days remaining`;G.scene='transition';G.transTimer=120;G.transAlpha=0;}
+      }
+    } else {G.px=AREA_W-50;popup(ZONES[G.zoneIdx].hint,'#ff7700');}
+  }
+  if(G.px<=42&&G.zoneIdx>0){
+    G.zoneIdx--;G.px=AREA_W-120;G.camX=AREA_W-W;
+    G.transMsg=ZONES[G.zoneIdx].name;G.transSubMsg=`${G.days} days remaining`;G.scene='transition';G.transTimer=110;G.transAlpha=0;
+  }
+}
+
+function tryInteract(){
+  if(G.scene!=='world')return;
+  const zone=ZONES[G.zoneIdx],pw=G.px;
+  for(const n of zone.npcs){
+    if(Math.abs(n.x-pw)<62){
+      const cb=n.id==='mum'?()=>{G.talkedToMum=true;}:null;
+      openDlg(n.lines,cb,n.id);return;
+    }
+  }
+  for(const o of zone.objs){if(Math.abs(o.x-pw)<62){o.act();return;}}
+}
+
+// ── RESET ─────────────────────────────────────────────────────────────────────
+function resetGame(){
+  Object.assign(G,{
+    scene:'title',px:180,facing:1,walkFrame:0,walkTimer:0,isWalking:false,camX:0,
+    zoneIdx:0,visitedZones:new Set([0]),days:30,xp:0,
+    tfn:false,myGovCreated:false,atoLinked:false,tfnDeclared:false,
+    bankLinked:false,myDeductionsEnabled:false,deductionsLogged:0,
+    workedShifts:0,incomeStatementChecked:false,taxEstimated:false,
+    taxLodged:false,studiedTax:false,talkedToMum:false,
+    income:0,taxWithheld:0,deductions:0,
+    dlgLines:null,dlgPage:0,dlgCb:null,dlgChar:0,dlgSpeaker:null,
+    transMsg:'',transSubMsg:'',transTimer:0,transAlpha:0,
+    notif:null,notifTimer:0,
+    keys:{},btl:null,
+  });
+  ZONES=makeZones();
+}
+
+// ── INPUT ─────────────────────────────────────────────────────────────────────
+window.addEventListener('keydown',e=>{
+  G.keys[e.key.toLowerCase()]=true;
+  const k=e.key.toLowerCase();
+  if(k==='z'||k===' '||k==='enter'){
+    e.preventDefault();
+    if(G.scene==='title'){G.zoneIdx=0;G.px=180;G.camX=0;G.transMsg='30 days til tax time!';G.transSubMsg='Entering: Rural Grasslands';G.scene='transition';G.transTimer=180;G.transAlpha=0;return;}
+    if(G.scene==='win'||G.scene==='lose'){resetGame();return;}
+    if(G.scene==='dialog'){
+      // skip typewriter first, then advance on second press
+      const tw=dlgTextW();
+      const lines=wrapText(G.dlgLines[G.dlgPage]||'',tw,15);
+      const totalChars=lines.reduce((a,l)=>a+l.length,0);
+      if(G.dlgChar<totalChars){G.dlgChar=totalChars;}else{advDlg();}
+      return;
+    }
+    if(G.scene==='world'){tryInteract();return;}
+    if(G.scene==='battle'){
+      const b=G.btl;
+      if(b.phase==='menu'){
+        if(b.menuSel===0){spawnProjectiles(b.turn);b.dodgeTimer=0;b.hx=AR.x+AR.w/2;b.hy=AR.y+AR.h/2;b.phase='dodge';}
+        else{G.btl=null;G.scene='world';popup('You quit the shift.','#ff8800');}
+      } else if(b.phase==='between'){
+        spawnProjectiles(b.turn);b.dodgeTimer=0;b.hx=AR.x+AR.w/2;b.hy=AR.y+AR.h/2;b.phase='dodge';
+      } else if(b.phase==='end'){
+        const won=b.hp>0;
+        if(b.enemy==='ato'){
+          G.taxLodged=true;spendDay(1);gainXP(won?200:80,'lodging tax return');
+          sfx('win');G.btl=null;G.scene='win';
+        } else {
+          const earned=won?300:150;
+          G.workedShifts++;G.income+=earned;
+          const wh=G.tfnDeclared?Math.round(earned*0.093):Math.round(earned*0.47);
+          G.taxWithheld+=wh;spendDay(1);gainXP(won?20:8,won?'surviving the shift':'surviving... barely');
+          sfx('conf');G.btl=null;G.scene='world';
+          popup(`Shift ${G.workedShifts}/3 — +$${earned} (withheld $${wh})`,'#00dd66');
+        }
+      }
+      return;
+    }
+  }
+  // battle menu cursor
+  if(G.scene==='battle'&&G.btl&&G.btl.phase==='menu'){
+    if(k==='a'||k==='arrowleft'){G.btl.menuSel=0;sfx('sel');}
+    if(k==='d'||k==='arrowright'){G.btl.menuSel=1;sfx('sel');}
+  }
+});
+window.addEventListener('keyup',e=>{G.keys[e.key.toLowerCase()]=false;});
+
+canvas.addEventListener('click',e=>{
+  if(G.scene==='title'){G.zoneIdx=0;G.px=180;G.camX=0;G.transMsg='30 days til tax time!';G.transSubMsg='Entering: Rural Grasslands';G.scene='transition';G.transTimer=180;G.transAlpha=0;return;}
+  if(G.scene==='win'||G.scene==='lose'){resetGame();return;}
+  if(G.scene==='dialog'){
+    const tw=dlgTextW();
+    const lines=wrapText(G.dlgLines[G.dlgPage]||'',tw,15);
+    const totalChars=lines.reduce((a,l)=>a+l.length,0);
+    if(G.dlgChar<totalChars){G.dlgChar=totalChars;}else{advDlg();}
+    return;
+  }
+  if(G.scene==='world'){
+    const r=canvas.getBoundingClientRect(),mx=(e.clientX-r.left)*(W/r.width)+G.camX;
+    const zone=ZONES[G.zoneIdx];
+    for(const n of zone.npcs){if(Math.abs(n.x-mx)<62){const cb=n.id==='mum'?()=>{G.talkedToMum=true;}:null;openDlg(n.lines,cb,n.id);return;}}
+    for(const o of zone.objs){if(Math.abs(o.x-mx)<62){o.act();return;}}
+  }
+});
+
+// ── GAME LOOP ─────────────────────────────────────────────────────────────────
+function loop(){
+  ctx.clearRect(0,0,W,H);
+  if(G.notifTimer>0)G.notifTimer--;
+  if((G.scene==='world'||G.scene==='battle')&&G.days<=0&&!G.taxLodged)G.scene='lose';
+
+  // typewriter advance
+  if(G.scene==='dialog'&&G.dlgLines){
+    const tw=dlgTextW();
+    const lines=wrapText(G.dlgLines[G.dlgPage]||'',tw,15);
+    const total=lines.reduce((a,l)=>a+l.length,0);
+    if(G.dlgChar<total){
+      const prev=Math.floor(G.dlgChar);
+      G.dlgChar=Math.min(G.dlgChar+1.6,total);
+      if(Math.floor(G.dlgChar)>prev&&Math.floor(G.dlgChar)%2===0) sfx('dlg',G.dlgSpeaker);
+    }
+  }
+
+  updateWorld();
+  updateBattle();
+  switch(G.scene){
+    case 'title':      drawTitle();break;
+    case 'world':      drawWorld();drawHUD();drawNotif();break;
+    case 'dialog':     drawWorld();drawHUD();drawDlg();drawNotif();break;
+    case 'transition': drawTransition();break;
+    case 'battle':     drawBattle();drawHUD();drawNotif();break;
+    case 'win':        drawWin();break;
+    case 'lose':       drawLose();break;
+  }
+  requestAnimationFrame(loop);
+}
+
+function resize(){const sc=Math.min(window.innerWidth/W,window.innerHeight/H);canvas.style.width=`${W*sc}px`;canvas.style.height=`${H*sc}px`;}
+window.addEventListener('resize',resize);resize();
+loop();
+</script>
+</body>
+</html>

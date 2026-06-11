@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dash</title>
+  <link rel="icon" href="favicon.ico">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a1a;
+      font-family: 'Segoe UI', sans-serif;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+    }
+    header {
+      width: 100%; max-width: 900px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.4rem 0.8rem;
+      flex-shrink: 0;
+    }
+    .back {
+      color: #fff; text-decoration: none; font-size: 0.78rem; font-weight: 700;
+      background: rgba(255,255,255,0.1); padding: 0.25rem 0.7rem;
+      border-radius: 20px; border: 1px solid rgba(255,255,255,0.25);
+    }
+    .back:hover { background: rgba(255,255,255,0.2); }
+    h1 { font-size: 1.5rem; font-weight: 900; letter-spacing: 5px; color: #a78bfa; text-shadow: 0 0 20px rgba(167,139,250,0.6); }
+    #score-display {
+      font-size: 0.85rem; font-weight: 900; letter-spacing: 2px;
+      color: rgba(255,255,255,0.6);
+    }
+    canvas {
+      border-radius: 10px;
+      display: block;
+      cursor: pointer;
+    }
+    .hints {
+      font-size: 0.72rem; font-weight: 700; color: rgba(255,255,255,0.4);
+      padding: 0.3rem 0; letter-spacing: 1px; text-align: center;
+    }
+    #overlay {
+      position: fixed; inset: 0;
+      background: rgba(5,5,20,0.96);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 10; gap: 0.7rem;
+    }
+    #overlay h2 { font-size: 3rem; font-weight: 900; letter-spacing: 4px; color: #a78bfa; text-shadow: 0 0 30px rgba(167,139,250,0.7); }
+    #overlay p  { font-size: 1rem; color: rgba(255,255,255,0.6); font-weight: 600; letter-spacing: 1px; }
+    #overlay .best { font-size: 0.85rem; color: rgba(255,255,255,0.4); font-weight: 700; letter-spacing: 2px; }
+    #start-btn {
+      margin-top: 0.6rem;
+      padding: 0.75rem 2.5rem;
+      background: linear-gradient(135deg, #7c3aed, #a78bfa);
+      border: none; border-radius: 50px;
+      color: #fff; font-size: 1rem; font-weight: 900;
+      letter-spacing: 2px; cursor: pointer;
+      box-shadow: 0 4px 20px rgba(124,58,237,0.5);
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    #start-btn:hover { transform: scale(1.05); box-shadow: 0 6px 28px rgba(124,58,237,0.7); }
+    #start-btn:active { transform: scale(0.97); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <a class="back" href="index.html">← Back</a>
+    <h1>DASH</h1>
+    <div id="score-display">BEST: 0</div>
+  </header>
+
+  <canvas id="c"></canvas>
+  <div class="hints">SPACE / CLICK / TAP to jump</div>
+
+  <div id="overlay">
+    <h2>DASH</h2>
+    <p>Jump over obstacles and survive as long as you can.</p>
+    <div class="best" id="overlay-best">BEST: 0</div>
+    <button id="start-btn">PLAY</button>
+  </div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const overlay      = document.getElementById('overlay');
+const startBtn     = document.getElementById('start-btn');
+const scoreDisplay = document.getElementById('score-display');
+const overlayBest  = document.getElementById('overlay-best');
+
+// ── Layout ──────────────────────────────────────────────────────────────────
+function resize() {
+  const header = document.querySelector('header');
+  const hints  = document.querySelector('.hints');
+  const avail  = window.innerHeight - header.offsetHeight - hints.offsetHeight - 16;
+  const w = Math.min(window.innerWidth - 8, 900);
+  const h = Math.min(avail, 380);
+  canvas.width  = w;
+  canvas.height = h;
+}
+resize();
+window.addEventListener('resize', () => { resize(); if (!running) drawIdle(); });
+
+// ── Constants (scaled to canvas height) ──────────────────────────────────────
+const GRAVITY   = () => canvas.height * 0.042;
+const JUMP_VEL  = () => -canvas.height * 0.027;
+const GROUND_Y  = () => canvas.height * 0.72;
+const CUBE_SIZE = () => canvas.height * 0.095;
+const BASE_SPEED = () => canvas.width * 0.008;
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let running = false, raf = 0;
+let cube, obstacles, particles, bgStars;
+let score, best = 0, speed, spawnTimer, spawnInterval;
+let jumpQueued;
+let tick = 0;
+
+// ── Stars (background) ───────────────────────────────────────────────────────
+function initStars() {
+  bgStars = Array.from({length: 60}, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * GROUND_Y(),
+    r: Math.random() * 1.5 + 0.3,
+    a: Math.random() * 0.6 + 0.2,
+  }));
+}
+
+// ── Obstacle shapes ──────────────────────────────────────────────────────────
+const SHAPES = ['spike', 'block', 'spike', 'block', 'double'];
+
+function makeObstacle() {
+  const cs   = CUBE_SIZE();
+  const gy   = GROUND_Y();
+  const kind = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+  const x    = canvas.width + 20;
+
+  if (kind === 'spike') {
+    return { kind, x, y: gy - cs * 0.9, w: cs * 0.7, h: cs * 0.9 };
+  } else if (kind === 'block') {
+    return { kind, x, y: gy - cs, w: cs, h: cs };
+  } else if (kind === 'double') {
+    return [
+      { kind: 'block', x, y: gy - cs, w: cs, h: cs },
+      { kind: 'block', x: x + cs * 1.4, y: gy - cs, w: cs, h: cs },
+    ];
+  } else {
+    // gap — no obstacle, just a visual dip in the ground (skip spawning)
+    return null;
+  }
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+function initGame() {
+  const cs = CUBE_SIZE();
+  const gy = GROUND_Y();
+  cube = {
+    x: canvas.width * 0.12,
+    y: gy - cs,
+    vy: 0,
+    size: cs,
+    onGround: true,
+  };
+  obstacles   = [];
+  particles   = [];
+  score       = 0;
+  speed       = BASE_SPEED();
+  spawnTimer  = 0;
+  spawnInterval = 110;
+  jumpQueued  = false;
+  tick        = 0;
+  initStars();
+}
+
+// ── Jump ──────────────────────────────────────────────────────────────────────
+function doJump() {
+  if (cube.onGround) {
+    cube.vy = JUMP_VEL();
+    cube.onGround = false;
+    spawnLandParticles(cube.x + cube.size / 2, GROUND_Y(), '#a78bfa', 5);
+  }
+}
+
+// ── Particles ────────────────────────────────────────────────────────────────
+function spawnLandParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = -Math.PI + Math.random() * Math.PI;
+    const spd   = 1.5 + Math.random() * 3;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * spd,
+      vy: Math.sin(angle) * spd - 2,
+      life: 1, decay: 0.05 + Math.random() * 0.04,
+      r: 2 + Math.random() * 3,
+      color,
+    });
+  }
+}
+
+function spawnDeathParticles(x, y) {
+  for (let i = 0; i < 20; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const spd   = 2 + Math.random() * 5;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * spd,
+      vy: Math.sin(angle) * spd - 3,
+      life: 1, decay: 0.025 + Math.random() * 0.03,
+      r: 3 + Math.random() * 5,
+      color: ['#a78bfa','#f472b6','#facc15','#38bdf8'][Math.floor(Math.random()*4)],
+    });
+  }
+}
+
+// ── Update ───────────────────────────────────────────────────────────────────
+function update() {
+  tick++;
+  const gy = GROUND_Y();
+  const cs = CUBE_SIZE();
+
+  // Speed ramp
+  speed = BASE_SPEED() + (score / 600) * BASE_SPEED() * 2.5;
+
+  // Physics
+  cube.vy += GRAVITY() * 0.06;
+  cube.y  += cube.vy;
+
+  // Land
+  if (cube.y >= gy - cs) {
+    cube.y  = gy - cs;
+    cube.vy = 0;
+    if (!cube.onGround) spawnLandParticles(cube.x + cs / 2, gy, '#a78bfa', 4);
+    cube.onGround = true;
+    if (jumpQueued) { jumpQueued = false; doJump(); }
+  } else {
+    cube.onGround = false;
+  }
+
+  // Obstacle spawn
+  spawnTimer++;
+  if (spawnTimer >= spawnInterval) {
+    spawnTimer = 0;
+    spawnInterval = Math.max(55, 110 - score / 40);
+    const obs = makeObstacle();
+    if (obs) {
+      if (Array.isArray(obs)) obstacles.push(...obs);
+      else obstacles.push(obs);
+    }
+  }
+
+  // Move obstacles
+  for (const ob of obstacles) ob.x -= speed;
+  obstacles = obstacles.filter(ob => ob.x + ob.w > -20);
+
+  // Collision
+  const cx1 = cube.x + 3, cx2 = cube.x + cs - 3;
+  const cy1 = cube.y + 3, cy2 = cube.y + cs - 3;
+  for (const ob of obstacles) {
+    if (cx2 > ob.x && cx1 < ob.x + ob.w && cy2 > ob.y && cy1 < ob.y + ob.h) {
+      spawnDeathParticles(cube.x + cs / 2, cube.y + cs / 2);
+      return false; // dead
+    }
+  }
+
+  // Particles
+  for (const p of particles) {
+    p.x += p.vx; p.y += p.vy;
+    p.vy += 0.15;
+    p.life -= p.decay;
+  }
+  particles = particles.filter(p => p.life > 0);
+
+  // Score
+  score++;
+  return true; // alive
+}
+
+// ── Draw ─────────────────────────────────────────────────────────────────────
+function drawScene(alive) {
+  const w  = canvas.width, h = canvas.height;
+  const gy = GROUND_Y();
+  const cs = CUBE_SIZE();
+
+  // Sky gradient
+  const sky = ctx.createLinearGradient(0, 0, 0, gy);
+  sky.addColorStop(0, '#07071f');
+  sky.addColorStop(1, '#12103a');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, w, h);
+
+  // Stars
+  for (const s of bgStars) {
+    ctx.globalAlpha = s.a;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // Scrolling BG lines (parallax lines on ground level)
+  ctx.strokeStyle = 'rgba(167,139,250,0.08)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 8; i++) {
+    const lx = ((tick * speed * 0.3 + i * (w / 8)) % w);
+    ctx.beginPath();
+    ctx.moveTo(lx, gy);
+    ctx.lineTo(lx, h);
+    ctx.stroke();
+  }
+
+  // Ground
+  const grd = ctx.createLinearGradient(0, gy, 0, h);
+  grd.addColorStop(0, '#1e1254');
+  grd.addColorStop(1, '#0a0820');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, gy, w, h - gy);
+
+  // Ground top line glow
+  ctx.strokeStyle = '#7c3aed';
+  ctx.lineWidth = 2;
+  ctx.shadowColor = '#7c3aed';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(0, gy);
+  ctx.lineTo(w, gy);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Particles
+  for (const p of particles) {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // Obstacles
+  for (const ob of obstacles) {
+    if (ob.kind === 'spike') {
+      ctx.fillStyle = '#f43f5e';
+      ctx.shadowColor = '#f43f5e';
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.moveTo(ob.x + ob.w / 2, ob.y);
+      ctx.lineTo(ob.x + ob.w, ob.y + ob.h);
+      ctx.lineTo(ob.x, ob.y + ob.h);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    } else {
+      const hue = ob.kind === 'tall' ? '#fb923c' : '#38bdf8';
+      ctx.fillStyle = hue;
+      ctx.shadowColor = hue;
+      ctx.shadowBlur = 10;
+      ctx.fillRect(ob.x, ob.y, ob.w, ob.h);
+      // inner highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillRect(ob.x + 3, ob.y + 3, ob.w - 6, 4);
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  // Cube
+  ctx.save();
+  ctx.translate(cube.x + cs / 2, cube.y + cs / 2);
+
+  const cubeColor = alive ? '#a78bfa' : '#f43f5e';
+  ctx.shadowColor = cubeColor;
+  ctx.shadowBlur = 18;
+  ctx.fillStyle = cubeColor;
+  ctx.fillRect(-cs / 2, -cs / 2, cs, cs);
+
+  // Face detail
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.fillRect(-cs / 2 + 3, -cs / 2 + 3, cs - 6, 4);
+  ctx.fillRect(-cs / 2 + 3, -cs / 2 + 3, 4, cs - 6);
+
+  // Eyes
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.fillRect(-cs * 0.22, -cs * 0.18, cs * 0.14, cs * 0.14);
+  ctx.fillRect(cs * 0.08, -cs * 0.18, cs * 0.14, cs * 0.14);
+
+  ctx.shadowBlur = 0;
+  ctx.restore();
+
+  // HUD score
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.font = `bold ${Math.round(h * 0.045)}px 'Segoe UI', sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText(Math.floor(score / 10), w / 2, h * 0.1);
+
+  // Progress bar
+  const progress = Math.min(score / 3000, 1);
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  ctx.fillRect(w * 0.1, h * 0.05, w * 0.8, 4);
+  ctx.fillStyle = '#a78bfa';
+  ctx.shadowColor = '#a78bfa';
+  ctx.shadowBlur = 6;
+  ctx.fillRect(w * 0.1, h * 0.05, w * 0.8 * progress, 4);
+  ctx.shadowBlur = 0;
+  ctx.textAlign = 'left';
+}
+
+function drawIdle() {
+  const w = canvas.width, h = canvas.height;
+  ctx.fillStyle = '#07071f';
+  ctx.fillRect(0, 0, w, h);
+}
+
+// ── Game loop ─────────────────────────────────────────────────────────────────
+function loop() {
+  const alive = update();
+  drawScene(alive);
+  updateHUD();
+
+  if (alive) {
+    raf = requestAnimationFrame(loop);
+  } else {
+    // Show one last frame
+    raf = requestAnimationFrame(() => {
+      drawScene(false);
+      endGame();
+    });
+  }
+}
+
+function updateHUD() {
+  const pts = Math.floor(score / 10);
+  if (pts > best) best = pts;
+  scoreDisplay.textContent = `BEST: ${best}`;
+}
+
+function endGame() {
+  running = false;
+  const pts = Math.floor(score / 10);
+  if (pts > best) best = pts;
+  scoreDisplay.textContent = `BEST: ${best}`;
+  overlayBest.textContent  = `BEST: ${best}`;
+  const h2 = overlay.querySelector('h2');
+  const p  = overlay.querySelector('p');
+  h2.textContent = `${pts}`;
+  h2.style.color = '#f472b6';
+  p.textContent  = pts < 10 ? 'Keep trying!' : pts < 50 ? 'Nice run!' : pts < 150 ? 'Great reflexes!' : 'Incredible!';
+  startBtn.textContent = 'TRY AGAIN';
+  overlay.style.display = 'flex';
+}
+
+function startGame() {
+  overlay.style.display = 'none';
+  const h2 = overlay.querySelector('h2');
+  h2.textContent = 'DASH';
+  h2.style.color = '#a78bfa';
+  cancelAnimationFrame(raf);
+  initGame();
+  running = true;
+  raf = requestAnimationFrame(loop);
+}
+
+// ── Input ─────────────────────────────────────────────────────────────────────
+function onJump() {
+  if (!running) return;
+  if (cube.onGround) doJump();
+  else jumpQueued = true;
+}
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' || e.code === 'ArrowUp') {
+    e.preventDefault();
+    onJump();
+  }
+});
+canvas.addEventListener('pointerdown', e => { e.preventDefault(); onJump(); });
+canvas.addEventListener('touchstart',  e => { e.preventDefault(); onJump(); }, { passive: false });
+
+startBtn.addEventListener('click', startGame);
+startBtn.addEventListener('touchend', e => { e.preventDefault(); startGame(); });
+
+// ── Init idle ────────────────────────────────────────────────────────────────
+drawIdle();
+overlayBest.textContent = `BEST: ${best}`;
+</script>
+</body>
+</html>

@@ -79,22 +79,81 @@
       color: #fff; font-family: 'Courier New', monospace;
     }
     .sep { color: rgba(255,255,255,0.2); font-size: 0.9rem; }
+
+    .legend {
+      width: 100%; max-width: 1120px;
+      display: flex; align-items: center; justify-content: center;
+      flex-wrap: wrap; gap: 0.35rem 0.8rem;
+      padding: 0.4rem 0 0.3rem;
+      border-top: 1px solid rgba(255,255,255,0.07);
+      margin-top: 0.3rem;
+    }
+    .legend-label {
+      font-size: 0.65rem; font-weight: 900; letter-spacing: 1.5px;
+      text-transform: uppercase; color: rgba(255,255,255,0.28);
+      margin-right: 0.2rem;
+    }
+    .tile-entry {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      font-size: 0.75rem; font-weight: 700; color: rgba(255,255,255,0.7);
+    }
+    .tile-entry canvas { border-radius: 3px; display: block; }
+    .tile-note { font-size: 0.65rem; font-weight: 400; color: rgba(255,255,255,0.38); }
+
+    #type-picker {
+      display: none; position: absolute;
+      background: rgba(10,20,50,0.96);
+      border: 1px solid rgba(255,255,255,0.28);
+      border-radius: 10px; padding: 0.4rem;
+      z-index: 20; flex-direction: column; gap: 0.3rem;
+      pointer-events: auto;
+    }
+    #type-picker.show { display: flex; }
+    #type-picker button {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px; color: #fff;
+      font-family: 'Segoe UI', sans-serif;
+      font-size: 0.82rem; font-weight: 700;
+      padding: 0.3rem 0.85rem; cursor: pointer;
+      text-align: left; white-space: nowrap;
+    }
+    #type-picker button:hover { background: rgba(255,255,255,0.22); }
+
+    .hdr-btns { display: flex; gap: 0.4rem; }
+    .hdr-btn {
+      color: #fff; font-size: 0.78rem; font-weight: 700;
+      background: rgba(0,0,0,0.2); padding: 0.25rem 0.7rem;
+      border-radius: 20px; border: 1px solid rgba(255,255,255,0.3);
+      cursor: pointer; font-family: 'Segoe UI', sans-serif;
+    }
+    .hdr-btn:hover { background: rgba(0,0,0,0.4); }
+    .hdr-btn.save:hover { background: rgba(39,174,96,0.35); border-color: #27ae60; }
+    .hdr-btn.reset:hover { background: rgba(200,50,50,0.35); border-color: #c03030; }
+    #save-toast {
+      position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%);
+      background: rgba(39,174,96,0.92); color: #fff; font-weight: 700;
+      padding: 0.45rem 1.2rem; border-radius: 20px; font-size: 0.82rem;
+      pointer-events: none; opacity: 0; transition: opacity 0.3s;
+      z-index: 50;
+    }
+    #save-toast.show { opacity: 1; }
   </style>
 </head>
 <body>
 
 <div id="overlay">
   <h2>TRENCH WARS</h2>
-  <p id="ov-sub">Two armies face off across no man's land. Advance your soldiers, deploy sappers to fortify the front, and storm the enemy fortress.</p>
+  <p id="ov-sub">Two armies face off across no man's land. Units deal damage and have HP — overwhelm defences with firepower, use flamethrowers from range, and storm the fortress.</p>
   <div class="lbox">
     <span class="lbox-lbl">Controls</span>
     <p>
       <strong>Click unit</strong> → select &nbsp;|&nbsp; <strong>Click blue</strong> → move &nbsp;|&nbsp; <strong>Click red</strong> → attack<br>
-      <strong>Soldier</strong>: fights — buy with <strong>B</strong> (20g)<br>
-      <strong>Sapper</strong>: builds — buy with <strong>S</strong> (30g)<br>
-      &nbsp;&nbsp;<strong>D</strong> = trench (free) &nbsp;|&nbsp; <strong>M</strong> = gold mine (50g, +15g/turn) &nbsp;|&nbsp; <strong>N</strong> = bunker (80g, ×2.5 defense)<br>
-      <strong>Flamethrower</strong>: forces trench retreat — buy with <strong>F</strong> (60g)<br>
-      &nbsp;&nbsp;Defenders within 2 tiles counter-fire: need 3 FTs per 1 defending FT<br>
+      <strong>Soldier</strong>: 2 HP · 2 dmg · range 1 tile — buy with <strong>B</strong> (20g)<br>
+      <strong>Sapper</strong>: 2 HP · builds structures — buy with <strong>S</strong> (30g)<br>
+      &nbsp;&nbsp;<strong>D</strong> = trench (free, ÷1.75 dmg) &nbsp;|&nbsp; <strong>M</strong> = gold mine (50g, +15g/turn) &nbsp;|&nbsp; <strong>N</strong> = bunker (80g, ÷2.5 dmg)<br>
+      <strong>Flamethrower</strong>: 2 HP · 4 dmg · range 2 tiles — buy with <strong>F</strong> (60g)<br>
+      &nbsp;&nbsp;Attack from range 2 to avoid counter-fire · only surviving defenders counter-attack<br>
       <strong>Enter</strong> = end turn &nbsp;|&nbsp; Win by storming the enemy fortress.
     </p>
   </div>
@@ -103,18 +162,27 @@
     <p>Builds <strong>tactical thinking</strong>, <strong>resource management</strong> &amp; <strong>spatial reasoning</strong> — weigh when to advance, when to fortify, and how to control the gold economy.</p>
   </div>
   <p id="ov-result"></p>
-  <button id="ov-btn">BEGIN BATTLE</button>
+  <div style="display:flex; gap:0.6rem; flex-wrap:wrap; justify-content:center;">
+    <button id="ov-btn">&#x2694; VS PLAYER</button>
+    <button id="ov-sp-btn" style="background:linear-gradient(135deg,#6b3a1f,#a0522d); box-shadow:0 4px 18px rgba(160,82,45,0.5);">&#x1F916; VS BOT</button>
+  </div>
+  <button id="ov-resume" style="display:none; margin-top:0; background:linear-gradient(135deg,#1a5fa8,#2e7fd4); box-shadow:0 4px 18px rgba(46,127,212,0.5);">RESUME SAVED GAME</button>
   <a href="index.html">&#8592; Back to Home</a>
 </div>
 
 <header>
   <a class="back" href="index.html">&#8592; Back</a>
   <h1>TRENCH WARS</h1>
-  <div style="width:80px"></div>
+  <div class="hdr-btns">
+    <button class="hdr-btn save" onclick="saveGame()">&#128190; Save</button>
+    <button class="hdr-btn reset" onclick="resetGame()">&#8635; Reset</button>
+  </div>
 </header>
+<div id="save-toast">Game saved!</div>
 
 <div id="wrap">
   <canvas id="c" width="1120" height="640"></canvas>
+  <div id="type-picker"></div>
 </div>
 
 <div class="hints">
@@ -124,13 +192,32 @@
   <span class="sep">·</span>
   <span class="hk"><span class="key">Click red</span> Attack</span>
   <span class="sep">·</span>
-  <span class="hk"><span class="key">D</span> Sapper: dig trench</span>
+  <span class="hk">Soldier 2HP·2dmg·rng1 &nbsp;|&nbsp; FT 2HP·4dmg·rng2</span>
   <span class="sep">·</span>
-  <span class="hk"><span class="key">M</span> Sapper: mine (50g)</span>
+  <span class="hk"><span class="key">D</span> Trench</span>
   <span class="sep">·</span>
-  <span class="hk"><span class="key">N</span> Sapper: bunker (80g)</span>
+  <span class="hk"><span class="key">M</span> Mine (50g)</span>
+  <span class="sep">·</span>
+  <span class="hk"><span class="key">N</span> Bunker (80g)</span>
   <span class="sep">·</span>
   <span class="hk"><span class="key">Enter</span> End turn</span>
+</div>
+
+<div class="legend">
+  <span class="legend-label">Tile key:</span>
+  <span class="tile-entry"><canvas id="leg-grass" width="18" height="18"></canvas> Grass <span class="tile-note">normal</span></span>
+  <span class="sep">·</span>
+  <span class="tile-entry"><canvas id="leg-trench" width="18" height="18"></canvas> Trench <span class="tile-note">×1.75 def</span></span>
+  <span class="sep">·</span>
+  <span class="tile-entry"><canvas id="leg-bunker" width="18" height="18"></canvas> Bunker <span class="tile-note">×2.5 def</span></span>
+  <span class="sep">·</span>
+  <span class="tile-entry"><canvas id="leg-hill" width="18" height="18"></canvas> Hill <span class="tile-note">×1.5 def, costs 2 moves</span></span>
+  <span class="sep">·</span>
+  <span class="tile-entry"><canvas id="leg-wall" width="18" height="18"></canvas> Wall <span class="tile-note">impassable</span></span>
+  <span class="sep">·</span>
+  <span class="tile-entry"><canvas id="leg-ruins" width="18" height="18"></canvas> Ruins <span class="tile-note">×1.5 def</span></span>
+  <span class="sep">·</span>
+  <span class="tile-entry"><canvas id="leg-mine" width="18" height="18"></canvas> Mine <span class="tile-note">+15g/turn</span></span>
 </div>
 
 <script>
@@ -141,6 +228,13 @@ const MOVE_PTS = 3;
 const TRENCH_CAP = 4;
 const GOLD_START = 80, GOLD_PER_TURN = 30, SOLDIER_COST = 20, SAPPER_COST = 30, FLAMETHROWER_COST = 60;
 const MINE_COST = 50, MINE_INCOME = 15, BUNKER_COST = 80;
+
+// ── Unit stats (damage-based system) ──────────────────────────────────────
+const UNIT_STATS = {
+  soldier:      { maxHp: 2, attack: 2, range: 1 },
+  sapper:       { maxHp: 2, attack: 0, range: 0 },
+  flamethrower: { maxHp: 2, attack: 4, range: 2 },
+};
 
 // 2×2 fortress at rows 5–6, cols 0–1 (P1) and cols 18–19 (P2)
 const inP1Base = (x, y) => x <= 1 && y >= 5 && y <= 6;
@@ -174,7 +268,37 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 // ── Game State ─────────────────────────────────────────────────────────────
-let grid, units, currentPlayer, gold, turn, selCell, reachable, attackable, logMsg, running, gameOver, uidNext;
+let grid, units, currentPlayer, gold, turn, selCell, selType, reachable, attackable, logMsg, running, gameOver, uidNext;
+let isSingleplayer = false, botThinking = false;
+
+// ── Type picker ────────────────────────────────────────────────────────────
+const typePicker = document.getElementById('type-picker');
+const TYPE_ICONS = { soldier: '⚔', sapper: '⛏', flamethrower: '🔥' };
+const TYPE_LABELS = { soldier: 'Soldier', sapper: 'Sapper', flamethrower: 'Flamethrower' };
+
+function hidePicker() {
+  typePicker.classList.remove('show');
+  typePicker.innerHTML = '';
+}
+
+function showPicker(screenX, screenY, types, cx, cy) {
+  typePicker.innerHTML = '';
+  for (const type of types) {
+    const btn = document.createElement('button');
+    btn.textContent = TYPE_ICONS[type] + ' ' + TYPE_LABELS[type];
+    btn.addEventListener('click', () => {
+      hidePicker();
+      selType = type;
+      selCell = { x: cx, y: cy };
+      computeReachable(cx, cy);
+      logMsg = `Selected ${TYPE_LABELS[type]}(s) — ${reachable.size} moves, ${attackable.size} attacks`;
+    });
+    typePicker.appendChild(btn);
+  }
+  typePicker.style.left = screenX + 'px';
+  typePicker.style.top  = screenY + 'px';
+  typePicker.classList.add('show');
+}
 
 function cellKey(x, y) { return y * COLS + x; }
 
@@ -183,23 +307,90 @@ function initGrid() {
   for (let r = 0; r < ROWS; r++) {
     grid[r] = [];
     for (let c = 0; c < COLS; c++) {
-      grid[r][c] = { trench: false, bunker: false, mine: null };
+      grid[r][c] = { trench: false, bunker: false, mine: null, hill: false, wall: false, ruins: false };
     }
   }
+}
+
+function placeMapFeatures() {
+  // Hills — cost 2 MP to enter, ×1.5 defense bonus
+  const hills = [
+    [3,2],[4,2],[3,3],         // top-left cluster
+    [3,8],[4,8],[3,9],         // bottom-left cluster
+    [15,2],[16,2],[16,3],      // top-right cluster
+    [15,8],[16,8],[16,9],      // bottom-right cluster
+    [9,0],[10,0],              // top centre
+    [9,11],[10,11],            // bottom centre
+  ];
+  // Walls — completely impassable
+  const walls = [
+    [9,3],[9,4],               // upper wall (left of centre)
+    [10,7],[10,8],             // lower wall (right of centre)
+  ];
+  // Ruins — ×1.5 defense bonus, normal movement cost
+  const ruins = [
+    [6,5],[6,6],               // left of centre
+    [13,5],[13,6],             // right of centre
+  ];
+
+  for (const [x,y] of hills)  { if (!inBase(x,y)) grid[y][x].hill  = true; }
+  for (const [x,y] of walls)  { if (!inBase(x,y)) grid[y][x].wall  = true; }
+  for (const [x,y] of ruins)  { if (!inBase(x,y)) grid[y][x].ruins = true; }
+}
+
+// ── Save / Load ────────────────────────────────────────────────────────────
+const SAVE_KEY = 'trenchWarsV2';
+
+function saveGame() {
+  if (!running) { logMsg = 'Start a game first!'; return; }
+  const state = {
+    grid: grid.map(row => row.map(cell => ({ ...cell }))),
+    units: units.map(u => ({ ...u })),
+    currentPlayer, gold: [...gold], turn, uidNext, isSingleplayer,
+  };
+  localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+  const toast = document.getElementById('save-toast');
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 1800);
+}
+
+function loadSave() {
+  const raw = localStorage.getItem(SAVE_KEY);
+  if (!raw) return false;
+  try {
+    const s = JSON.parse(raw);
+    grid = s.grid; units = s.units;
+    currentPlayer = s.currentPlayer; gold = s.gold;
+    turn = s.turn; uidNext = s.uidNext;
+    isSingleplayer = s.isSingleplayer || false;
+    selCell = null; selType = null;
+    reachable = new Set(); attackable = new Set();
+    logMsg = `Game loaded — Player ${currentPlayer + 1}'s turn.`;
+    running = true; gameOver = false;
+    return true;
+  } catch (e) { return false; }
+}
+
+function resetGame() {
+  localStorage.removeItem(SAVE_KEY);
+  document.getElementById('ov-resume').style.display = 'none';
+  initGame();
+  logMsg = 'New game started!';
 }
 
 function initGame() {
   uidNext = 1;
   initGrid();
   units = [];
-  // P1 soldiers in 2×2 base
   for (const bc of P1_BASE_CELLS) {
-    units.push({ id: uidNext++, player: 0, type: 'soldier', x: bc.x, y: bc.y, moved: false, dug: false, inTrench: false });
+    units.push({ id: uidNext++, player: 0, type: 'soldier', x: bc.x, y: bc.y,
+      moved: false, dug: false, inTrench: false, hp: UNIT_STATS.soldier.maxHp });
   }
-  // P2 soldiers in 2×2 base
   for (const bc of P2_BASE_CELLS) {
-    units.push({ id: uidNext++, player: 1, type: 'soldier', x: bc.x, y: bc.y, moved: false, dug: false, inTrench: false });
+    units.push({ id: uidNext++, player: 1, type: 'soldier', x: bc.x, y: bc.y,
+      moved: false, dug: false, inTrench: false, hp: UNIT_STATS.soldier.maxHp });
   }
+  placeMapFeatures();
   currentPlayer = 0;
   gold = [GOLD_START, GOLD_START];
   turn = 1;
@@ -211,13 +402,27 @@ function initGame() {
   gameOver = false;
 }
 
+// ── Apply damage to a group (front-to-back) ────────────────────────────────
+function applyDamage(group, totalDmg) {
+  let remaining = totalDmg;
+  for (const u of group) {
+    if (remaining <= 0) break;
+    const taken = Math.min(u.hp, remaining);
+    u.hp -= taken;
+    remaining -= taken;
+  }
+}
+
 // ── BFS Movement ───────────────────────────────────────────────────────────
 function computeReachable(sx, sy) {
   reachable = new Set();
   attackable = new Set();
 
-  const myUnits = units.filter(u => u.player === currentPlayer && u.x === sx && u.y === sy && !u.moved);
+  const myUnits = units.filter(u => u.player === currentPlayer && u.x === sx && u.y === sy && !u.moved && (!selType || u.type === selType));
   if (myUnits.length === 0) return;
+
+  // Attack range = max range among selected units
+  const range = Math.max(...myUnits.map(u => UNIT_STATS[u.type].range));
 
   const fromTrench = grid[sy][sx].trench && myUnits.some(u => u.inTrench);
 
@@ -235,21 +440,19 @@ function computeReachable(sx, sy) {
       if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) continue;
       if (mp <= 0) continue;
 
-      const destTrench = grid[ny][nx].trench;
+      if (grid[ny][nx].wall) continue;
 
-      // Can't move trench→adjacent trench (must exit first)
+      const destTrench = grid[ny][nx].trench;
       if (inTrench && destTrench) continue;
 
-      const newMp = mp - 1;
+      const moveCost = grid[ny][nx].hill ? 2 : 1;
+      const newMp = mp - moveCost;
       const newInTrench = destTrench;
 
       const enemiesAtDest = units.filter(u => u.player !== currentPlayer && u.x === nx && u.y === ny);
       const alliesAtDest  = units.filter(u => u.player === currentPlayer && u.x === nx && u.y === ny);
 
-      if (enemiesAtDest.length > 0) {
-        if (mp >= 1) attackable.add(cellKey(nx, ny));
-        continue;
-      }
+      if (enemiesAtDest.length > 0) continue; // can't move into enemy cells
 
       if (destTrench && alliesAtDest.length >= TRENCH_CAP) continue;
 
@@ -262,62 +465,75 @@ function computeReachable(sx, sy) {
       if (newMp > 0) queue.push({ x: nx, y: ny, mp: newMp, inTrench: newInTrench });
     }
   }
+
+  // Range-based attack detection from start position
+  if (range > 0) {
+    for (const u of units) {
+      if (u.player === currentPlayer) continue;
+      const dist = Math.abs(u.x - sx) + Math.abs(u.y - sy);
+      if (dist <= range) attackable.add(cellKey(u.x, u.y));
+    }
+  }
+
   for (const k of attackable) reachable.delete(k);
 }
 
-// ── Combat ─────────────────────────────────────────────────────────────────
+// ── Combat (damage-based) ──────────────────────────────────────────────────
 function doCombat(tx, ty) {
-  const atkers = units.filter(u => u.player === currentPlayer && u.x === selCell.x && u.y === selCell.y);
+  const atkers = units.filter(u => u.player === currentPlayer && u.x === selCell.x && u.y === selCell.y && (!selType || u.type === selType));
   const defs   = units.filter(u => u.player !== currentPlayer && u.x === tx && u.y === ty);
   if (atkers.length === 0 || defs.length === 0) return;
 
-  const A = atkers.length, D = defs.length;
-  // Flamethrowers count as 2 units each in combat strength
-  const Aeff = atkers.reduce((s, u) => s + (u.type === 'flamethrower' ? 2 : 1), 0);
-  const Deff = defs.reduce((s, u) => s + (u.type === 'flamethrower' ? 2 : 1), 0);
   const defInTrench = grid[ty][tx].trench && defs.some(u => u.inTrench);
   const defInBunker = grid[ty][tx].bunker;
+  const defOnHill   = grid[ty][tx].hill;
+  const defInRuins  = grid[ty][tx].ruins;
 
-  let atkLoss, defLoss;
-  if (defInBunker) {
-    atkLoss = Math.min(A, Math.round(Deff * 2.5));
-    defLoss = Math.min(D, Aeff);
-  } else if (defInTrench) {
-    atkLoss = Math.min(A, Math.round(Deff * 1.75));
-    defLoss = Math.min(D, Aeff);
-  } else {
-    atkLoss = Math.min(A, Deff);
-    defLoss = Math.min(D, Aeff);
-  }
+  // Total attacker damage, reduced by defender terrain
+  const rawAtkDmg = atkers.reduce((s, u) => s + UNIT_STATS[u.type].attack, 0);
+  const defMult = defInBunker ? 2.5 : defInTrench ? 1.75 : (defOnHill || defInRuins) ? 1.5 : 1.0;
+  const finalAtkDmg = Math.max(1, Math.round(rawAtkDmg / defMult));
 
-  const atkKilled = atkers.slice(atkers.length - atkLoss);
-  const defKilled = defs.slice(defs.length - defLoss);
-  for (const u of atkKilled) units.splice(units.indexOf(u), 1);
-  for (const u of defKilled) units.splice(units.indexOf(u), 1);
+  // Deal damage to defenders first
+  applyDamage(defs, finalAtkDmg);
+
+  // Only surviving defenders counter-attack, and only if the attacker is within their range
+  const dist = Math.abs(tx - selCell.x) + Math.abs(ty - selCell.y);
+  const defSurvivorsBefore = defs.filter(u => u.hp > 0);
+  const counterDmg = defSurvivorsBefore.reduce((s, u) => {
+    return s + (UNIT_STATS[u.type].range >= dist ? UNIT_STATS[u.type].attack : 0);
+  }, 0);
+  if (counterDmg > 0) applyDamage(atkers, counterDmg);
+
+  // Remove dead units
+  units = units.filter(u => u.hp > 0);
 
   const atkSurvivors = units.filter(u => u.player === currentPlayer && u.x === selCell.x && u.y === selCell.y);
   const defSurvivors = units.filter(u => u.player !== currentPlayer && u.x === tx && u.y === ty);
 
+  // Flamethrower forces trench retreat (survivors lose trench status)
+  const hasFT = atkers.some(u => u.type === 'flamethrower');
+  if (hasFT && defSurvivors.length > 0 && defInTrench) {
+    for (const u of defSurvivors) u.inTrench = false;
+  }
+
+  const note = defInBunker ? ' [÷2.5 bunker]' : defInTrench ? ' [÷1.75 trench]' : defOnHill ? ' [÷1.5 hill]' : defInRuins ? ' [÷1.5 ruins]' : '';
+
   if (defSurvivors.length === 0 && atkSurvivors.length > 0) {
-    for (const u of atkSurvivors) {
-      u.x = tx; u.y = ty;
-      u.inTrench = grid[ty][tx].trench;
-    }
+    for (const u of atkSurvivors) { u.x = tx; u.y = ty; u.inTrench = grid[ty][tx].trench; }
     if (grid[ty][tx].mine && grid[ty][tx].mine.player !== currentPlayer) {
       grid[ty][tx].mine = null;
-      logMsg = `Combat ${A}v${D} → ${atkSurvivors.length} vs 0 — enemy mine destroyed!`;
+      logMsg = `Attack${note}: ${finalAtkDmg} dmg dealt — wiped out + mine destroyed!`;
     } else {
-      const note = defInBunker ? ' [bunker]' : defInTrench ? ' [trench]' : '';
-      logMsg = `Combat ${A}v${D}${note} → ${atkSurvivors.length} vs 0 remain`;
+      logMsg = `Attack${note}: ${finalAtkDmg} dmg → wiped out! (${counterDmg} counter taken)`;
     }
   } else {
-    const note = defInBunker ? ' [bunker]' : defInTrench ? ' [trench]' : '';
-    logMsg = `Combat ${A}v${D}${note} → ${atkSurvivors.length} vs ${defSurvivors.length} remain`;
+    logMsg = `Attack${note}: ${finalAtkDmg} dmg, ${counterDmg} counter — ${atkSurvivors.length} vs ${defSurvivors.length} remain`;
   }
 
   for (const u of atkSurvivors) { u.moved = true; u.dug = true; }
 
-  selCell = null; reachable = new Set(); attackable = new Set();
+  selCell = null; selType = null; reachable = new Set(); attackable = new Set();
   checkWin();
 }
 
@@ -335,10 +551,13 @@ function checkWin() {
 function endGame(winner, reason) {
   gameOver = true; running = false;
   const res = document.getElementById('ov-result');
-  res.textContent = `PLAYER ${winner + 1} WINS — ${reason}`;
+  const winName = isSingleplayer ? (winner === 0 ? 'YOU WIN' : 'ENEMY WINS') : `PLAYER ${winner + 1} WINS`;
+  res.textContent = `${winName} — ${reason}`;
   res.className = winner === 0 ? 'p1' : 'p2';
   res.style.display = 'block';
-  document.getElementById('ov-btn').textContent = 'PLAY AGAIN';
+  document.getElementById('ov-btn').textContent = isSingleplayer ? 'PLAY AGAIN (2P)' : 'PLAY AGAIN';
+  document.getElementById('ov-sp-btn').textContent = '\u{1F916} PLAY AGAIN (VS BOT)';
+  document.getElementById('ov-resume').style.display = 'none';
   document.getElementById('overlay').style.display = 'flex';
 }
 
@@ -349,13 +568,18 @@ function canDoSomething(u) {
   return false;
 }
 
+function hasAnyMoves() {
+  return units.some(u => u.player === currentPlayer && canDoSomething(u));
+}
+
 function buyUnit(player, def) {
   if (gold[player] < def.cost) { logMsg = `Not enough gold! Need ${def.cost}g`; return; }
   const baseCells = player === 0 ? P1_BASE_CELLS : P2_BASE_CELLS;
   const spawnCell = baseCells.find(bc => !units.some(u => u.x === bc.x && u.y === bc.y));
   if (!spawnCell) { logMsg = 'Fortress is full!'; return; }
   gold[player] -= def.cost;
-  units.push({ id: uidNext++, player, type: def.type, x: spawnCell.x, y: spawnCell.y, moved: true, dug: true, inTrench: false });
+  units.push({ id: uidNext++, player, type: def.type, x: spawnCell.x, y: spawnCell.y,
+    moved: true, dug: true, inTrench: false, hp: UNIT_STATS[def.type].maxHp });
   logMsg = `Bought ${def.label.toLowerCase()}! ${gold[player]}g remaining`;
 }
 
@@ -370,9 +594,123 @@ function sapperBuild(x, y, buildFn) {
   buildFn(cx, cy, sappers);
 }
 
+// ── Turn management ────────────────────────────────────────────────────────
+function endTurn() {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const mine = grid[r][c].mine;
+      if (mine && mine.player === currentPlayer) {
+        if (!units.some(u => u.player !== currentPlayer && u.x === c && u.y === r))
+          gold[currentPlayer] += MINE_INCOME;
+      }
+    }
+  }
+  currentPlayer = 1 - currentPlayer;
+  turn++;
+  gold[currentPlayer] += GOLD_PER_TURN;
+  for (const u of units) { if (u.player === currentPlayer) { u.moved = false; u.dug = false; } }
+  selCell = null; selType = null; reachable = new Set(); attackable = new Set();
+  hidePicker();
+  checkWin();
+  if (gameOver) return;
+
+  if (isSingleplayer && currentPlayer === 1) {
+    botThinking = true;
+    logMsg = 'Enemy is planning...';
+    setTimeout(runBotTurn, 700);
+  } else {
+    botThinking = false;
+    const pName = isSingleplayer ? 'Your' : `Player ${currentPlayer + 1}'s`;
+    logMsg = `${pName} turn. Gold: ${gold[currentPlayer]}g`;
+  }
+}
+
+// ── Bot AI ─────────────────────────────────────────────────────────────────
+function runBotTurn() {
+  if (gameOver) { botThinking = false; return; }
+
+  // Collect unique unmoved bot unit cells, sorted closest to P1 base first (lowest x)
+  const botCells = [...new Map(
+    units.filter(u => u.player === 1 && !u.moved)
+      .map(u => [cellKey(u.x, u.y), { x: u.x, y: u.y }])
+  ).values()].sort((a, b) => a.x - b.x);
+
+  for (const cell of botCells) {
+    if (gameOver) break;
+    if (!units.some(u => u.player === 1 && u.x === cell.x && u.y === cell.y && !u.moved)) continue;
+
+    selCell = { x: cell.x, y: cell.y };
+    selType = null;
+    computeReachable(cell.x, cell.y);
+
+    if (attackable.size > 0) {
+      // Attack the enemy cell with the lowest total HP (finish off weakened groups first)
+      let bestTarget = null, bestHp = Infinity;
+      for (const ak of attackable) {
+        const tx = ak % COLS, ty = Math.floor(ak / COLS);
+        const hp = units.filter(u => u.player === 0 && u.x === tx && u.y === ty)
+          .reduce((s, u) => s + u.hp, 0);
+        if (hp < bestHp) { bestHp = hp; bestTarget = { x: tx, y: ty }; }
+      }
+      if (bestTarget) doCombat(bestTarget.x, bestTarget.y);
+
+    } else if (reachable.size > 0) {
+      // Find goal: nearest player unit, or P1 base if no units
+      const pUnits = units.filter(u => u.player === 0);
+      let goalX = 1, goalY = 5;
+      if (pUnits.length > 0) {
+        const nearest = pUnits.reduce((best, u) =>
+          (Math.abs(u.x - cell.x) + Math.abs(u.y - cell.y)) <
+          (Math.abs(best.x - cell.x) + Math.abs(best.y - cell.y)) ? u : best
+        );
+        goalX = nearest.x; goalY = nearest.y;
+      }
+      // Pick reachable cell closest to goal; prefer cover tiles
+      let bestMove = null, bestScore = Infinity;
+      for (const rk of reachable) {
+        const rx = rk % COLS, ry = Math.floor(rk / COLS);
+        const dist = Math.abs(rx - goalX) + Math.abs(ry - goalY);
+        const cover = grid[ry][rx].bunker ? -1.5 : grid[ry][rx].trench ? -0.8 : grid[ry][rx].ruins ? -0.4 : 0;
+        if (dist + cover < bestScore) { bestScore = dist + cover; bestMove = { x: rx, y: ry }; }
+      }
+      if (bestMove) {
+        units.filter(u => u.player === 1 && u.x === cell.x && u.y === cell.y && !u.moved)
+          .forEach(u => { u.x = bestMove.x; u.y = bestMove.y; u.inTrench = grid[bestMove.y][bestMove.x].trench; u.moved = true; });
+        selCell = null; reachable = new Set(); attackable = new Set();
+        checkWin();
+      }
+    }
+  }
+
+  // Spend gold: buy FT if gold is high enough to still afford a soldier after; else buy soldiers
+  if (!gameOver) {
+    let ftBought = false;
+    let buying = true;
+    while (buying && !gameOver) {
+      buying = false;
+      const spawn = P2_BASE_CELLS.find(bc => !units.some(u => u.x === bc.x && u.y === bc.y));
+      if (!spawn) break;
+      if (!ftBought && gold[1] >= FLAMETHROWER_COST + SOLDIER_COST) {
+        gold[1] -= FLAMETHROWER_COST;
+        units.push({ id: uidNext++, player: 1, type: 'flamethrower',
+          x: spawn.x, y: spawn.y, moved: true, dug: true, inTrench: false, hp: UNIT_STATS.flamethrower.maxHp });
+        ftBought = true; buying = true;
+      } else if (gold[1] >= SOLDIER_COST) {
+        gold[1] -= SOLDIER_COST;
+        units.push({ id: uidNext++, player: 1, type: 'soldier',
+          x: spawn.x, y: spawn.y, moved: true, dug: true, inTrench: false, hp: UNIT_STATS.soldier.maxHp });
+        buying = true; ftBought = false;
+      }
+    }
+  }
+
+  botThinking = false;
+  if (!gameOver) endTurn();
+}
+
 // ── Input ──────────────────────────────────────────────────────────────────
 canvas.addEventListener('click', e => {
-  if (!running) return;
+  if (!running || botThinking) return;
   const rect = canvas.getBoundingClientRect();
   const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
   const my = (e.clientY - rect.top)  * (canvas.height / rect.height);
@@ -380,6 +718,7 @@ canvas.addEventListener('click', e => {
   // ── Buy panel buttons (checked before grid coords) ────────────────────
   for (let p = 0; p < 2; p++) {
     if (p !== currentPlayer) continue;
+    if (isSingleplayer && p === 1) continue;
     for (let i = 0; i < BUY_DEFS.length; i++) {
       const { x, y, w, h } = buyBtnRect(p, i);
       if (mx >= x && mx <= x + w && my >= y && my <= y + h) {
@@ -401,12 +740,14 @@ canvas.addEventListener('click', e => {
       return;
     }
     if (reachable.has(k)) {
-      const myGroup = units.filter(u => u.player === currentPlayer && u.x === selCell.x && u.y === selCell.y && !u.moved);
+      hidePicker();
+      const myGroup = units.filter(u => u.player === currentPlayer && u.x === selCell.x && u.y === selCell.y && !u.moved && (!selType || u.type === selType));
       for (const u of myGroup) {
         u.x = cx; u.y = cy;
         u.inTrench = grid[cy][cx].trench;
         u.moved = true;
       }
+      selType = null;
       // Destroy enemy mine on move-in
       if (grid[cy][cx].mine && grid[cy][cx].mine.player !== currentPlayer) {
         grid[cy][cx].mine = null;
@@ -423,40 +764,33 @@ canvas.addEventListener('click', e => {
     }
   }
 
+  hidePicker();
+  selType = null;
   const canSelect = units.filter(u =>
     u.player === currentPlayer && u.x === cx && u.y === cy && canDoSomething(u)
   );
   if (canSelect.length > 0) {
-    selCell = { x: cx, y: cy };
-    computeReachable(cx, cy);
-    logMsg = `Selected ${canSelect.length} unit(s) — ${reachable.size} moves, ${attackable.size} attacks`;
+    const types = [...new Set(canSelect.map(u => u.type))];
+    if (types.length > 1) {
+      // Multiple unit types — show picker
+      const wrapRect = document.getElementById('wrap').getBoundingClientRect();
+      showPicker(e.clientX - wrapRect.left + 8, e.clientY - wrapRect.top + 8, types, cx, cy);
+    } else {
+      selCell = { x: cx, y: cy };
+      computeReachable(cx, cy);
+      logMsg = `Selected ${canSelect.length} unit(s) — ${reachable.size} moves, ${attackable.size} attacks`;
+    }
   } else {
     selCell = null; reachable = new Set(); attackable = new Set();
   }
 });
 
 document.addEventListener('keydown', e => {
-  if (!running) return;
+  if (!running || botThinking) return;
 
   // ── End turn ──────────────────────────────────────────────────────────
   if (e.key === 'Enter') {
-    // Mine income for current player
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        const mine = grid[r][c].mine;
-        if (mine && mine.player === currentPlayer) {
-          const enemyHere = units.some(u => u.player !== currentPlayer && u.x === c && u.y === r);
-          if (!enemyHere) gold[currentPlayer] += MINE_INCOME;
-        }
-      }
-    }
-    currentPlayer = 1 - currentPlayer;
-    turn++;
-    gold[currentPlayer] += GOLD_PER_TURN;
-    for (const u of units) { if (u.player === currentPlayer) { u.moved = false; u.dug = false; } }
-    selCell = null; reachable = new Set(); attackable = new Set();
-    logMsg = `Player ${currentPlayer + 1}'s turn. Gold: ${gold[currentPlayer]}g`;
-    checkWin();
+    endTurn();
     return;
   }
 
@@ -464,6 +798,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'd' || e.key === 'D') {
     if (!selCell) { logMsg = 'Select a sapper first to dig'; return; }
     sapperBuild(selCell.x, selCell.y, (cx, cy, sappers) => {
+      if (grid[cy][cx].wall)   { logMsg = "Can't dig into a wall!"; return; }
       if (grid[cy][cx].trench) { logMsg = 'Already a trench here!'; return; }
       if (grid[cy][cx].bunker) { logMsg = 'Already a bunker here!'; return; }
       grid[cy][cx].trench = true;
@@ -521,6 +856,7 @@ canvas.addEventListener('mousemove', e => {
   let overBtn = false;
   for (let p = 0; p < 2; p++) {
     if (p !== currentPlayer) continue;
+    if (isSingleplayer && p === 1) continue;
     for (let i = 0; i < BUY_DEFS.length; i++) {
       const { x, y, w, h } = buyBtnRect(p, i);
       if (mx >= x && mx <= x + w && my >= y && my <= y + h) { overBtn = true; break; }
@@ -567,6 +903,60 @@ function drawGrid() {
           ctx.lineTo(px + i, py + CS - 4);
           ctx.stroke();
         }
+      } else if (cell.wall) {
+        // Stone wall — impassable
+        ctx.fillStyle = '#22222e';
+        ctx.fillRect(px, py, CS, CS);
+        // Brick row pattern
+        const brickH = CS / 3, brickW = CS / 2;
+        for (let row = 0; row < 3; row++) {
+          const offset = (row % 2) * (brickW / 2);
+          for (let col = -1; col < 3; col++) {
+            const bx2 = px + col * brickW + offset, by2 = py + row * brickH;
+            ctx.fillStyle = row % 2 === 0 ? '#2e2e3e' : '#282838';
+            ctx.fillRect(bx2 + 1, by2 + 1, brickW - 2, brickH - 2);
+          }
+        }
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(px + 2, py + 2, CS - 4, CS - 4);
+      } else if (cell.hill) {
+        // Hill — lighter grass + elevation dome
+        ctx.fillStyle = '#4a7a28';
+        ctx.fillRect(px, py, CS, CS);
+        const hgrad = ctx.createRadialGradient(px + CS/2, py + CS/2 - 3, 1, px + CS/2, py + CS/2, CS * 0.45);
+        hgrad.addColorStop(0, '#7ab840');
+        hgrad.addColorStop(1, '#4a7a28');
+        ctx.fillStyle = hgrad;
+        ctx.beginPath();
+        ctx.ellipse(px + CS/2, py + CS/2 - 2, CS * 0.38, CS * 0.30, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Contour ring
+        ctx.strokeStyle = 'rgba(90,140,35,0.55)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.ellipse(px + CS/2, py + CS/2 - 2, CS * 0.42, CS * 0.34, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (cell.ruins) {
+        // Ruins — broken building floor + rubble
+        ctx.fillStyle = '#38322a';
+        ctx.fillRect(px, py, CS, CS);
+        ctx.fillStyle = '#48403a';
+        ctx.fillRect(px + 3, py + 3, CS - 6, CS - 6);
+        // Broken wall stubs at corners
+        ctx.fillStyle = '#5a5248';
+        const stubs = [[0,0,14,7],[CS-14,0,14,7],[0,CS-7,14,7],[CS-14,CS-7,14,7]];
+        for (const [fx,fy,fw,fh] of stubs) ctx.fillRect(px + fx, py + fy, fw, fh);
+        // Rubble scatter
+        ctx.fillStyle = 'rgba(130,110,80,0.6)';
+        for (let i = 0; i < 5; i++) {
+          ctx.beginPath();
+          ctx.arc(px + 9 + (i * 7 % 26), py + 9 + (i * 11 % 26), 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.strokeStyle = 'rgba(150,130,90,0.4)';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(px + 2, py + 2, CS - 4, CS - 4);
       } else {
         // Grass
         ctx.fillStyle = GRASS[(c * 3 + r * 7) % 4];
@@ -799,6 +1189,21 @@ function drawUnit(cx, cy, player, count, someInTrench, alphaLevel, hasSapper, ha
   }
 }
 
+function drawHPBar(cx, cy, currentHp, maxHp) {
+  const bx = OX + cx * CS + 3;
+  const by = OY + (cy + 1) * CS - 6;
+  const bw = CS - 6;
+  const bh = 3;
+  const frac = currentHp / maxHp;
+  const col = frac > 0.6 ? '#3dcc3d' : frac > 0.3 ? '#ddcc22' : '#cc3333';
+  ctx.globalAlpha = frac < 1 ? 0.9 : 0.45;
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(bx, by, bw, bh);
+  ctx.fillStyle = col;
+  ctx.fillRect(bx, by, Math.max(1, Math.round(bw * frac)), bh);
+  ctx.globalAlpha = 1;
+}
+
 function drawUnits() {
   const cellMap = new Map();
   for (const u of units) {
@@ -817,6 +1222,9 @@ function drawUnits() {
     const hasFT = group.some(u => u.type === 'flamethrower');
     const alpha = allSpent ? 0.32 : allMoved ? 0.62 : 1.0;
     drawUnit(x, y, player, count, someInTrench, alpha, hasSapper, hasFT);
+    const totalHp = group.reduce((s, u) => s + u.hp, 0);
+    const maxHp   = group.reduce((s, u) => s + UNIT_STATS[u.type].maxHp, 0);
+    drawHPBar(x, y, totalHp, maxHp);
   }
 }
 
@@ -882,12 +1290,14 @@ function drawTurnBanner() {
   ctx.fillStyle = currentPlayer === 1 ? C_P2 : 'rgba(212,48,48,0.4)';
   ctx.fillText(`P2  \u25CF ${p2u}  \uD83D\uDCB0 ${gold[1]}g` + (p2mines ? `  \u26CF ${p2mines}` : ''), canvas.width - 14, h / 2);
 
-  const playerName = `PLAYER ${currentPlayer + 1}`;
+  const playerName = isSingleplayer
+    ? (currentPlayer === 0 ? 'YOUR TURN' : 'ENEMY TURN')
+    : `PLAYER ${currentPlayer + 1}'S TURN`;
   const turnColor = currentPlayer === 0 ? C_P1 : C_P2;
   ctx.textAlign = 'center';
   ctx.font = 'bold 15px Segoe UI';
   ctx.fillStyle = turnColor;
-  ctx.fillText(`${playerName}'S TURN`, canvas.width / 2, h / 2 - 2);
+  ctx.fillText(playerName, canvas.width / 2, h / 2 - 2);
   ctx.font = '9px Segoe UI';
   ctx.fillStyle = 'rgba(255,255,255,0.35)';
   ctx.fillText(logMsg, canvas.width / 2, h / 2 + 9);
@@ -1012,6 +1422,7 @@ function drawBase(player) {
 // ── Buy panels ─────────────────────────────────────────────────────────────
 function drawBuyPanels() {
   for (let p = 0; p < 2; p++) {
+    if (isSingleplayer && p === 1) continue; // bot manages its own purchases
     const isActive = currentPlayer === p;
     const col = p === 0 ? C_P1 : C_P2;
     const totalH = BUY_DEFS.length * (BUY_BH + BUY_GAP) - BUY_GAP;
@@ -1074,6 +1485,48 @@ function drawBuyPanels() {
   ctx.textBaseline = 'alphabetic';
 }
 
+function drawNoMovesWarning() {
+  const col = currentPlayer === 0 ? C_P1 : C_P2;
+  const pulse = 0.55 + 0.45 * Math.sin(Date.now() / 350);
+  const bw = 360, bh = 52;
+  const bx = canvas.width / 2 - bw / 2;
+  const by = OY + ROWS * CS / 2 - bh / 2;
+
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.beginPath();
+  ctx.roundRect(bx + 3, by + 3, bw, bh, 10);
+  ctx.fill();
+
+  // Background
+  ctx.fillStyle = `rgba(8,14,30,${0.88 + 0.08 * pulse})`;
+  ctx.beginPath();
+  ctx.roundRect(bx, by, bw, bh, 10);
+  ctx.fill();
+
+  // Glowing border
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 2 * pulse;
+  ctx.globalAlpha = pulse;
+  ctx.beginPath();
+  ctx.roundRect(bx, by, bw, bh, 10);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 14px Segoe UI';
+  ctx.fillStyle = '#fff';
+  ctx.fillText('All units spent', canvas.width / 2, by + bh / 2 - 9);
+
+  ctx.font = 'bold 12px Segoe UI';
+  ctx.fillStyle = col;
+  ctx.fillText('Press  ENTER  to end your turn', canvas.width / 2, by + bh / 2 + 11);
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+}
+
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = '#0a1628';
@@ -1088,20 +1541,125 @@ function render() {
   drawUnits();
   drawUIBar();
   drawBuyPanels();
+  if (running && !gameOver && !hasAnyMoves() && !botThinking) drawNoMovesWarning();
 
   requestAnimationFrame(render);
 }
 
-// ── Overlay button ─────────────────────────────────────────────────────────
-document.getElementById('ov-btn').addEventListener('click', () => {
+// ── Overlay buttons ────────────────────────────────────────────────────────
+function closeOverlay() {
   document.getElementById('overlay').style.display = 'none';
   document.getElementById('ov-result').style.display = 'none';
   document.getElementById('ov-result').className = '';
-  initGame();
+}
+
+document.getElementById('ov-btn').addEventListener('click', () => {
+  isSingleplayer = false; botThinking = false;
+  closeOverlay(); initGame();
 });
 
+document.getElementById('ov-sp-btn').addEventListener('click', () => {
+  isSingleplayer = true; botThinking = false;
+  closeOverlay(); initGame();
+  logMsg = 'Your turn. Select a unit to begin.';
+});
+
+document.getElementById('ov-resume').addEventListener('click', () => {
+  closeOverlay();
+  loadSave();
+  // If resumed save was singleplayer and it was bot's turn, don't auto-run bot
+  botThinking = false;
+});
+
+// Show Resume button if a save exists
+if (localStorage.getItem(SAVE_KEY)) {
+  document.getElementById('ov-resume').style.display = 'inline-block';
+}
+
+// ── Legend swatches ────────────────────────────────────────────────────────
+(function drawLegendSwatches() {
+  const S = 18;
+  function swatch(id, fn) {
+    const c = document.getElementById(id);
+    if (!c) return;
+    const x = c.getContext('2d');
+    fn(x, S);
+  }
+
+  // Grass
+  swatch('leg-grass', (x, S) => {
+    x.fillStyle = '#2d4a1e'; x.fillRect(0, 0, S, S);
+  });
+
+  // Trench
+  swatch('leg-trench', (x, S) => {
+    x.fillStyle = '#5c4025'; x.fillRect(0, 0, S, S);
+    x.fillStyle = '#3e2a12'; x.fillRect(2, 2, S-4, S-4);
+    x.strokeStyle = 'rgba(0,0,0,0.35)'; x.lineWidth = 0.5;
+    for (let i = 4; i < S-2; i += 4) {
+      x.beginPath(); x.moveTo(i, 2); x.lineTo(i, S-2); x.stroke();
+    }
+  });
+
+  // Bunker
+  swatch('leg-bunker', (x, S) => {
+    x.fillStyle = '#3a3a4a'; x.fillRect(0, 0, S, S);
+    x.fillStyle = '#2e2e3e'; x.fillRect(2, 2, S-4, S-4);
+    x.fillStyle = 'rgba(180,160,100,0.35)';
+    for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+      x.beginPath(); x.arc(5 + i*8, 5 + j*8, 2, 0, Math.PI*2); x.fill();
+    }
+    x.strokeStyle = 'rgba(180,160,100,0.55)'; x.lineWidth = 1;
+    x.strokeRect(2, 2, S-4, S-4);
+  });
+
+  // Hill
+  swatch('leg-hill', (x, S) => {
+    x.fillStyle = '#4a7a28'; x.fillRect(0, 0, S, S);
+    const g = x.createRadialGradient(S/2, S/2-1, 0, S/2, S/2, S*0.45);
+    g.addColorStop(0, '#7ab840'); g.addColorStop(1, '#4a7a28');
+    x.fillStyle = g;
+    x.beginPath(); x.ellipse(S/2, S/2-1, S*0.36, S*0.28, 0, 0, Math.PI*2); x.fill();
+  });
+
+  // Wall
+  swatch('leg-wall', (x, S) => {
+    x.fillStyle = '#22222e'; x.fillRect(0, 0, S, S);
+    const bH = S/3, bW = S/2;
+    for (let row = 0; row < 3; row++) {
+      const off = (row%2)*(bW/2);
+      for (let col = -1; col < 3; col++) {
+        x.fillStyle = row%2===0 ? '#2e2e3e' : '#282838';
+        x.fillRect(col*bW+off+0.5, row*bH+0.5, bW-1, bH-1);
+      }
+    }
+  });
+
+  // Ruins
+  swatch('leg-ruins', (x, S) => {
+    x.fillStyle = '#38322a'; x.fillRect(0, 0, S, S);
+    x.fillStyle = '#48403a'; x.fillRect(2, 2, S-4, S-4);
+    x.fillStyle = '#5a5248';
+    [[0,0,7,4],[S-7,0,7,4],[0,S-4,7,4],[S-7,S-4,7,4]].forEach(([fx,fy,fw,fh]) => x.fillRect(fx,fy,fw,fh));
+    x.strokeStyle = 'rgba(150,130,90,0.4)'; x.lineWidth = 1;
+    x.strokeRect(1, 1, S-2, S-2);
+  });
+
+  // Mine
+  swatch('leg-mine', (x, S) => {
+    x.fillStyle = '#2d4a1e'; x.fillRect(0, 0, S, S);
+    x.fillStyle = 'rgba(46,127,212,0.25)'; x.fillRect(0, 0, S, S);
+    x.beginPath(); x.arc(S/2, S/2, 5, 0, Math.PI*2);
+    x.fillStyle = '#f0c030'; x.fill();
+    x.strokeStyle = '#c09010'; x.lineWidth = 1; x.stroke();
+    x.font = 'bold 6px Segoe UI'; x.textAlign = 'center';
+    x.textBaseline = 'middle'; x.fillStyle = '#7a5000';
+    x.fillText('$', S/2, S/2);
+  });
+})();
+
 // ── Start ──────────────────────────────────────────────────────────────────
-initGame();
+initGame(); // initialise state so render() works even before overlay is dismissed
 render();
 </script>
 </body>

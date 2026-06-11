@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WIP Games · EduArcade</title>
+  <link rel="icon" href="favicon.ico">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f1e3d;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    header {
+      width: 100%;
+      background: #0a1428;
+      border-bottom: 2px solid rgba(255,255,255,0.07);
+      padding: 1.2rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1.2rem;
+    }
+
+    .back {
+      color: #fff; text-decoration: none; font-size: 0.8rem; font-weight: 700;
+      background: rgba(255,255,255,0.08); padding: 0.3rem 0.8rem;
+      border-radius: 20px; border: 1px solid rgba(255,255,255,0.2);
+      white-space: nowrap;
+    }
+    .back:hover { background: rgba(255,255,255,0.16); }
+
+    .header-text h1 {
+      font-size: 1.3rem;
+      font-weight: 900;
+      letter-spacing: 5px;
+      color: #fff;
+      text-transform: uppercase;
+    }
+    .header-text p {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: rgba(255,255,255,0.4);
+      text-transform: uppercase;
+      margin-top: 0.15rem;
+    }
+
+    main {
+      width: 100%;
+      max-width: 900px;
+      padding: 2.5rem 1.5rem 4rem;
+    }
+
+    .notice {
+      background: rgba(255,200,50,0.07);
+      border: 1.5px solid rgba(255,200,50,0.2);
+      border-radius: 12px;
+      padding: 0.85rem 1.2rem;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: rgba(255,220,80,0.75);
+      letter-spacing: 0.5px;
+      line-height: 1.6;
+      margin-bottom: 2.2rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 160px));
+      gap: 1.2rem;
+      justify-content: start;
+    }
+
+    .card {
+      position: relative;
+      padding: 2rem 1.5rem 1.8rem;
+      border-radius: 20px;
+      text-decoration: none;
+      color: #fff;
+      text-align: center;
+      transition: transform 0.18s, box-shadow 0.18s;
+      overflow: hidden;
+      cursor: pointer;
+      border-bottom: 5px solid rgba(0,0,0,0.2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 20px;
+      background: rgba(255,255,255,0);
+      transition: background 0.18s;
+      pointer-events: none;
+    }
+    .card:hover { transform: translateY(-4px); }
+    .card:hover::after { background: rgba(255,255,255,0.06); }
+
+    .card .icon {
+      width: 52px; height: 52px;
+      margin-bottom: 0.7rem;
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+    }
+
+    .card-title {
+      font-size: 0.88rem;
+      font-weight: 900;
+      letter-spacing: 1px;
+      margin-bottom: 0.5rem;
+    }
+
+    .badge {
+      display: block;
+      margin-top: auto;
+      padding: 0.25rem 0.9rem;
+      border-radius: 50px;
+      font-size: 0.65rem;
+      font-weight: 900;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      background: rgba(0,0,0,0.22);
+      border: 2px solid rgba(255,255,255,0.3);
+    }
+
+    .wip-tag {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-size: 0.52rem;
+      font-weight: 900;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      background: rgba(255,200,50,0.18);
+      border: 1.5px solid rgba(255,200,50,0.45);
+      color: rgba(255,220,80,0.9);
+    }
+
+    footer {
+      background: rgba(0,0,0,0.4);
+      width: 100%;
+      text-align: center;
+      padding: 1.2rem 1rem;
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.3);
+      letter-spacing: 1px;
+      margin-top: auto;
+    }
+    footer a {
+      color: rgba(255,255,255,0.45);
+      text-decoration: none;
+      margin: 0 0.6rem;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <a class="back" href="index.html">← Back</a>
+    <div class="header-text">
+      <h1>WIP Games</h1>
+      <p>Work in progress · Playable but unfinished</p>
+    </div>
+  </header>
+
+  <main>
+
+    <div class="notice">
+      These games are still being built. Expect rough edges, missing features, or balance issues.
+      Feedback is welcome — they'll move to the main page when they're ready.
+    </div>
+
+    <div class="grid">
+
+      <a class="card" href="dash.html" style="background:linear-gradient(160deg,#4c1d95,#1e1254);box-shadow:0 6px 20px rgba(124,58,237,0.35)">
+        <span class="wip-tag">WIP</span>
+        <img class="icon" src="icons/runner.svg" alt="Running cube">
+        <div class="card-title">Dash</div>
+        <span class="badge">1 Player</span>
+      </a>
+
+    </div>
+
+  </main>
+
+  <footer>
+    <a href="privacy.html">Privacy Policy</a>
+    <a href="contact.html">Contact</a>
+    <a href="index.html">All Games</a>
+  </footer>
+
+</body>
+</html>

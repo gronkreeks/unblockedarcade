@@ -1454,11 +1454,17 @@ function showEndlessMode() {
 
 // ── Game over ─────────────────────────────────────────────────────────────────
 function showGameOver() {
+  const wavesCompleted = waveNum > 0 ? waveNum - (waveActive?0:1) : 0;
+  const prevBest = +localStorage.getItem('survive_best_waves') || 0;
+  const newBest = wavesCompleted > prevBest;
+  if (newBest) localStorage.setItem('survive_best_waves', wavesCompleted);
+  const best = newBest ? wavesCompleted : prevBest;
   const ov = document.getElementById('overlay');
   ov.style.background = '';
   ov.innerHTML = `
     <h2>💀 GAME OVER</h2>
-    <div class="survived">Survived ${waveNum > 0 ? waveNum - (waveActive?0:1) : 0} wave${(waveNum-1)===1?'':'s'}</div>
+    <div class="survived">Survived ${wavesCompleted} wave${wavesCompleted===1?'':'s'}</div>
+    ${newBest && wavesCompleted > 0 ? '<p style="color:#ffe066;font-weight:900;letter-spacing:1px">NEW BEST!</p>' : `<p style="opacity:0.65;font-size:0.85rem">Best: ${best} wave${best===1?'':'s'}</p>`}
     <p>You made it to wave ${waveNum}. Better luck next time!</p>
     <button id="startBtn">Try Again</button>
     <a href="index.html">&#8592; Back to Home</a>
