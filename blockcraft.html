@@ -45,14 +45,38 @@
   #menu h1 { color:#e6e6e6; font-size:54px; letter-spacing:4px;
     text-shadow:4px 4px 0 #3a3a3a; font-weight:bold; }
   #menu h1 span { color:#9ee65f; }
+  #menu .btns { display:flex; flex-direction:column; gap:10px; align-items:center; }
   #menu .btn { background:#6e6e6e; color:#fff; border:2px solid #000;
     box-shadow:inset 2px 2px 0 rgba(255,255,255,0.35), inset -2px -2px 0 rgba(0,0,0,0.45);
-    padding:12px 60px; font-size:20px; font-family:inherit; font-weight:bold; }
+    padding:12px 0; width:320px; font-size:20px; font-family:inherit; font-weight:bold;
+    cursor:pointer; }
   #menu .btn:hover { background:#7d8bc9; }
+  #menu .btn:disabled { opacity:0.45; cursor:default; }
+  #menu .btn:disabled:hover { background:#6e6e6e; }
+  #menuStatus { color:#ffe27a; font-size:14px; min-height:18px;
+    text-shadow:1px 1px 0 #2c2c2c; }
   #menu .controls { color:#cfcfcf; font-size:14px; line-height:1.8; text-align:center;
     text-shadow:1px 1px 0 #2c2c2c; }
   #menu .controls b { color:#ffe27a; }
   #menu .tip { color:#8f8f8f; font-size:12px; margin-top:6px; }
+
+  /* Inventory */
+  #inv { position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    background:rgba(0,0,0,0.5); z-index:9; }
+  #inv[hidden] { display:none; }
+  #invPanel { background:#c6c6c6; border:3px solid #000; padding:16px 18px;
+    box-shadow:inset 3px 3px 0 #fff, inset -3px -3px 0 #555, 0 10px 40px rgba(0,0,0,0.6); }
+  .invTitle { color:#3b3b3b; font-size:18px; font-weight:bold; margin-bottom:10px; }
+  .invLabel { color:#4a4a4a; font-size:12px; margin:12px 0 4px; }
+  .invTip { color:#4a4a4a; font-size:12px; margin-top:12px; text-align:center; }
+  #invGrid { display:grid; grid-template-columns:repeat(7, 52px); gap:3px; }
+  #invHotbar { display:grid; grid-template-columns:repeat(9, 52px); gap:3px; }
+  .islot { width:52px; height:52px; background:#8b8b8b; cursor:pointer;
+    border:2px solid; border-color:#373737 #ffffff #ffffff #373737;
+    display:flex; align-items:center; justify-content:center; }
+  .islot:hover { background:#a0a0a0; }
+  .islot.sel { outline:3px solid #fff; }
+  .islot canvas { width:44px; height:44px; image-rendering:pixelated; }
 </style>
 </head>
 <body>
@@ -63,16 +87,32 @@
 <div id="toast"></div>
 <div id="debug"></div>
 
+<div id="inv" hidden>
+  <div id="invPanel">
+    <div class="invTitle">Inventory</div>
+    <div id="invGrid"></div>
+    <div class="invLabel">Hotbar — click a slot to select it</div>
+    <div id="invHotbar"></div>
+    <div class="invTip">Click an item to put it in the selected hotbar slot &nbsp;·&nbsp; <b>E</b> to close</div>
+  </div>
+</div>
+
 <div id="menu">
   <h1>BLOCK<span>CRAFT</span></h1>
-  <button class="btn" id="playBtn">Click to Play</button>
+  <div class="btns">
+    <button class="btn" id="playBtn">Click to Play</button>
+    <button class="btn" id="saveBtn">Save World</button>
+    <button class="btn" id="loadBtn">Load World</button>
+    <button class="btn" id="newBtn">New World</button>
+  </div>
+  <div id="menuStatus"></div>
   <div class="controls">
     <b>W A S D</b> move &nbsp;·&nbsp; <b>Mouse</b> look &nbsp;·&nbsp; <b>Space</b> jump<br>
-    <b>Left click</b> break &nbsp;·&nbsp; <b>Right click</b> place &nbsp;·&nbsp; <b>Middle click</b> pick block<br>
-    <b>1–9 / Scroll</b> select block &nbsp;·&nbsp; <b>Shift</b> sneak &nbsp;·&nbsp; <b>Double-tap W</b> sprint<br>
+    <b>Left click</b> break (hold to keep digging) &nbsp;·&nbsp; <b>Right click</b> place &nbsp;·&nbsp; <b>Middle click</b> pick block<br>
+    <b>1–9 / Scroll</b> select block &nbsp;·&nbsp; <b>E</b> inventory &nbsp;·&nbsp; <b>Shift</b> sneak &nbsp;·&nbsp; <b>Double-tap W</b> sprint<br>
     <b>Double-tap Space</b> toggle flying &nbsp;·&nbsp; <b>R</b> respawn &nbsp;·&nbsp; <b>Esc</b> pause
   </div>
-  <div class="tip">An original voxel sandbox demo. Terrain is procedurally generated — every reload is a new world.</div>
+  <div class="tip">An original voxel sandbox demo. Your world autosaves when you close the tab and loads again next visit (stored in this browser).</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -88,25 +128,41 @@
    ========================================================================= */
 
 // ---------------------------------------------------------------- constants
-const WX = 128, WY = 64, WZ = 128;     // world size in blocks
+const WX = 256, WY = 64, WZ = 256;     // world size in blocks
 const CH = 16;                          // chunk size (x,z)
 const CHX = WX / CH, CHZ = WZ / CH;
 const SEA = 27;                         // sea level
-const SEED = (Math.random() * 1e9) | 0;
+let SEED = (Math.random() * 1e9) | 0;   // mutable so "New World" can reroll it
 
 const B = { AIR:0, GRASS:1, DIRT:2, STONE:3, SAND:4, LOG:5, LEAVES:6,
-            PLANKS:7, COBBLE:8, GLASS:9, WATER:10, BEDROCK:11, BRICKS:12 };
+            PLANKS:7, COBBLE:8, GLASS:9, WATER:10, BEDROCK:11, BRICKS:12,
+            LOG_X:13, LOG_Z:14, FLOWER_RED:15, FLOWER_YELLOW:16,
+            COAL:17, IRON:18, DIAMOND:19, REDSTONE:20, LAPIS:21,
+            STAIR_OAK_E:22, STAIR_OAK_W:23, STAIR_OAK_S:24, STAIR_OAK_N:25,
+            STAIR_COB_E:26, STAIR_COB_W:27, STAIR_COB_S:28, STAIR_COB_N:29 };
 const T = { GRASS_TOP:0, GRASS_SIDE:1, DIRT:2, STONE:3, SAND:4, LOG_SIDE:5,
             LOG_TOP:6, LEAVES:7, PLANKS:8, COBBLE:9, GLASS:10, WATER:11,
-            BEDROCK:12, BRICKS:13 };
+            BEDROCK:12, BRICKS:13, FLOWER_RED:14, FLOWER_YELLOW:15,
+            COAL:16, IRON:17, DIAMOND:18, REDSTONE:19, LAPIS:20 };
+
+const OAK_STAIRS = { e:B.STAIR_OAK_E, w:B.STAIR_OAK_W, s:B.STAIR_OAK_S, n:B.STAIR_OAK_N };
+const COB_STAIRS = { e:B.STAIR_COB_E, w:B.STAIR_COB_W, s:B.STAIR_COB_S, n:B.STAIR_COB_N };
 
 // tiles: [top, bottom, side]
+// extra fields: t6 = per-face tiles [+x,-x,+y,-y,+z,-z], rot = per-face 90° uv turn,
+// cross = X-shaped plant, stair = step direction of the tall half, item = inventory id
 const DEF = {
   [B.GRASS]:  { name:'Grass Block',  t:[T.GRASS_TOP, T.DIRT, T.GRASS_SIDE] },
   [B.DIRT]:   { name:'Dirt',         t:[T.DIRT, T.DIRT, T.DIRT] },
   [B.STONE]:  { name:'Stone',        t:[T.STONE, T.STONE, T.STONE] },
   [B.SAND]:   { name:'Sand',         t:[T.SAND, T.SAND, T.SAND] },
   [B.LOG]:    { name:'Oak Log',      t:[T.LOG_TOP, T.LOG_TOP, T.LOG_SIDE] },
+  [B.LOG_X]:  { name:'Oak Log',      item:B.LOG, t:[T.LOG_TOP, T.LOG_TOP, T.LOG_SIDE],
+                t6:[T.LOG_TOP, T.LOG_TOP, T.LOG_SIDE, T.LOG_SIDE, T.LOG_SIDE, T.LOG_SIDE],
+                rot:[0,0,1,1,1,1] },
+  [B.LOG_Z]:  { name:'Oak Log',      item:B.LOG, t:[T.LOG_TOP, T.LOG_TOP, T.LOG_SIDE],
+                t6:[T.LOG_SIDE, T.LOG_SIDE, T.LOG_SIDE, T.LOG_SIDE, T.LOG_TOP, T.LOG_TOP],
+                rot:[1,1,0,0,0,0] },
   [B.LEAVES]: { name:'Oak Leaves',   t:[T.LEAVES, T.LEAVES, T.LEAVES] },
   [B.PLANKS]: { name:'Oak Planks',   t:[T.PLANKS, T.PLANKS, T.PLANKS] },
   [B.COBBLE]: { name:'Cobblestone',  t:[T.COBBLE, T.COBBLE, T.COBBLE] },
@@ -114,10 +170,30 @@ const DEF = {
   [B.WATER]:  { name:'Water',        t:[T.WATER, T.WATER, T.WATER] },
   [B.BEDROCK]:{ name:'Bedrock',      t:[T.BEDROCK, T.BEDROCK, T.BEDROCK] },
   [B.BRICKS]: { name:'Bricks',       t:[T.BRICKS, T.BRICKS, T.BRICKS] },
+  [B.FLOWER_RED]:    { name:'Poppy',     cross:true, t:[T.FLOWER_RED, T.FLOWER_RED, T.FLOWER_RED] },
+  [B.FLOWER_YELLOW]: { name:'Dandelion', cross:true, t:[T.FLOWER_YELLOW, T.FLOWER_YELLOW, T.FLOWER_YELLOW] },
+  [B.COAL]:     { name:'Coal Ore',     t:[T.COAL, T.COAL, T.COAL] },
+  [B.IRON]:     { name:'Iron Ore',     t:[T.IRON, T.IRON, T.IRON] },
+  [B.DIAMOND]:  { name:'Diamond Ore',  t:[T.DIAMOND, T.DIAMOND, T.DIAMOND] },
+  [B.REDSTONE]: { name:'Redstone Ore', t:[T.REDSTONE, T.REDSTONE, T.REDSTONE] },
+  [B.LAPIS]:    { name:'Lapis Ore',    t:[T.LAPIS, T.LAPIS, T.LAPIS] },
 };
+for (const [fam, tile, name] of [[OAK_STAIRS, T.PLANKS, 'Oak Stairs'],
+                                 [COB_STAIRS, T.COBBLE, 'Cobblestone Stairs']])
+  for (const d of ['e', 'w', 's', 'n'])
+    DEF[fam[d]] = { name, stair:d, family:fam, item:fam.e, t:[tile, tile, tile] };
+
 // blocks that let neighbouring faces show through
 const SEE_THROUGH = new Set([B.AIR, B.GLASS, B.WATER]);
-const HOTBAR = [B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.PLANKS, B.LOG, B.LEAVES, B.SAND, B.GLASS];
+for (const id in DEF) if (DEF[id].cross || DEF[id].stair) SEE_THROUGH.add(+id);
+
+const HOTBAR = [B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.PLANKS, B.LOG,
+                B.STAIR_OAK_E, B.FLOWER_RED, B.GLASS];
+const INV_ITEMS = [
+  B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.SAND, B.PLANKS, B.LOG,
+  B.LEAVES, B.GLASS, B.BRICKS, B.BEDROCK, B.WATER, B.STAIR_OAK_E, B.STAIR_COB_E,
+  B.FLOWER_RED, B.FLOWER_YELLOW, B.COAL, B.IRON, B.DIAMOND, B.REDSTONE, B.LAPIS,
+];
 
 // ------------------------------------------------------------------- noise
 function hash2(x, z) {
@@ -158,7 +234,8 @@ function isSolidAt(x, y, z) {         // for physics: world border is a wall
   if (y >= WY) return false;
   if (x < 0 || x >= WX || z < 0 || z >= WZ) return true;
   const b = world[wIdx(x, y, z)];
-  return b !== B.AIR && b !== B.WATER;
+  if (b === B.AIR || b === B.WATER) return false;
+  return !DEF[b].cross;               // flowers have no collision
 }
 
 // Continent noise is normalized per world (remapped to its own min/max),
@@ -201,6 +278,28 @@ function generateWorld() {
       if (h < SEA) for (let y = h + 1; y <= SEA; y++) world[wIdx(x, y, z)] = B.WATER;
     }
   }
+  // ------- ore veins (random walks that replace stone)
+  const oreRnd = mulberry(SEED ^ 0x9e3779b9);
+  const veins = (block, count, yMin, yMax, sMin, sMax) => {
+    for (let i = 0; i < count; i++) {
+      let x = (oreRnd() * WX) | 0, z = (oreRnd() * WZ) | 0;
+      let y = yMin + ((oreRnd() * (yMax - yMin)) | 0);
+      const n = sMin + ((oreRnd() * (sMax - sMin)) | 0);
+      for (let j = 0; j < n; j++) {
+        if (x >= 0 && x < WX && y >= 1 && y < WY && z >= 0 && z < WZ &&
+            world[wIdx(x, y, z)] === B.STONE)
+          world[wIdx(x, y, z)] = block;
+        const axis = (oreRnd() * 3) | 0, s = oreRnd() < 0.5 ? -1 : 1;
+        if (axis === 0) x += s; else if (axis === 1) y += s; else z += s;
+      }
+    }
+  };
+  const area = WX * WZ;
+  veins(B.COAL,     area / 22 | 0, 6, 46, 5, 12);
+  veins(B.IRON,     area / 28 | 0, 4, 36, 3, 9);
+  veins(B.REDSTONE, area / 60 | 0, 2, 15, 4, 8);
+  veins(B.LAPIS,    area / 70 | 0, 3, 22, 3, 7);
+  veins(B.DIAMOND,  area / 85 | 0, 2, 13, 2, 5);
   // ------- oak trees
   const leafAt = (x, y, z) => {
     if (x < 0 || x >= WX || z < 0 || z >= WZ || y < 0 || y >= WY) return;
@@ -233,10 +332,22 @@ function generateWorld() {
       leafAt(x, top, z);
     }
   }
+  // ------- flowers scattered on open grass
+  for (let x = 0; x < WX; x++) {
+    for (let z = 0; z < WZ; z++) {
+      const h = heights[x * WZ + z];
+      if (h + 1 >= WY) continue;
+      if (world[wIdx(x, h, z)] !== B.GRASS) continue;
+      if (world[wIdx(x, h + 1, z)] !== B.AIR) continue;
+      const r = hash2(x * 101 + 37, z * 57 + 91);
+      if (r < 0.006) world[wIdx(x, h + 1, z)] = B.FLOWER_RED;
+      else if (r < 0.013) world[wIdx(x, h + 1, z)] = B.FLOWER_YELLOW;
+    }
+  }
 }
 
 // -------------------------------------------------------- texture painting
-const AW = 8, AH = 2, TS = 16;               // atlas: 8x2 tiles of 16px
+const AW = 8, AH = 3, TS = 16;               // atlas: 8x3 tiles of 16px
 const atlas = document.createElement('canvas');
 atlas.width = AW * TS; atlas.height = AH * TS;
 const actx = atlas.getContext('2d');
@@ -390,6 +501,43 @@ function paintAllTextures() {
       set(x, y, c[0], c[1], c[2]);
     }
   });
+  // flowers: transparent sprite, petals up top, stem below
+  const flower = (tile, petal, petalDark, centre, rad) => paint(tile, (set, rnd) => {
+    for (let y = 7; y < 16; y++) set(7, y, 62, 122, 40);          // stem
+    set(6, 11, 46, 96, 30); set(5, 11, 46, 96, 30);               // left leaf
+    set(8, 13, 46, 96, 30); set(9, 12, 46, 96, 30);               // right leaf
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+      if (dx * dx + dy * dy > rad) continue;
+      const c = rnd() < 0.4 ? petalDark : petal;
+      set(7 + dx, 4 + dy, c[0], c[1], c[2]);
+    }
+    set(7, 4, centre[0], centre[1], centre[2]);
+    set(8, 4, centre[0], centre[1], centre[2]);
+  });
+  flower(T.FLOWER_RED,    [206, 44, 38], [160, 26, 24], [38, 26, 22], 5);
+  flower(T.FLOWER_YELLOW, [235, 208, 62], [250, 234, 110], [255, 244, 150], 4);
+  // ores: stone base with coloured clusters
+  const ore = (tile, c1, c2) => paint(tile, (set, rnd, sp) => {
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      let c = sp([127, 127, 127], 26);
+      if (((x * 3 + y * 5) % 11) === 0 && rnd() < 0.5) c = [104, 104, 104];
+      set(x, y, c[0], c[1], c[2]);
+    }
+    for (let i = 0; i < 4; i++) {
+      let x = 2 + ((rnd() * 12) | 0), y = 2 + ((rnd() * 12) | 0);
+      const n = 4 + ((rnd() * 4) | 0);
+      for (let j = 0; j < n; j++) {
+        const c = rnd() < 0.5 ? c1 : c2;
+        set(Math.max(0, Math.min(15, x)), Math.max(0, Math.min(15, y)), c[0], c[1], c[2]);
+        x += ((rnd() * 3) | 0) - 1; y += ((rnd() * 3) | 0) - 1;
+      }
+    }
+  });
+  ore(T.COAL,     [43, 43, 43],   [22, 22, 22]);
+  ore(T.IRON,     [216, 173, 140],[184, 137, 100]);
+  ore(T.DIAMOND,  [92, 219, 213], [150, 242, 237]);
+  ore(T.REDSTONE, [211, 48, 38],  [255, 92, 70]);
+  ore(T.LAPIS,    [38, 73, 180],  [66, 112, 222]);
 }
 
 // average colour of a block's side tile (for break particles)
@@ -450,8 +598,64 @@ function tileUV(tile, u, v) {
           ((AH - 1 - cy) + e + v * (1 - 2 * e)) / AH];
 }
 function faceTile(block, faceIdx) {
-  const t = DEF[block].t;
-  return faceIdx === 2 ? t[0] : (faceIdx === 3 ? t[1] : t[2]);
+  const d = DEF[block];
+  if (d.t6) return d.t6[faceIdx];
+  return faceIdx === 2 ? d.t[0] : (faceIdx === 3 ? d.t[1] : d.t[2]);
+}
+// horizontal logs turn their grain to follow the block's axis
+function faceRot(block, faceIdx) {
+  const r = DEF[block].rot;
+  return r ? r[faceIdx] : 0;
+}
+
+// ------------------------------------------------- stairs & cross geometry
+// stair quads are authored for 'e' (tall half at +x) then rotated 90° per dir.
+// t: 0 top / 1 bottom / 2 side tile.  cull: skip when that neighbour is opaque.
+const STAIR_QUADS = (() => {
+  const e = [
+    { p:[[0,0,0],[1,0,0],[1,0,1],[0,0,1]],       uv:[[0,0],[1,0],[1,1],[0,1]],     t:1, n:[0,-1,0], cull:true },
+    { p:[[0,.5,0],[0,.5,1],[.5,.5,1],[.5,.5,0]], uv:[[0,0],[0,1],[.5,1],[.5,0]],   t:0, n:[0,1,0],  cull:false },
+    { p:[[.5,1,0],[.5,1,1],[1,1,1],[1,1,0]],     uv:[[.5,0],[.5,1],[1,1],[1,0]],   t:0, n:[0,1,0],  cull:true },
+    { p:[[.5,.5,1],[.5,1,1],[.5,1,0],[.5,.5,0]], uv:[[0,.5],[0,1],[1,1],[1,.5]],   t:2, n:[-1,0,0], cull:false },
+    { p:[[0,0,1],[0,.5,1],[0,.5,0],[0,0,0]],     uv:[[0,0],[0,.5],[1,.5],[1,0]],   t:2, n:[-1,0,0], cull:true },
+    { p:[[1,0,0],[1,1,0],[1,1,1],[1,0,1]],       uv:[[0,0],[0,1],[1,1],[1,0]],     t:2, n:[1,0,0],  cull:true },
+    { p:[[1,0,0],[0,0,0],[0,.5,0],[1,.5,0]],     uv:[[0,0],[1,0],[1,.5],[0,.5]],   t:2, n:[0,0,-1], cull:true },
+    { p:[[1,.5,0],[.5,.5,0],[.5,1,0],[1,1,0]],   uv:[[0,.5],[.5,.5],[.5,1],[0,1]], t:2, n:[0,0,-1], cull:true },
+    { p:[[0,0,1],[1,0,1],[1,.5,1],[0,.5,1]],     uv:[[0,0],[1,0],[1,.5],[0,.5]],   t:2, n:[0,0,1],  cull:true },
+    { p:[[.5,.5,1],[1,.5,1],[1,1,1],[.5,1,1]],   uv:[[.5,.5],[1,.5],[1,1],[.5,1]], t:2, n:[0,0,1],  cull:true },
+  ];
+  const rotQ = qs => qs.map(q => ({
+    p: q.p.map(c => [1 - c[2], c[1], c[0]]),
+    uv: q.uv, t: q.t, n: [-q.n[2], q.n[1], q.n[0]], cull: q.cull,
+  }));
+  const s = rotQ(e), w = rotQ(s), n = rotQ(w);
+  return { e, s, w, n };
+})();
+const shadeOf = n => n[1] > 0 ? 1 : (n[1] < 0 ? 0.5 : (n[0] !== 0 ? 0.6 : 0.8));
+
+function pushQuad(arrs, pts, tile, uvs, shade, both) {
+  const [pos, uv, col, ind] = arrs;
+  const base = pos.length / 3;
+  for (let k = 0; k < 4; k++) {
+    pos.push(pts[k][0], pts[k][1], pts[k][2]);
+    const t = tileUV(tile, uvs[k][0], uvs[k][1]);
+    uv.push(t[0], t[1]);
+    col.push(shade, shade, shade);
+  }
+  ind.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  if (both) ind.push(base, base + 2, base + 1, base, base + 3, base + 2);
+}
+function emitCross(arrs, x, y, z, tile) {          // two X'd double-sided quads
+  const a = 0.15, b = 0.85, UV = [[0,0],[1,0],[1,1],[0,1]];
+  pushQuad(arrs, [[x+a,y,z+a],[x+b,y,z+b],[x+b,y+1,z+b],[x+a,y+1,z+a]], tile, UV, 0.95, true);
+  pushQuad(arrs, [[x+a,y,z+b],[x+b,y,z+a],[x+b,y+1,z+a],[x+a,y+1,z+b]], tile, UV, 0.95, true);
+}
+function emitStair(arrs, x, y, z, def) {
+  for (const q of STAIR_QUADS[def.stair]) {
+    if (q.cull && !SEE_THROUGH.has(getBlock(x + q.n[0], y + q.n[1], z + q.n[2]))) continue;
+    pushQuad(arrs, q.p.map(c => [x + c[0], y + c[1], z + c[2]]),
+             def.t[q.t], q.uv, shadeOf(q.n));
+  }
 }
 
 // -------------------------------------------------------------- chunk mesh
@@ -466,13 +670,14 @@ function buildChunk(cx, cz) {
   const P = [], U = [], C = [], I = [];
   const wP = [], wU = [], wC = [], wI = [];
 
-  const pushFace = (arrs, f, x, y, z, tile, topY) => {
+  const pushFace = (arrs, f, x, y, z, tile, topY, rot) => {
     const [pos, uv, col, ind] = arrs;
     const base = pos.length / 3;
     for (let k = 0; k < 4; k++) {
       const c = f.c[k];
       pos.push(x + c[0], y + c[1] * (topY !== undefined && c[1] === 1 ? topY : 1), z + c[2]);
-      const t = tileUV(tile, f.uv[k][0], f.uv[k][1]);
+      const u0 = f.uv[k][0], v0 = f.uv[k][1];
+      const t = rot ? tileUV(tile, v0, 1 - u0) : tileUV(tile, u0, v0);
       uv.push(t[0], t[1]);
       col.push(f.s, f.s, f.s);
     }
@@ -485,6 +690,9 @@ function buildChunk(cx, cz) {
       for (let y = 0; y < WY; y++) {
         const b = world[wIdx(x, y, z)];
         if (b === B.AIR) continue;
+        const def = DEF[b];
+        if (def.cross) { emitCross([P, U, C, I], x, y, z, def.t[2]); continue; }
+        if (def.stair) { emitStair([P, U, C, I], x, y, z, def); continue; }
         for (let fi = 0; fi < 6; fi++) {
           const f = FACES[fi];
           const nb = getBlock(x + f.n[0], y + f.n[1], z + f.n[2]);
@@ -495,7 +703,7 @@ function buildChunk(cx, cz) {
             const surf = getBlock(x, y + 1, z) !== B.WATER ? 0.875 : 1;
             pushFace([wP, wU, wC, wI], f, x, y, z, tile, surf);
           } else {
-            pushFace([P, U, C, I], f, x, y, z, tile);
+            pushFace([P, U, C, I], f, x, y, z, tile, undefined, faceRot(b, fi));
           }
         }
       }
@@ -574,10 +782,10 @@ scene.add(highlight);
 const particles = [];
 const partGeom = new THREE.BoxGeometry(0.12, 0.12, 0.12);
 const partMats = {};
-function spawnBreakParticles(x, y, z, block) {
+function spawnBreakParticles(x, y, z, block, count = 10) {
   if (!partMats[block])
     partMats[block] = new THREE.MeshBasicMaterial({ color: avgColor[block] });
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < count; i++) {
     const m = new THREE.Mesh(partGeom, partMats[block]);
     m.position.set(x + 0.2 + Math.random() * 0.6,
                    y + 0.2 + Math.random() * 0.6,
@@ -604,19 +812,31 @@ function updateParticles(dt) {
 const handScene = new THREE.Scene();
 const handCam = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.05, 10);
 let handMesh = null;
-function buildBlockGeometry(block) {
+function buildItemGeometry(item) {
+  const def = DEF[item];
   const pos = [], uv = [], col = [], ind = [];
-  for (let fi = 0; fi < 6; fi++) {
-    const f = FACES[fi];
-    const base = pos.length / 3;
-    for (let k = 0; k < 4; k++) {
-      const c = f.c[k];
-      pos.push(c[0] - 0.5, c[1] - 0.5, c[2] - 0.5);
-      const t = tileUV(faceTile(block, fi), f.uv[k][0], f.uv[k][1]);
-      uv.push(t[0], t[1]);
-      col.push(f.s, f.s, f.s);
+  const arrs = [pos, uv, col, ind];
+  if (def.cross) {
+    emitCross(arrs, -0.5, -0.5, -0.5, def.t[2]);
+  } else if (def.stair) {
+    for (const q of STAIR_QUADS[def.stair])
+      pushQuad(arrs, q.p.map(c => [c[0] - 0.5, c[1] - 0.5, c[2] - 0.5]),
+               def.t[q.t], q.uv, shadeOf(q.n));
+  } else {
+    for (let fi = 0; fi < 6; fi++) {
+      const f = FACES[fi];
+      const base = pos.length / 3;
+      for (let k = 0; k < 4; k++) {
+        const c = f.c[k];
+        pos.push(c[0] - 0.5, c[1] - 0.5, c[2] - 0.5);
+        const u0 = f.uv[k][0], v0 = f.uv[k][1];
+        const t = faceRot(item, fi) ? tileUV(faceTile(item, fi), v0, 1 - u0)
+                                    : tileUV(faceTile(item, fi), u0, v0);
+        uv.push(t[0], t[1]);
+        col.push(f.s, f.s, f.s);
+      }
+      ind.push(base, base + 1, base + 2, base, base + 2, base + 3);
     }
-    ind.push(base, base + 1, base + 2, base, base + 2, base + 3);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -627,7 +847,7 @@ function buildBlockGeometry(block) {
 }
 function refreshHand() {
   if (handMesh) { handScene.remove(handMesh); handMesh.geometry.dispose(); }
-  handMesh = new THREE.Mesh(buildBlockGeometry(HOTBAR[slot]),
+  handMesh = new THREE.Mesh(buildItemGeometry(HOTBAR[slot]),
     new THREE.MeshBasicMaterial({ map: atlasTex, vertexColors: true, alphaTest: 0.5 }));
   handMesh.scale.setScalar(0.55);
   handMesh.rotation.set(0.15, -0.85, 0);
@@ -650,6 +870,35 @@ function respawn() {
   player.vel.set(0, 0, 0);
 }
 
+// collision boxes within a cell: full cube for most blocks, two boxes for stairs
+const FULL_BOX = [[0, 0, 0, 1, 1, 1]];
+const STAIR_BOXES = {
+  e: [[0, 0, 0, 1, 0.5, 1], [0.5, 0.5, 0, 1, 1, 1]],
+  w: [[0, 0, 0, 1, 0.5, 1], [0, 0.5, 0, 0.5, 1, 1]],
+  s: [[0, 0, 0, 1, 0.5, 1], [0, 0.5, 0.5, 1, 1, 1]],
+  n: [[0, 0, 0, 1, 0.5, 1], [0, 0.5, 0, 1, 1, 0.5]],
+};
+function boxesAt(x, y, z) {
+  if (x < 0 || x >= WX || y < 0 || y >= WY || z < 0 || z >= WZ) return FULL_BOX;
+  const d = DEF[world[wIdx(x, y, z)]];
+  return d && d.stair ? STAIR_BOXES[d.stair] : FULL_BOX;
+}
+function boxCollides(px, py, pz) {    // would the player AABB overlap anything here?
+  const w = player.W, h = player.H;
+  const minX = Math.floor(px - w), maxX = Math.floor(px + w);
+  const minY = Math.floor(py),     maxY = Math.floor(py + h - 0.001);
+  const minZ = Math.floor(pz - w), maxZ = Math.floor(pz + w);
+  for (let x = minX; x <= maxX; x++)
+    for (let y = minY; y <= maxY; y++)
+      for (let z = minZ; z <= maxZ; z++) {
+        if (!isSolidAt(x, y, z)) continue;
+        for (const bx of boxesAt(x, y, z))
+          if (px - w < x + bx[3] && px + w > x + bx[0] &&
+              py < y + bx[4] && py + h > y + bx[1] &&
+              pz - w < z + bx[5] && pz + w > z + bx[2]) return true;
+      }
+  return false;
+}
 function collideAxis(axis, amount) {
   player.pos.setComponent(axis, player.pos.getComponent(axis) + amount);
   const w = player.W, h = player.H;
@@ -660,14 +909,30 @@ function collideAxis(axis, amount) {
     for (let y = minY; y <= maxY; y++)
       for (let z = minZ; z <= maxZ; z++) {
         if (!isSolidAt(x, y, z)) continue;
-        if (axis === 0) player.pos.x = amount > 0 ? x - w - 0.0001 : x + 1 + w + 0.0001;
-        if (axis === 1) {
-          if (amount > 0) player.pos.y = y - h - 0.0001;
-          else { player.pos.y = y + 1; player.onGround = true; }
+        for (const bx of boxesAt(x, y, z)) {
+          const X0 = x + bx[0], Y0 = y + bx[1], Z0 = z + bx[2];
+          const X1 = x + bx[3], Y1 = y + bx[4], Z1 = z + bx[5];
+          if (!(player.pos.x - w < X1 && player.pos.x + w > X0 &&
+                player.pos.y < Y1 && player.pos.y + h > Y0 &&
+                player.pos.z - w < Z1 && player.pos.z + w > Z0)) continue;
+          // walk up half-block steps (stairs) without jumping
+          if (axis !== 1 && player.onGround && !player.flying) {
+            const rise = Y1 - player.pos.y;
+            if (rise > 0 && rise <= 0.55 &&
+                !boxCollides(player.pos.x, Y1 + 0.001, player.pos.z)) {
+              player.pos.y = Y1 + 0.001;
+              return;
+            }
+          }
+          if (axis === 0) player.pos.x = amount > 0 ? X0 - w - 0.0001 : X1 + w + 0.0001;
+          if (axis === 1) {
+            if (amount > 0) player.pos.y = Y0 - h - 0.0001;
+            else { player.pos.y = Y1; player.onGround = true; }
+          }
+          if (axis === 2) player.pos.z = amount > 0 ? Z0 - w - 0.0001 : Z1 + w + 0.0001;
+          player.vel.setComponent(axis, 0);
+          return;
         }
-        if (axis === 2) player.pos.z = amount > 0 ? z - w - 0.0001 : z + 1 + w + 0.0001;
-        player.vel.setComponent(axis, 0);
-        return;
       }
 }
 
@@ -686,6 +951,8 @@ const keys = {};
 let slot = 0, locked = false;
 let lastW = 0, lastSpace = 0;
 let walkTime = 0;
+// held left button: swing the arm and keep breaking whatever is targeted
+let mineHeld = false, mineSwing = 0, mineCooldown = 0;
 
 const menu = document.getElementById('menu');
 function lock() { canvas.requestPointerLock(); }
@@ -693,7 +960,9 @@ menu.addEventListener('click', lock);
 document.getElementById('playBtn').addEventListener('click', e => { e.stopPropagation(); lock(); });
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === canvas;
-  menu.style.display = locked ? 'none' : 'flex';
+  menu.style.display = (locked || invOpen) ? 'none' : 'flex';
+  if (locked) { playBtn.textContent = 'Resume'; setStatus(''); }
+  else mineHeld = false;
 });
 document.addEventListener('mousemove', e => {
   if (!locked) return;
@@ -702,6 +971,16 @@ document.addEventListener('mousemove', e => {
   player.pitch = Math.max(-Math.PI / 2 + 0.001, Math.min(Math.PI / 2 - 0.001, player.pitch));
 });
 document.addEventListener('keydown', e => {
+  if (e.code === 'KeyE') {
+    if (invOpen) closeInv();
+    else if (locked) openInv();
+    e.preventDefault();
+    return;
+  }
+  if (invOpen) {
+    if (e.code === 'Escape') closeInv();
+    return;                              // game keys pause while browsing
+  }
   if (e.code === 'KeyW') {
     const now = performance.now();
     if (now - lastW < 260 && !keys['KeyW']) player.sprinting = true;
@@ -733,34 +1012,85 @@ document.addEventListener('wheel', e => {
   selectSlot((slot + (e.deltaY > 0 ? 1 : -1) + 9) % 9);
 });
 document.addEventListener('contextmenu', e => e.preventDefault());
+// logs align to the clicked face; stairs turn to face away from the player
+function resolvePlacement(item, hit) {
+  const def = DEF[item];
+  if (item === B.LOG) {
+    if (hit.nx !== 0) return B.LOG_X;
+    if (hit.nz !== 0) return B.LOG_Z;
+    return B.LOG;
+  }
+  if (def.stair) {
+    const fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
+    const dir = Math.abs(fx) > Math.abs(fz) ? (fx > 0 ? 'e' : 'w') : (fz > 0 ? 's' : 'n');
+    return def.family[dir];
+  }
+  return item;
+}
+
+function breakBlock(x, y, z) {
+  const b = world[wIdx(x, y, z)];
+  if (b === B.AIR || b === B.BEDROCK) return;
+  spawnBreakParticles(x, y, z, b);
+  setBlock(x, y, z, B.AIR);
+  const above = getBlock(x, y + 1, z);                     // flowers pop off
+  if (DEF[above] && DEF[above].cross) {
+    spawnBreakParticles(x, y + 1, z, above);
+    setBlock(x, y + 1, z, B.AIR);
+  }
+}
+
 document.addEventListener('mousedown', e => {
   if (!locked) return;
+  if (e.button === 0) { mineHeld = true; mineSwing = 0; }  // hold to keep breaking
   const hit = raycast();
   if (!hit) return;
-  if (e.button === 0) {                                    // break
-    const b = world[wIdx(hit.x, hit.y, hit.z)];
-    if (b === B.BEDROCK) return;
-    spawnBreakParticles(hit.x, hit.y, hit.z, b);
-    setBlock(hit.x, hit.y, hit.z, B.AIR);
+  if (e.button === 0) {                                    // break instantly
+    if (handMesh) handMesh.rotation.x = 0.5;
+    breakBlock(hit.x, hit.y, hit.z);
+    mineCooldown = 0.25;                                   // repeat delay while held
   } else if (e.button === 1) {                             // pick block
     const b = world[wIdx(hit.x, hit.y, hit.z)];
-    const i = HOTBAR.indexOf(b);
+    const item = DEF[b].item !== undefined ? DEF[b].item : b;
+    const i = HOTBAR.indexOf(item);
     if (i >= 0) selectSlot(i);
+    else {                                                 // pull it into the bar
+      HOTBAR[slot] = item;
+      updateHotbarIcon(slot);
+      refreshHand();
+      toast(DEF[item].name);
+    }
     e.preventDefault();
   } else if (e.button === 2) {                             // place
-    const px = hit.x + hit.nx, py = hit.y + hit.ny, pz = hit.z + hit.nz;
+    const item = HOTBAR[slot];
+    const hitDef = DEF[world[wIdx(hit.x, hit.y, hit.z)]];
+    let px, py, pz;
+    if (hitDef.cross && !DEF[item].cross) {                // building over a flower
+      px = hit.x; py = hit.y; pz = hit.z;
+    } else {
+      px = hit.x + hit.nx; py = hit.y + hit.ny; pz = hit.z + hit.nz;
+    }
     const cur = getBlock(px, py, pz);
-    if (cur !== B.AIR && cur !== B.WATER) return;
-    // don't place inside the player
-    const w = player.W;
-    const overlap =
-      px + 1 > player.pos.x - w && px < player.pos.x + w &&
-      pz + 1 > player.pos.z - w && pz < player.pos.z + w &&
-      py + 1 > player.pos.y     && py < player.pos.y + player.H;
-    if (overlap) return;
-    setBlock(px, py, pz, HOTBAR[slot]);
+    const curDef = DEF[cur];
+    if (cur !== B.AIR && cur !== B.WATER && !(curDef && curDef.cross)) return;
+    const block = resolvePlacement(item, hit);
+    if (DEF[block].cross) {                                // flowers need solid ground
+      if (cur !== B.AIR || !isSolidAt(px, py - 1, pz)) return;
+    } else {
+      // don't place inside the player
+      const w = player.W;
+      const overlap =
+        px + 1 > player.pos.x - w && px < player.pos.x + w &&
+        pz + 1 > player.pos.z - w && pz < player.pos.z + w &&
+        py + 1 > player.pos.y     && py < player.pos.y + player.H;
+      if (overlap) return;
+    }
+    setBlock(px, py, pz, block);
     if (handMesh) handMesh.rotation.x = 0.5;               // little swing
   }
+});
+document.addEventListener('mouseup', e => {
+  if (e.button === 0) mineHeld = false;
 });
 
 // ---------------------------------------------------------------- raycast
@@ -791,15 +1121,28 @@ function raycast() {
 
 // -------------------------------------------------------------------- HUD
 const hotbarEl = document.getElementById('hotbar');
-const slotIcons = [];
-function drawIcon(cv, block) {
+const slotIcons = [], slotCvs = [];
+function drawIcon(cv, item) {
   const g = cv.getContext('2d');
+  g.setTransform(1, 0, 0, 1, 0, 0);
   g.imageSmoothingEnabled = false;
   g.clearRect(0, 0, 48, 48);
+  const def = DEF[item];
+  const src = t => [(t % AW) * TS, Math.floor(t / AW) * TS];
+  if (def.cross) {                                        // flat sprite
+    const [sx, sy] = src(def.t[2]);
+    g.drawImage(atlas, sx, sy, 16, 16, 0, 0, 48, 48);
+    return;
+  }
+  if (def.stair) {                                        // step silhouette
+    const [sx, sy] = src(def.t[2]);
+    g.drawImage(atlas, sx, sy, 16, 16, 2, 2, 44, 44);
+    g.clearRect(0, 0, 24, 24);
+    return;
+  }
   const a = 13, b2 = 6.5, L = 15;
   const P0 = [24, 6], P1 = [24 + a, 6 + b2], P2 = [24, 6 + 2 * b2], P3 = [24 - a, 6 + b2];
-  const tiles = DEF[block].t;
-  const src = t => [(t % AW) * TS, Math.floor(t / AW) * TS];
+  const tiles = def.t;
   const face = (tile, o, xAxis, yAxis, dark) => {
     const [sx, sy] = src(tile);
     g.setTransform(xAxis[0] / 16, xAxis[1] / 16, yAxis[0] / 16, yAxis[1] / 16, o[0], o[1]);
@@ -822,8 +1165,66 @@ function buildHotbar() {
     drawIcon(cv, HOTBAR[i]);
     s.appendChild(cv); s.appendChild(n);
     hotbarEl.appendChild(s);
-    slotIcons.push(s);
+    slotIcons.push(s); slotCvs.push(cv);
   }
+}
+function updateHotbarIcon(i) {
+  drawIcon(slotCvs[i], HOTBAR[i]);
+  if (invHotCvs[i]) drawIcon(invHotCvs[i], HOTBAR[i]);
+}
+
+// -------------------------------------------------------------- inventory
+const invEl = document.getElementById('inv');
+const invGrid = document.getElementById('invGrid');
+const invHotbarEl = document.getElementById('invHotbar');
+const invHotSlots = [], invHotCvs = [];
+let invOpen = false;
+function buildInventory() {
+  for (const item of INV_ITEMS) {
+    const d = document.createElement('div');
+    d.className = 'islot';
+    d.title = DEF[item].name;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 48;
+    drawIcon(cv, item);
+    d.appendChild(cv);
+    d.addEventListener('click', () => {
+      HOTBAR[slot] = item;
+      updateHotbarIcon(slot);
+      refreshHand();
+      toast(DEF[item].name + ' → slot ' + (slot + 1));
+    });
+    invGrid.appendChild(d);
+  }
+  for (let i = 0; i < 9; i++) {
+    const d = document.createElement('div');
+    d.className = 'islot' + (i === slot ? ' sel' : '');
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 48;
+    drawIcon(cv, HOTBAR[i]);
+    d.appendChild(cv);
+    d.addEventListener('click', () => selectSlot(i));
+    invHotbarEl.appendChild(d);
+    invHotSlots.push(d); invHotCvs.push(cv);
+  }
+}
+function openInv() {
+  invOpen = true;
+  invEl.hidden = false;
+  for (const k in keys) keys[k] = false;   // don't keep walking behind the panel
+  player.sprinting = false;
+  mineHeld = false;
+  if (locked) document.exitPointerLock();
+}
+function closeInv() {
+  invOpen = false;
+  invEl.hidden = true;
+  try {
+    const p = canvas.requestPointerLock();
+    if (p && p.catch) p.catch(() => {});
+  } catch (err) {}
+  // if the browser refused to re-lock, fall back to the pause menu
+  setTimeout(() => { if (!locked && !invOpen) menu.style.display = 'flex'; }, 700);
 }
 let toastTimer = null;
 const toastEl = document.getElementById('toast');
@@ -835,11 +1236,147 @@ function toast(msg) {
 }
 function selectSlot(i) {
   slotIcons[slot].classList.remove('sel');
+  if (invHotSlots[slot]) invHotSlots[slot].classList.remove('sel');
   slot = i;
   slotIcons[slot].classList.add('sel');
+  if (invHotSlots[slot]) invHotSlots[slot].classList.add('sel');
   toast(DEF[HOTBAR[slot]].name);
   refreshHand();
 }
+
+// ------------------------------------------------------- save / load / new
+// worlds compress well with run-length encoding (raw is 4 MB — over the
+// localStorage quota; RLE brings it to roughly 1 MB)
+const SAVE_KEY = 'blockcraft.save.v1';
+function rleEncode(arr) {
+  const out = [];
+  let i = 0;
+  while (i < arr.length) {
+    const v = arr[i];
+    let n = 1;
+    while (n < 255 && i + n < arr.length && arr[i + n] === v) n++;
+    out.push(n, v);
+    i += n;
+  }
+  return Uint8Array.from(out);
+}
+function rleDecode(bytes, len) {
+  const out = new Uint8Array(len);
+  let o = 0;
+  for (let i = 0; i + 1 < bytes.length; i += 2) {
+    out.fill(bytes[i + 1], o, o + bytes[i]);
+    o += bytes[i];
+  }
+  if (o !== len) throw new Error('corrupt save');
+  return out;
+}
+function bytesToB64(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function b64ToBytes(str) {
+  const s = atob(str);
+  const b = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);
+  return b;
+}
+
+function saveWorld() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      v: 1, wx: WX, wy: WY, wz: WZ, seed: SEED,
+      world: bytesToB64(rleEncode(world)),
+      player: { x: player.pos.x, y: player.pos.y, z: player.pos.z,
+                yaw: player.yaw, pitch: player.pitch, flying: player.flying },
+      hotbar: HOTBAR.slice(), slot,
+    }));
+    return true;
+  } catch (err) { return false; }
+}
+function hasSave() {
+  try { return localStorage.getItem(SAVE_KEY) !== null; } catch (err) { return false; }
+}
+function loadWorld() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (data.v !== 1 || data.wx !== WX || data.wy !== WY || data.wz !== WZ) return false;
+    world.set(rleDecode(b64ToBytes(data.world), world.length));
+    SEED = data.seed | 0;
+    for (let i = 0; i < 9; i++) {
+      if (DEF[data.hotbar[i]]) HOTBAR[i] = data.hotbar[i];
+      updateHotbarIcon(i);
+    }
+    player.pos.set(data.player.x, data.player.y, data.player.z);
+    player.vel.set(0, 0, 0);
+    player.yaw = data.player.yaw; player.pitch = data.player.pitch;
+    player.flying = !!data.player.flying;
+    selectSlot(Math.min(8, Math.max(0, data.slot | 0)));
+    buildAllChunks();
+    return true;
+  } catch (err) { return false; }
+}
+function newWorld() {
+  SEED = (Math.random() * 1e9) | 0;
+  world.fill(B.AIR);
+  generateWorld();
+  buildAllChunks();
+  player.pos.set(WX / 2 + 0.5, 0, WZ / 2 + 0.5);
+  player.vel.set(0, 0, 0);
+  player.flying = false;
+  respawn();
+}
+
+// ------------------------------------------------------------- main menu
+const menuStatus = document.getElementById('menuStatus');
+const playBtn = document.getElementById('playBtn');
+const saveBtn = document.getElementById('saveBtn');
+const loadBtn = document.getElementById('loadBtn');
+const newBtn  = document.getElementById('newBtn');
+function setStatus(msg) { menuStatus.textContent = msg; }
+function syncLoadBtn() { loadBtn.disabled = !hasSave(); }
+saveBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  setStatus(saveWorld() ? 'World saved ✓' : 'Save failed — browser storage unavailable or full');
+  syncLoadBtn();
+});
+loadBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  if (loadBtn.disabled) return;
+  setStatus('Loading…');
+  setTimeout(() => {
+    setStatus(loadWorld() ? 'World loaded ✓' : 'Could not load — save is missing or incompatible');
+  }, 30);
+});
+let newArm = null;
+newBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  if (newArm === null) {                       // two-click confirm
+    newBtn.textContent = 'Erase & generate?';
+    setStatus('Click again to confirm — unsaved progress will be lost');
+    newArm = setTimeout(() => { newBtn.textContent = 'New World'; newArm = null; setStatus(''); }, 3500);
+  } else {
+    clearTimeout(newArm); newArm = null;
+    newBtn.textContent = 'New World';
+    setStatus('Generating…');
+    setTimeout(() => { newWorld(); setStatus('New world ready ✓'); }, 30);
+  }
+});
+
+// autosave when the tab closes or reloads (the world auto-loads on startup,
+// so an untouched session just re-saves the same world — never destructive)
+let autosaved = false;
+function autosave() {
+  if (autosaved) return;
+  autosaved = true;
+  saveWorld();
+  setTimeout(() => { autosaved = false; }, 1000);  // in case the page survives (bfcache)
+}
+window.addEventListener('pagehide', autosave);
+window.addEventListener('beforeunload', autosave);
 
 // ------------------------------------------------------------------- loop
 const debugEl = document.getElementById('debug');
@@ -909,15 +1446,28 @@ function step(dt) {
     highlight.position.set(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5);
   } else highlight.visible = false;
 
+  // -------- held left button: swing and keep breaking (instant per block)
+  if (mineHeld) {
+    mineSwing += dt * 13;
+    mineCooldown -= dt;
+    if (hit && mineCooldown <= 0) {
+      breakBlock(hit.x, hit.y, hit.z);
+      mineCooldown = 0.25;
+    }
+  } else mineCooldown = 0;
+
   // -------- sky
   sun.position.copy(camera.position).addScaledVector(sunDir, 420);
   sun.lookAt(camera.position);
   cloudTex.offset.x += dt * 0.0016;
 
-  // -------- held block idle bob / swing recovery
+  // -------- held block idle bob / hitting swing / swing recovery
   if (handMesh) {
     handMesh.position.set(0.92, -0.78 + Math.sin(walkTime) * 0.028, -1.45);
-    handMesh.rotation.x += (0.15 - handMesh.rotation.x) * Math.min(1, 10 * dt);
+    if (mineHeld && hit)
+      handMesh.rotation.x = 0.15 + Math.abs(Math.sin(mineSwing)) * 0.45;
+    else
+      handMesh.rotation.x += (0.15 - handMesh.rotation.x) * Math.min(1, 10 * dt);
   }
 
   waterOv.style.display = eyeInWater() ? 'block' : 'none';
@@ -958,9 +1508,15 @@ window.addEventListener('resize', () => {
 
 // -------------------------------------------------------------------- go!
 buildHotbar();
-buildAllChunks();
+buildInventory();
+const resumed = hasSave() && loadWorld();   // continue where you left off
+if (!resumed) {
+  buildAllChunks();
+  respawn();
+}
 refreshHand();
-respawn();
+syncLoadBtn();
+if (resumed) setStatus('Saved world loaded — continuing where you left off');
 requestAnimationFrame(frame);
 </script>
 </body>
