@@ -262,7 +262,7 @@ function updateBall(dt) {
 
   // Cap speed
   const spd = Math.hypot(ball.vx, ball.vy);
-  if (spd > 20) { ball.vx = ball.vx / spd * 20; ball.vy = ball.vy / spd * 20; }
+  if (spd > 30) { ball.vx = ball.vx / spd * 30; ball.vy = ball.vy / spd * 30; }
 
   ball.x += ball.vx * fps60;
   ball.y += ball.vy * fps60;

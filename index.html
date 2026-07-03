@@ -363,6 +363,42 @@
       z-index: 2;
     }
 
+    .expand-btn {
+      margin-top: 1.5rem;
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.4);
+      padding: 0.5rem;
+      cursor: pointer;
+      transition: all 0.18s;
+      font-size: 1.5rem;
+      display: flex;
+      align-items: center;
+    }
+    .expand-btn:hover {
+      color: rgba(255,255,255,0.6);
+    }
+
+    .expand-arrow {
+      display: inline-block;
+      transition: transform 0.18s;
+    }
+    .expand-arrow.open {
+      transform: rotate(180deg);
+    }
+
+    .extra-games {
+      display: none;
+      width: 100%;
+      max-width: 900px;
+    }
+    .extra-games.open {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 160px));
+      gap: 1.2rem;
+      justify-content: center;
+    }
+
   </style>
 </head>
 <body>
@@ -391,7 +427,7 @@
     <div class="ground-main">
 
       <!-- ── Motor Skills & Coordination ── -->
-      <p class="section-label">Motor Skills &amp; Coordination</p>
+      <p class="section-label" id="motorLabel">Motor Skills &amp; Coordination</p>
       <div class="grid">
 
         <a class="card card-tag" href="volley.html" style="background:linear-gradient(160deg,#1a6aaa,#0e3d72);box-shadow:0 6px 20px rgba(30,120,200,0.45),0 0 0 3px #f5c518;">
@@ -430,7 +466,26 @@
           <span class="badge">2 Players</span>
         </a>
 
+      </div>
 
+      <button class="expand-btn" onclick="toggleMotorSkills()">
+        <span class="expand-arrow" id="motorArrow">▼</span>
+      </button>
+
+      <div class="extra-games" id="motorExtra">
+        <a class="card card-tag" href="blockcraft.html" style="background:linear-gradient(160deg,#16a085,#0d5f4f);box-shadow:0 6px 20px rgba(22,160,133,0.45)">
+          <img class="icon" src="icons/block.svg" alt="Building blocks">
+          <div class="card-title">BlockCraft</div>
+          <span class="skill-tag">Spatial Reasoning</span>
+          <span class="badge">1 Player</span>
+        </a>
+
+        <a class="card card-tag" href="pong.html" style="background:linear-gradient(160deg,#2c3e50,#1a252f);box-shadow:0 6px 20px rgba(44,62,80,0.45)">
+          <img class="icon" src="icons/pong.svg" alt="Pong paddle">
+          <div class="card-title">Pong</div>
+          <span class="skill-tag">Timing &amp; Reflexes</span>
+          <span class="badge">2 Players</span>
+        </a>
       </div>
 
       <!-- ── Strategy & Critical Thinking ── -->
@@ -499,6 +554,15 @@
   </div>
 
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "f19965aca353444c9351b9a951d995e7"}'></script><!-- End Cloudflare Web Analytics -->
+
+<script>
+  function toggleMotorSkills() {
+    const extraGames = document.getElementById('motorExtra');
+    const arrow = document.getElementById('motorArrow');
+    extraGames.classList.toggle('open');
+    arrow.classList.toggle('open');
+  }
+</script>
 
 <footer style="
   background: rgba(0,0,0,0.55);
