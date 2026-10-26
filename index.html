@@ -709,7 +709,7 @@
 (() => {
   const SERVER = new URLSearchParams(location.search).get('server') || 'wss://frontier-server.onrender.com';
   const $ = id => document.getElementById(id);
-  let ws = null, me = null, room = null, wantRoom = null, retry = 1000, retryT = null, active = false, refreshT = null;
+  let ws = null, me = null, room = null, wantRoom = null, retry = 1000, retryT = null, active = false, refreshT = null, helloT = null;
   const muted = new Set();
   try { $('crName').value = localStorage.getItem('edu-chat-name') || ''; } catch (e) { }
 
@@ -724,7 +724,13 @@
     clearTimeout(retryT);
     status('Connecting… the chat server can take up to a minute to wake up.');
     try { ws = new WebSocket(SERVER); } catch (e) { status("Couldn't reach the chat server."); return; }
-    ws.onopen = () => { retry = 1000; status('Connected'); send({ t: 'c_hello', name: $('crName').value.trim(), over13: true }); };
+    ws.onopen = () => {
+      retry = 1000; status('Connected');
+      send({ t: 'c_hello', name: $('crName').value.trim(), over13: true });
+      // An older server without chat never answers
+      clearTimeout(helloT);
+      helloT = setTimeout(() => { stop(); show('crJoin'); err('crJoinErr', "The chatroom isn't available right now. Try again later."); status(''); }, 10000);
+    };
     ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (x) { return; } onMsg(m); };
     ws.onclose = () => {
       ws = null;
@@ -737,6 +743,7 @@
   function stop() { active = false; clearInterval(refreshT); if (ws) { try { ws.close(); } catch (e) { } } ws = null; }
 
   function onMsg(m) {
+    if (m.t && m.t.startsWith('c_')) clearTimeout(helloT);
     switch (m.t) {
       case 'c_welcome':
         me = { name: m.name };
