@@ -1,0 +1,16 @@
+{
+  "name": "frontier-server",
+  "version": "1.0.0",
+  "description": "Multiplayer server for Frontier on EduArcade",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ws": "8.18.0"
+  }
+}

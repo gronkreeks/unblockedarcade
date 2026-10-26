@@ -240,6 +240,29 @@
       #topbar { top: 8px; }
       #banner { top: auto; bottom: 190px; font-size: 0.8rem; }
     }
+    /* Multiplayer lobby */
+    .mpStatus { font-size: 0.75rem; font-weight: 700; color: rgba(255,255,255,0.6); margin-bottom: 0.9rem; display: flex; align-items: center; gap: 0.5rem; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: #7f8c8d; display: inline-block; }
+    .dot.on { background: #2ecc71; box-shadow: 0 0 8px #2ecc71; }
+    .dot.wait { background: #f5c518; }
+    .dot.off { background: #e74c3c; }
+    .lrow { display: flex; align-items: center; gap: 0.8rem; padding: 0.65rem 0.9rem; border-radius: 10px; background: rgba(0,0,0,0.25); margin-bottom: 0.5rem; font-size: 0.82rem; font-weight: 700; }
+    .lrow .pc { margin-left: auto; color: rgba(255,255,255,0.6); white-space: nowrap; }
+    .mpbtn { font-family: inherit; font-size: 0.72rem; font-weight: 900; letter-spacing: 1px; color: #fff; border: none; border-radius: 20px; padding: 0.35rem 1rem; cursor: pointer; background: #27ae60; }
+    .mpbtn.alt { background: rgba(255,255,255,0.14); }
+    .mpbtn.red { background: rgba(231,76,60,0.75); }
+    .mpbtn:disabled { opacity: 0.4; cursor: default; }
+    .mpgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-top: 1rem; }
+    .mpbox { background: rgba(0,0,0,0.2); border-radius: 12px; padding: 0.8rem 0.9rem; }
+    .mpbox .fl { margin-bottom: 0.5rem; }
+    .codeIn { width: 100%; padding: 0.5rem 0.7rem; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.25); color: #fff; font-family: inherit; font-size: 1rem; font-weight: 900; letter-spacing: 6px; text-transform: uppercase; outline: none; margin-bottom: 0.5rem; }
+    .mpErr { color: #ff8a7a; font-size: 0.78rem; font-weight: 700; min-height: 1.1rem; margin-top: 0.6rem; }
+    .roomCode { font-size: 2rem; font-weight: 900; letter-spacing: 10px; color: #f5c518; }
+    .plist { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.6rem 0 0.9rem; }
+    .plist span { background: rgba(255,255,255,0.1); padding: 0.25rem 0.7rem; border-radius: 20px; font-size: 0.78rem; font-weight: 700; }
+    .mpsel { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.6rem; margin-bottom: 0.9rem; }
+    .mpsel select { width: 100%; padding: 0.4rem; border-radius: 8px; background: #16294d; color: #fff; border: 1px solid rgba(255,255,255,0.2); font-family: inherit; font-weight: 700; }
+    @media (max-width: 760px) { .mpgrid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -294,7 +317,7 @@
 
   <div class="tabs">
     <button class="tab on" data-tab="sp">Singleplayer</button>
-    <button class="tab" data-tab="mp">Multiplayer<span class="soon">SOON</span></button>
+    <button class="tab" data-tab="mp">Multiplayer</button>
   </div>
 
   <div class="tabbody" id="tab-sp">
@@ -354,20 +377,38 @@
   </div>
 
   <div class="tabbody hidden" id="tab-mp">
-    <div class="lobby" aria-hidden="true">
-      <div class="lrow">Public Lobby &middot; Continents &middot; Free for All<span class="pc">&ndash; / 40</span><span class="jn">JOIN</span></div>
-      <div class="lrow">Public Lobby &middot; Pangaea &middot; Teams<span class="pc">&ndash; / 30</span><span class="jn">JOIN</span></div>
-      <div class="lrow">Public Lobby &middot; Archipelago &middot; Free for All<span class="pc">&ndash; / 50</span><span class="jn">JOIN</span></div>
-      <div class="grid2" style="margin-top:1rem;">
-        <div class="lrow">Create private lobby</div>
-        <div class="lrow">Join with code</div>
+    <div class="mpStatus"><span class="dot" id="mpDot"></span><span id="mpStatus">Not connected</span></div>
+
+    <div id="mpLobbyView">
+      <span class="fl">Public lobbies</span>
+      <div id="pubList"><div class="lrow" style="color:rgba(255,255,255,.5)">Connecting…</div></div>
+      <div class="mpgrid">
+        <div class="mpbox">
+          <span class="fl">Play with friends</span>
+          <p style="font-size:.78rem;color:rgba(255,255,255,.65);line-height:1.5;margin-bottom:.6rem">Create a private lobby and share its 4-letter code.</p>
+          <button class="mpbtn" id="mpCreate">CREATE PRIVATE LOBBY</button>
+        </div>
+        <div class="mpbox">
+          <span class="fl">Join with code</span>
+          <input class="codeIn" id="codeIn" maxlength="4" placeholder="ABCD" autocomplete="off">
+          <button class="mpbtn" id="mpJoin">JOIN</button>
+        </div>
       </div>
     </div>
-    <div class="soonOv">
-      <span class="chip">IN DEVELOPMENT</span>
-      <div class="big">COMING SOON</div>
-      <p>Online multiplayer is on the way: public lobbies, private games with friends, and team modes. For now, you can play singleplayer against AI nations.</p>
-      <button class="gbtn sm" id="toSp">PLAY SINGLEPLAYER</button>
+
+    <div id="mpRoomView" class="hidden">
+      <div id="roomHead"></div>
+      <div class="plist" id="roomPlayers"></div>
+      <div id="roomCfg"></div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <button class="mpbtn" id="roomStart">START GAME</button>
+        <button class="mpbtn alt" id="roomLeave">LEAVE</button>
+      </div>
+    </div>
+    <div class="mpErr" id="mpErr"></div>
+    <div class="lbox" style="margin-top:.6rem">
+      <span class="lbox-lbl">Multiplayer</span>
+      <p>Your nation's name comes from the Singleplayer tab. The server goes to sleep when nobody is playing, so the first connection of the day can take up to a minute.</p>
     </div>
   </div>
 </div>
@@ -383,91 +424,16 @@
   <a href="index.html">&#8592; Back to Home</a>
 </div>
 
+<script src="frontier-core.js"></script>
 <script>
 'use strict';
-// Frontier: an OpenFront-style territory game.
-// Troop growth, troop cap, attack loss/speed and building costs follow OpenFront's
-// open-source engine (packages/engine & engine-lib), scaled for a smaller map.
-
-// ════════════════ Utilities ════════════════
+// Frontier client: renders the game and sends the player's actions. The rules live in
+// frontier-core.js. Singleplayer runs them here; multiplayer receives them from the server.
+const { fmt, esc, within, BUILD, BUILD_ORDER, NUKE, TERR, DEFENSE_RANGE, SAM_RANGE, TICK_MS, IMMUNITY_TICKS } = FrontierCore;
+const SERVER_URL = new URLSearchParams(location.search).get('server') || 'wss://frontier-server.onrender.com';
 const $ = id => document.getElementById(id);
-function mulberry32(a) {
-  return function () {
-    a |= 0; a = a + 0x6D2B79F5 | 0;
-    let t = Math.imul(a ^ a >>> 15, 1 | a);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-const rand = Math.random;
-const within = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-function fmt(n) {
-  n = Math.max(0, Math.floor(n));
-  if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'M';
-  if (n >= 1e3) return (n / 1e3).toFixed(n >= 1e4 ? 0 : 1).replace(/\.0$/, '') + 'K';
-  return '' + n;
-}
-function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
-function rgb(c, a) { return a === undefined ? `rgb(${c[0]},${c[1]},${c[2]})` : `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
-function hsl2rgb(h, s, l) {
-  s /= 100; l /= 100;
-  const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
-  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
-  return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
-}
-function makeNoise(rng) {
-  const g = new Float32Array(65536);
-  for (let i = 0; i < 65536; i++) g[i] = rng();
-  return (x, y) => {
-    const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
-    const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
-    const x0 = xi & 255, x1 = (xi + 1) & 255, y0 = (yi & 255) << 8, y1 = ((yi + 1) & 255) << 8;
-    const a = g[x0 + y0], b = g[x1 + y0], c = g[x0 + y1], d = g[x1 + y1];
-    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-  };
-}
-function fbm(n, x, y, oct) {
-  let s = 0, a = 1, t = 0, f = 1;
-  for (let i = 0; i < oct; i++) { s += n(x * f + i * 17.3, y * f + i * 9.1) * a; t += a; a *= 0.5; f *= 2.03; }
-  return s / t;
-}
+const rgb = (c, a) => a === undefined ? `rgb(${c[0]},${c[1]},${c[2]})` : `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
-// ════════════════ Rules ════════════════
-const TICK_MS = 100;
-const SPAWN_TICKS = 100;          // 10 s to pick a spawn
-const IMMUNITY_TICKS = 300;       // 30 s of no player-vs-player attacks
-const ALLIANCE_TICKS = 3000;      // alliances last 5 minutes
-const WIN_SHARE = 0.8;
-const CITY_TROOPS = 250000;
-// OpenFront maps have roughly 10x more land tiles. Each tile here stands in for several
-// OpenFront tiles so troop density, and so the attacker/defender balance, stays similar.
-const TILE_SCALE = 4;
-const FRONT_SLOWDOWN = Math.sqrt(TILE_SCALE);   // fronts advance in tiles, so scale by the side length
-const DEFENSE_RANGE = 10;
-const SAM_RANGE = 24;
-const MAX_BOATS = 3;
-const NUKE = { atom: { inner: 7, outer: 12 }, hydrogen: { inner: 16, outer: 26 } };
-// terrainAttackBase() in OpenFront
-const TERR = [null, { mag: 80, cost: 16.5, name: 'Plains' }, { mag: 100, cost: 20, name: 'Highland' }, { mag: 120, cost: 25, name: 'Mountains' }];
-
-const DIFF = {
-  easy:       { start: 12500, grow: 0.9,  thr: 0.65, ratio: 0.2,  acc: 0.75, defense: false, nukes: false, every: 14, aggr: 0.55 },
-  medium:     { start: 18750, grow: 0.95, thr: 0.55, ratio: 0.25, acc: 0.55, defense: true,  nukes: false, every: 10, aggr: 0.8 },
-  hard:       { start: 25000, grow: 1,    thr: 0.45, ratio: 0.3,  acc: 0.35, defense: true,  nukes: true,  every: 8,  aggr: 1.0 },
-  impossible: { start: 31250, grow: 1.1,  thr: 0.35, ratio: 0.35, acc: 0.2,  defense: true,  nukes: true,  every: 6,  aggr: 1.3 },
-};
-
-const BUILD = {
-  city:     { name: 'City',     key: '1', time: 50,  tip: '+250K troop cap' },
-  port:     { name: 'Port',     key: '2', time: 50,  tip: 'Trade ships earn gold. Must be on the coast.' },
-  defense:  { name: 'Defense',  key: '3', time: 40,  tip: 'Land within 10 tiles is 5× harder to take' },
-  silo:     { name: 'Silo',     key: '4', time: 100, tip: 'Launches nukes' },
-  sam:      { name: 'SAM',      key: '5', time: 80,  tip: 'Shoots down nukes aimed within 24 tiles' },
-  warship:  { name: 'Warship',  key: '6', time: 0,   tip: 'Click water near your port. Sinks enemy boats.' },
-  atom:     { name: 'Atom Bomb', key: '7', time: 0,  tip: 'Small blast. Needs a ready silo.' },
-  hydrogen: { name: 'H-Bomb',   key: '8', time: 0,   tip: 'Huge blast. Needs a ready silo.' },
-};
-const BUILD_ORDER = ['city', 'port', 'defense', 'silo', 'sam', 'warship', 'atom', 'hydrogen'];
 const ICON_SVG = {
   city: '<svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7v9H4z" fill="#fff"/><rect x="10" y="14" width="4" height="6" fill="#0f1e3d"/></svg>',
   port: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="5" r="2"/><path d="M12 7v13M6 14a6 6 0 0 0 12 0M8 10h8"/></svg>',
@@ -479,1035 +445,64 @@ const ICON_SVG = {
   hydrogen: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.4" fill="#e74c3c"/><path d="M12 8.6 8.5 2a11 11 0 0 1 7 0zM15 13.7l7.4.6a11 11 0 0 1-3.5 6zM9 13.7 5.1 20.3A11 11 0 0 1 1.6 14.3z" fill="#e74c3c"/></svg>',
 };
 
-const NATION_NAMES = ['Aurelia', 'Borovia', 'Caldora', 'Drakmar', 'Elyria', 'Fenmark', 'Galdor', 'Halvard', 'Istria', 'Jorvik', 'Kaldera',
-  'Lumina', 'Morvath', 'Norland', 'Ostara', 'Pyrrha', 'Quorin', 'Rhovan', 'Sylvara', 'Tarsis', 'Umbra', 'Valtor', 'Westmark', 'Xandria',
-  'Ysolde', 'Zephyra', 'Arkos', 'Brennic', 'Corvina', 'Dunmere'];
-const SYL = ['ka', 'ro', 'th', 'ul', 'mi', 'zan', 'ok', 'ra', 'en', 'dor', 'vi', 'ash', 'ur', 'tek', 'mo', 'lia', 'gar', 'is', 'bo', 'nu'];
-function botName() {
-  const n = SYL[rand() * SYL.length | 0] + SYL[rand() * SYL.length | 0] + (rand() < 0.5 ? SYL[rand() * SYL.length | 0] : '');
-  return n[0].toUpperCase() + n.slice(1);
-}
-
-// ════════════════ State ════════════════
-let cfg, D;
-let W = 0, H = 0, N = 0;
-let terrain, owner, baseCol, landBody, landSizes, waterBody, waterSizes, coastal, falloutUntil, structAt, distT, landTotal = 1;
-let players = [], attacks = [], ships = [], nukes = [], structs = [], effects = [];
-let tick = 0, state = 'menu', spawnLeft = 0, immunityUntil = 0, paused = false, speed = 1, human = null, ended = false, watching = false;
-let mapCv, mapCtx, img, pix, mapDirty = false;
-let falloutList = [];
-let tradePaths = new Map();
-let pendingReq = new Map();   // nation id -> expiry tick (alliance requests to human)
-let askCooldown = new Map();  // nation id -> tick human may ask again
-let stats = { peak: 0, kills: 0 };
+// ════════════════ Game state (client side) ════════════════
+let G = null, meId = 0, mode = null;      // mode: 'sp' | 'mp'
+let paused = false, speed = 1, buildMode = null, hoverTile = -1, endShown = false, lastTickAt = 0;
+let mapCv, mapCtx, img, pix, mapDirty = false, paintReady = false;
+let effects = [];
 const cam = { s: 1, ox: 0, oy: 0 };
-let buildMode = null, hoverTile = -1;
 const mouse = { x: -1, y: -1, inside: false };
-let stampArr, stampId = 0, bfsPrev, bfsMark, bfsQ, bfsStamp = 0;
-const NB = new Int32Array(4);
+const me = () => G && G.players[meId];
 
-function nb4(t, buf) {
-  let c = 0; const x = t % W;
-  if (x > 0) buf[c++] = t - 1;
-  if (x < W - 1) buf[c++] = t + 1;
-  if (t >= W) buf[c++] = t - W;
-  if (t < N - W) buf[c++] = t + W;
-  return c;
-}
-
-// ════════════════ Map generation ════════════════
-function genMap() {
-  const sizes = { small: [320, 200], medium: [440, 272], large: [560, 344] };
-  [W, H] = sizes[cfg.size]; N = W * H;
-  const rng = mulberry32((Math.random() * 2 ** 31) | 0);
-  const n1 = makeNoise(rng), n2 = makeNoise(rng), n3 = makeNoise(rng);
-  const freq = cfg.map === 'archipelago' ? 9 : cfg.map === 'pangaea' ? 3.4 : 4.4;
-  const h = new Float32Array(N), e = new Float32Array(N);
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const t = y * W + x, nx = x / W * freq, ny = y / W * freq;
-    let v = fbm(n1, nx, ny, 5);
-    if (cfg.map === 'continents') v = v * 0.75 + fbm(n2, nx * 0.3 + 7, ny * 0.3 + 3, 2) * 0.45;
-    if (cfg.map === 'pangaea') {
-      const dx = (x / W - 0.5) * 2, dy = (y / H - 0.5) * 2;
-      v = v * 0.55 + (1 - Math.sqrt(dx * dx + dy * dy)) * 0.5;
-    }
-    const ex = Math.min(x, W - 1 - x) / W, ey = Math.min(y, H - 1 - y) / H;
-    const edge = Math.min(ex / 0.07, ey / 0.1, 1);
-    v -= (1 - edge) * 0.5;
-    h[t] = v;
-    e[t] = (1 - Math.abs(fbm(n3, nx * 1.6, ny * 1.6, 4) * 2 - 1));
-  }
-  const waterFrac = { continents: 0.52, pangaea: 0.46, archipelago: 0.64 }[cfg.map];
-  const sorted = Float32Array.from(h).sort();
-  const sea = sorted[Math.floor(N * waterFrac)];
-
-  terrain = new Uint8Array(N);
-  const landE = [];
-  for (let t = 0; t < N; t++) if (h[t] > sea) { e[t] = (h[t] - sea) * 2 + e[t] * 0.35; landE.push(e[t]); }
-  landE.sort((a, b) => a - b);
-  const pHigh = landE[Math.floor(landE.length * 0.58)] || 0, pMount = landE[Math.floor(landE.length * 0.86)] || 0;
-  for (let t = 0; t < N; t++) if (h[t] > sea) terrain[t] = e[t] < pHigh ? 1 : e[t] < pMount ? 2 : 3;
-
-  // Remove specks of land and puddles
-  let lb = labelBodies(t => terrain[t] !== 0);
-  for (let t = 0; t < N; t++) if (terrain[t] && lb.sizes[lb.id[t]] < 12) terrain[t] = 0;
-  let wb = labelBodies(t => terrain[t] === 0);
-  for (let t = 0; t < N; t++) if (!terrain[t] && wb.sizes[wb.id[t]] < 8) terrain[t] = 1;
-  lb = labelBodies(t => terrain[t] !== 0);
-  wb = labelBodies(t => terrain[t] === 0);
-  landBody = lb.id; landSizes = lb.sizes; waterBody = wb.id; waterSizes = wb.sizes;
-
-  coastal = new Uint8Array(N);
-  landTotal = 0;
-  const coastDist = new Uint8Array(N).fill(255);
-  const q = new Int32Array(N); let qh = 0, qt = 0;
-  for (let t = 0; t < N; t++) {
-    if (!terrain[t]) continue;
-    landTotal++;
-    const c = nb4(t, NB);
-    for (let i = 0; i < c; i++) if (!terrain[NB[i]]) { coastal[t] = 1; break; }
-    coastDist[t] = 0; q[qt++] = t;
-  }
-  while (qh < qt) {
-    const t = q[qh++], d = coastDist[t];
-    if (d >= 14) continue;
-    const c = nb4(t, NB);
-    for (let i = 0; i < c; i++) { const n = NB[i]; if (coastDist[n] === 255) { coastDist[n] = d + 1; q[qt++] = n; } }
-  }
-
-  baseCol = new Uint8ClampedArray(N * 3);
-  for (let t = 0; t < N; t++) {
-    let c;
-    const j = (rand() - 0.5) * 6;
-    if (!terrain[t]) {
-      const d = Math.min(coastDist[t], 14) / 14;
-      c = [62 - 38 * d, 118 - 64 * d, 168 - 72 * d];
-    } else {
-      const lv = within((e[t] - (terrain[t] === 1 ? 0 : terrain[t] === 2 ? pHigh : pMount)) / 0.25, 0, 1);
-      if (terrain[t] === 1) c = [112 + 30 * lv, 158 + 18 * lv, 80 + 12 * lv];
-      else if (terrain[t] === 2) c = [178 + 18 * lv, 162 + 16 * lv, 112 + 16 * lv];
-      else c = [138 + 100 * lv, 132 + 103 * lv, 124 + 110 * lv];
-      if (coastal[t]) c = [c[0] * 0.5 + 214 * 0.5, c[1] * 0.5 + 200 * 0.5, c[2] * 0.5 + 150 * 0.5];
-    }
-    baseCol[t * 3] = c[0] + j; baseCol[t * 3 + 1] = c[1] + j; baseCol[t * 3 + 2] = c[2] + j;
-  }
-
-  owner = new Uint16Array(N);
-  falloutUntil = new Uint32Array(N);
-  structAt = new Int32Array(N).fill(-1);
-  distT = new Uint16Array(N);
-  stampArr = new Uint32Array(N);
-  bfsPrev = new Int32Array(N); bfsMark = new Uint32Array(N); bfsQ = new Int32Array(N);
-  falloutList = []; tradePaths = new Map();
-
-  mapCv = document.createElement('canvas'); mapCv.width = W; mapCv.height = H;
-  mapCtx = mapCv.getContext('2d');
-  img = mapCtx.createImageData(W, H); pix = img.data;
-  for (let t = 0; t < N; t++) paint(t);
-}
-
-function labelBodies(pred) {
-  const id = new Int32Array(N).fill(-1), sizes = [], st = new Int32Array(N), buf = new Int32Array(4);
-  for (let s = 0; s < N; s++) {
-    if (id[s] !== -1 || !pred(s)) continue;
-    const k = sizes.length; let sp = 0, c = 0;
-    st[sp++] = s; id[s] = k;
-    while (sp) {
-      const t = st[--sp]; c++;
-      const m = nb4(t, buf);
-      for (let i = 0; i < m; i++) { const n = buf[i]; if (id[n] === -1 && pred(n)) { id[n] = k; st[sp++] = n; } }
-    }
-    sizes.push(c);
-  }
-  return { id, sizes };
-}
-
-// ════════════════ Tiles & ownership ════════════════
-function isBorderTile(t) {
-  const o = owner[t], x = t % W;
-  return (x > 0 && owner[t - 1] !== o) || (x < W - 1 && owner[t + 1] !== o) ||
-    (t >= W && owner[t - W] !== o) || (t < N - W && owner[t + W] !== o);
-}
 function paint(t) {
-  const i = t * 4, j = t * 3;
-  let r = baseCol[j], g = baseCol[j + 1], b = baseCol[j + 2];
-  const o = owner[t];
+  if (!paintReady) return;
+  const i = t * 4, j = t * 3, bc = G.baseCol;
+  let r = bc[j], g = bc[j + 1], b = bc[j + 2];
+  const o = G.owner[t];
   if (o) {
-    const c = players[o].color;
-    const mine = players[o] === human;
-    if (players[o].border.has(t)) {
+    const p = G.players[o], c = p.color, mine = o === meId;
+    if (p.border.has(t)) {
       if (mine) { r = 225; g = 240; b = 255; }
       else { r = c[0] * 0.72; g = c[1] * 0.72; b = c[2] * 0.72; }
     } else {
       const w = mine ? 0.8 : 0.62;
       r = r * (1 - w) + c[0] * w; g = g * (1 - w) + c[1] * w; b = b * (1 - w) + c[2] * w;
     }
-  } else if (terrain[t] && falloutUntil[t] > tick) {
+  } else if (G.terrain[t] && G.falloutUntil[t] > G.tick) {
     r = r * 0.35 + 70 * 0.65; g = g * 0.35 + 112 * 0.65; b = b * 0.35 + 48 * 0.65;
   }
   pix[i] = r; pix[i + 1] = g; pix[i + 2] = b; pix[i + 3] = 255;
   mapDirty = true;
 }
-function refreshTile(t) {
-  if (!terrain[t]) return;
-  const o = owner[t];
-  if (o) { const p = players[o]; if (isBorderTile(t)) p.border.add(t); else p.border.delete(t); }
-  paint(t);
+const hooks = {
+  tile: paint,
+  event(pid, html, cls, extra) {
+    if (pid && pid !== meId) return;
+    if (extra && extra.except && extra.except.includes(meId)) return;
+    addEvent(html, cls, extra);
+  },
+  effect(e) { effects.push({ ...e, t0: performance.now() }); },
+  end(winnerId) { showEnd(winnerId); },
+};
+function initGame(game, myId, m) {
+  G = game; meId = myId; mode = m;
+  mapCv = document.createElement('canvas'); mapCv.width = G.W; mapCv.height = G.H;
+  mapCtx = mapCv.getContext('2d');
+  img = mapCtx.createImageData(G.W, G.H); pix = img.data;
+  paintReady = true;
+  for (let t = 0; t < G.N; t++) paint(t);
+  paused = false; speed = 1; buildMode = null; endShown = false; effects = [];
+  $('speedBtn').innerHTML = '1&times;'; $('pauseBtn').innerHTML = '&#10074;&#10074;'; $('paused').classList.add('hidden');
+  $('pauseBtn').classList.toggle('hidden', m === 'mp'); $('speedBtn').classList.toggle('hidden', m === 'mp');
+  $('feedWrap').innerHTML = '';
+  fitCamera();
+  $('menu').classList.add('hidden'); $('endOv').classList.add('hidden'); $('hud').classList.remove('hidden');
+  updateHUD();
 }
-function setOwner(t, o) {
-  const old = owner[t];
-  if (old === o) return;
-  if (old) { const op = players[old]; op.tiles--; op.border.delete(t); }
-  owner[t] = o;
-  if (o) players[o].tiles++;
-  refreshTile(t);
-  const x = t % W;
-  if (x > 0) refreshTile(t - 1);
-  if (x < W - 1) refreshTile(t + 1);
-  if (t >= W) refreshTile(t - W);
-  if (t < N - W) refreshTile(t + W);
-  const si = structAt[t];
-  if (si >= 0) {
-    const s = structs[si];
-    if (!o || s.type === 'defense') destroyStruct(s);
-    else s.owner = o;
-  }
-}
-
-// Distance-to-border pass: used for name label placement and finding interior tiles.
-function computeLabels() {
-  for (let t = 0; t < N; t++) {
-    const o = owner[t];
-    if (!o) { distT[t] = 0; continue; }
-    if (isBorderTile(t)) { distT[t] = 1; continue; }
-    const x = t % W;
-    distT[t] = Math.min(x > 0 ? distT[t - 1] : 0, t >= W ? distT[t - W] : 0) + 1;
-  }
-  for (let t = N - 1; t >= 0; t--) {
-    if (!owner[t] || distT[t] <= 1) continue;
-    const x = t % W;
-    const m = Math.min(x < W - 1 ? distT[t + 1] : 0, t < N - W ? distT[t + W] : 0) + 1;
-    if (m < distT[t]) distT[t] = m;
-  }
-  for (const p of players) if (p) { p.best = 0; p.bestT = -1; p.minX = W; p.maxX = 0; p.minY = H; p.maxY = 0; }
-  for (let t = 0; t < N; t++) {
-    const o = owner[t]; if (!o) continue;
-    const p = players[o], x = t % W, y = (t / W) | 0;
-    if (distT[t] > p.best) { p.best = distT[t]; p.bestT = t; }
-    if (x < p.minX) p.minX = x; if (x > p.maxX) p.maxX = x;
-    if (y < p.minY) p.minY = y; if (y > p.maxY) p.maxY = y;
-  }
-  for (const p of players) {
-    if (!p || p.bestT < 0) continue;
-    const d = p.best;
-    p.lx = p.bestT % W + 0.5; p.ly = ((p.bestT / W) | 0) + 0.5;
-    p.lfs = Math.min(d * 0.75, (2 * d * 0.9) / (Math.max(4, p.name.length) * 0.62));
-  }
-}
-function findTile(p, pred, tries = 160) {
-  if (p.maxX < p.minX) return -1;
-  const w = p.maxX - p.minX + 1, hh = p.maxY - p.minY + 1;
-  for (let i = 0; i < tries; i++) {
-    const t = (p.minY + (rand() * hh | 0)) * W + p.minX + (rand() * w | 0);
-    if (owner[t] === p.id && pred(t)) return t;
-  }
-  return -1;
-}
-
-// ════════════════ Players ════════════════
-function makePlayer(name, type, color) {
-  const p = {
-    id: players.length, name, type, color,
-    troops: type === 'bot' ? 10000 : type === 'nation' ? D.start : 25000,
-    gold: 0, tiles: 0, border: new Set(), alive: true, spawned: false,
-    allies: new Map(), traitorUntil: 0, hate: new Map(), cityLevels: 0,
-    lx: 0, ly: 0, lfs: 0, best: 0, bestT: -1, minX: W, maxX: 0, minY: H, maxY: 0,
-    aiPhase: (rand() * 20) | 0, lastHitBy: 0,
-  };
-  players.push(p);
-  return p;
-}
-function maxTroops(p) {
-  // troopCap() in OpenFront: 2 * (tiles^0.6 * 1000 + 50000) + cities
-  let m = 2 * (Math.pow(p.tiles * TILE_SCALE, 0.6) * 1000 + 50000) + p.cityLevels * CITY_TROOPS;
-  if (p.type === 'bot') m /= 3;
-  return m;
-}
-function troopRate(p) {
-  // troopIncreaseRate() in OpenFront
-  const max = maxTroops(p);
-  let add = (10 + Math.pow(Math.max(0, p.troops), 0.73) / 4) * (1 - p.troops / max);
-  if (p.type === 'bot') add *= 0.5;
-  if (p.type === 'nation') add *= D.grow;
-  return add;
-}
-function goldRate(p) { return (p.type === 'bot' ? 50 : 100) + 5 * Math.sqrt(p.tiles); }
-function allied(a, b) { return a !== b && a > 0 && b > 0 && players[a].allies.has(b); }
-function addHate(p, towards, v) { if (p && p.type !== 'human') p.hate.set(towards, (p.hate.get(towards) || 0) + v); }
-function relation(o) {
-  if (!o) return 'Unclaimed';
-  const p = players[o];
-  if (p === human) return 'You';
-  const tags = [];
-  tags.push(p.type === 'bot' ? 'Tribe' : 'Nation');
-  if (allied(human.id, o)) tags.push('<span style="color:#2ecc71">Ally</span>');
-  if (p.traitorUntil > tick) tags.push('<span style="color:#e74c3c">Traitor</span>');
-  return tags.join(' · ');
-}
-
-function neighbors(p) {
-  const res = { neutral: 0, players: new Map(), coastal: 0 };
-  const buf = new Int32Array(4);
-  for (const t of p.border) {
-    if (coastal[t]) res.coastal++;
-    const c = nb4(t, buf);
-    for (let i = 0; i < c; i++) {
-      const n = buf[i];
-      if (!terrain[n]) continue;
-      const o = owner[n];
-      if (o === p.id) continue;
-      if (!o) res.neutral++;
-      else res.players.set(o, (res.players.get(o) || 0) + 1);
-    }
-  }
-  return res;
-}
-// Does p touch land owned by `target` (0 = unclaimed) on the given landmass?
-function touches(p, target, body) {
-  const buf = new Int32Array(4);
-  for (const t of p.border) {
-    if (body >= 0 && landBody[t] !== body) continue;
-    const c = nb4(t, buf);
-    for (let i = 0; i < c; i++) { const n = buf[i]; if (terrain[n] && owner[n] === target) return true; }
-  }
-  return false;
-}
-
-// ════════════════ Attacks ════════════════
-function startAttack(p, target, troops, fromBoat) {
-  if (!p.alive || troops < 1) return false;
-  if (target && (allied(p.id, target) || target === p.id)) return false;
-  if (target && tick < immunityUntil) return false;
-  if (!fromBoat) p.troops -= troops;
-  if (target) {
-    const q = players[target];
-    // Opposing attacks cancel each other out first.
-    const opp = attacks.find(a => a.p === target && a.target === p.id);
-    if (opp) {
-      const m = Math.min(opp.troops, troops);
-      opp.troops -= m; troops -= m;
-      if (opp.troops <= 0) removeAttack(opp, false);
-    }
-    addHate(q, p.id, 1);
-    if (q === human && p !== human) {
-      const known = attacks.some(a => a.p === p.id && a.target === target);
-      if (!known) addEvent(`<b>${esc(p.name)}</b> is attacking you with ${fmt(troops)} troops!`, 'bad');
-    }
-  }
-  if (troops <= 0) return true;
-  const ex = attacks.find(a => a.p === p.id && a.target === target);
-  if (ex) ex.troops += troops;
-  else attacks.push({ p: p.id, target, troops });
-  return true;
-}
-function removeAttack(a, refund) {
-  const i = attacks.indexOf(a);
-  if (i >= 0) attacks.splice(i, 1);
-  if (refund && players[a.p].alive) players[a.p].troops += a.troops * refund;
-}
-function hasDefensePost(t, o) {
-  const x = t % W, y = (t / W) | 0, R2 = DEFENSE_RANGE * DEFENSE_RANGE;
-  for (const s of structs) {
-    if (!s.alive || s.type !== 'defense' || s.owner !== o || s.doneAt > tick) continue;
-    const dx = s.x - x, dy = s.y - y;
-    if (dx * dx + dy * dy <= R2) return true;
-  }
-  return false;
-}
-function stepAttack(a) {
-  const P = players[a.p], tid = a.target, T = tid ? players[tid] : null;
-  if (!P.alive || (T && !T.alive) || (tid && allied(a.p, tid))) { removeAttack(a, 1); return; }
-  stampId++;
-  const cand = [], buf = new Int32Array(4);
-  for (const t of P.border) {
-    const c = nb4(t, buf);
-    for (let i = 0; i < c; i++) {
-      const n = buf[i];
-      if (owner[n] !== tid || !terrain[n] || stampArr[n] === stampId) continue;
-      stampArr[n] = stampId; cand.push(n);
-    }
-  }
-  if (!cand.length) { removeAttack(a, 1); return; }
-  // Favour tiles already surrounded by the attacker so fronts stay smooth.
-  const score = new Float32Array(cand.length);
-  for (let k = 0; k < cand.length; k++) {
-    const t = cand[k], c = nb4(t, buf); let own = 0;
-    for (let i = 0; i < c; i++) if (owner[buf[i]] === a.p) own++;
-    score[k] = own + rand() * 1.6;
-  }
-  const order = Array.from(cand.keys()).sort((i, j) => score[j] - score[i]);
-  const border = cand.length;
-  let frac = 0;
-  for (const k of order) {
-    const t = cand[k];
-    let { mag, cost } = TERR[terrain[t]];
-    if (T && hasDefensePost(t, tid)) { mag *= 5; cost *= 3; }
-    if (falloutUntil[t] > tick) { mag *= 2; cost *= 2; }
-    let loss, defLoss = 0, f;
-    if (!T) {
-      loss = mag / (P.type === 'bot' ? 10 : 5) * TILE_SCALE;
-      f = within(2000 * cost / Math.max(1, a.troops), 5, 100) / (border * 2);
-    } else {
-      if (P.type !== 'bot' && T.type === 'bot') mag *= 0.7;
-      const traitor = T.traitorUntil > tick;
-      defLoss = T.troops / Math.max(1, T.tiles);
-      const ratio = T.troops / Math.max(1, a.troops);
-      loss = mag * (traitor ? 0.5 : 1) * within(ratio, 0.6, 2) * (0.463 * TILE_SCALE + 0.0039 * defLoss);
-      const speedCost = within(ratio, 0.82, 7.5) * within(ratio / 20, 1, 50) / 8.55;
-      f = speedCost * cost * (traitor ? 0.8 : 1) / border;
-    }
-    if (a.troops < loss) { removeAttack(a, 0); return; }
-    a.troops -= loss;
-    if (T) { T.troops = Math.max(0, T.troops - defLoss); T.lastHitBy = a.p; }
-    setOwner(t, a.p);
-    frac += f * FRONT_SLOWDOWN;
-    if (frac >= 1) break;
-  }
-}
-
-// ════════════════ Ships ════════════════
-function waterBFS(starts, isGoal, maxNodes) {
-  bfsStamp++;
-  let qh = 0, qt = 0;
-  for (const s of starts) { if (bfsMark[s] === bfsStamp) continue; bfsMark[s] = bfsStamp; bfsPrev[s] = -1; bfsQ[qt++] = s; }
-  const buf = new Int32Array(4);
-  while (qh < qt) {
-    const t = bfsQ[qh++];
-    if (isGoal(t)) return t;
-    if (maxNodes && qh > maxNodes) return -1;
-    const c = nb4(t, buf);
-    for (let i = 0; i < c; i++) {
-      const n = buf[i];
-      if (terrain[n] || bfsMark[n] === bfsStamp) continue;
-      bfsMark[n] = bfsStamp; bfsPrev[n] = t; bfsQ[qt++] = n;
-    }
-  }
-  return -1;
-}
-function tracePath(goal) { const path = []; for (let t = goal; t !== -1; t = bfsPrev[t]) path.push(t); return path; }
-function waterNbrs(t) { const c = nb4(t, NB), out = []; for (let i = 0; i < c; i++) if (!terrain[NB[i]]) out.push(NB[i]); return out; }
-function boatsOf(p) { let n = 0; for (const s of ships) if (s.kind === 'transport' && s.owner === p.id) n++; return n; }
-
-// Route a transport from p's nearest coast to land tile T.
-function boatPath(p, T) {
-  const starts = waterNbrs(T);
-  if (!starts.length) return null;
-  const buf = new Int32Array(4);
-  const goal = waterBFS(starts, w => {
-    const c = nb4(w, buf);
-    for (let i = 0; i < c; i++) if (owner[buf[i]] === p.id && terrain[buf[i]]) return true;
-    return false;
-  });
-  return goal < 0 ? null : tracePath(goal);
-}
-function sendBoat(p, T, troops) {
-  if (boatsOf(p) >= MAX_BOATS) return 'You already have 3 boats at sea';
-  const tgt = owner[T];
-  if (tgt && tick < immunityUntil) return 'Spawn protection is still active';
-  if (tgt && allied(p.id, tgt)) return 'You cannot attack an ally';
-  if (troops < 1) return 'Not enough troops';
-  const path = boatPath(p, T);
-  if (!path) return 'No sea route to that coast';
-  p.troops -= troops;
-  const s0 = path[0];
-  ships.push({ kind: 'transport', owner: p.id, path, i: 0, x: s0 % W + 0.5, y: ((s0 / W) | 0) + 0.5, px: 0, py: 0, ang: 0, troops, target: T, speed: 1 });
-  if (tgt) {
-    addHate(players[tgt], p.id, 1);
-    if (players[tgt] === human) addEvent(`<b>${esc(p.name)}</b> sent a boat with ${fmt(troops)} troops toward you`, 'warn');
-  }
-  return null;
-}
-function followPath(s, speed) {
-  let rem = speed;
-  while (rem > 0 && s.i < s.path.length) {
-    const t = s.path[s.i], tx = t % W + 0.5, ty = ((t / W) | 0) + 0.5;
-    const dx = tx - s.x, dy = ty - s.y, d = Math.hypot(dx, dy);
-    if (d > 0.01) s.ang = Math.atan2(dy, dx);
-    if (d <= rem) { s.x = tx; s.y = ty; rem -= d; s.i++; }
-    else { s.x += dx / d * rem; s.y += dy / d * rem; rem = 0; }
-  }
-  return s.i >= s.path.length;
-}
-function shipTile(s) { return (s.y | 0) * W + (s.x | 0); }
-function landBoat(s) {
-  const P = players[s.owner];
-  if (!P.alive) return;
-  const T = s.target, o = owner[T];
-  if (o === s.owner) { P.troops += s.troops; return; }
-  if (o && (allied(s.owner, o) || tick < immunityUntil)) { P.troops += s.troops; return; }
-  setOwner(T, s.owner);
-  startAttack(P, o, s.troops, true);
-  if (P === human) addEvent(`Your boat landed on ${o ? '<b>' + esc(players[o].name) + '</b>' : 'new land'}`, 'good');
-}
-function spawnTrade(s) {
-  const options = structs.filter(d => d.alive && d.type === 'port' && d.doneAt <= tick && d.owner !== s.owner &&
-    players[d.owner].alive && waterBody[d.dock] === waterBody[s.dock]);
-  if (!options.length) return;
-  const d = options[rand() * options.length | 0];
-  const key = s.id + '>' + d.id;
-  let path = tradePaths.get(key);
-  if (path === undefined) {
-    const goal = waterBFS([d.dock], t => t === s.dock);
-    path = goal < 0 ? null : tracePath(goal);
-    tradePaths.set(key, path);
-  }
-  if (!path) return;
-  const t0 = path[0];
-  ships.push({ kind: 'trade', owner: s.owner, path, i: 0, x: t0 % W + 0.5, y: ((t0 / W) | 0) + 0.5, px: 0, py: 0, ang: 0, dest: d, value: Math.floor(2000 + path.length * 80), speed: 0.9 });
-}
-function stepWarship(s) {
-  s.cd = Math.max(0, s.cd - 1);
-  let best = null, bd = 225;
-  for (const o of ships) {
-    if (o === s || o.dead || o.owner === s.owner || allied(o.owner, s.owner)) continue;
-    const dx = o.x - s.x, dy = o.y - s.y, d2 = dx * dx + dy * dy;
-    if (o.kind === 'warship') {
-      if (d2 < 100 && s.cd === 0) {
-        o.hp -= 250; s.cd = 15;
-        effects.push({ kind: 'shot', x0: s.x, y0: s.y, x1: o.x, y1: o.y, t0: performance.now(), dur: 250 });
-        if (o.hp <= 0) { o.dead = true; boom(o.x, o.y, 3); if (o.owner === human.id) addEvent('One of your warships was sunk', 'bad'); }
-      }
-    } else if (d2 < bd) { bd = d2; best = o; }
-  }
-  if (best) {
-    if (bd <= 4) {
-      best.dead = true;
-      if (best.kind === 'trade') {
-        players[s.owner].gold += best.value;
-        if (best.owner === human.id) addEvent(`<b>${esc(players[s.owner].name)}</b> captured your trade ship`, 'bad');
-      } else {
-        boom(best.x, best.y, 2);
-        if (best.owner === human.id) addEvent(`Your boat with ${fmt(best.troops)} troops was sunk by <b>${esc(players[s.owner].name)}</b>`, 'bad');
-        if (s.owner === human.id) addEvent(`Your warship sank a boat from <b>${esc(players[best.owner].name)}</b>`, 'good');
-      }
-      return;
-    }
-    // Greedy chase toward the target
-    const cur = shipTile(s), c = nb4(cur, NB); let nx = -1, nd = 1e9;
-    for (let i = 0; i < c; i++) {
-      const n = NB[i]; if (terrain[n]) continue;
-      const dx = n % W + 0.5 - best.x, dy = ((n / W) | 0) + 0.5 - best.y, d2 = dx * dx + dy * dy;
-      if (d2 < nd) { nd = d2; nx = n; }
-    }
-    if (nx >= 0) { s.path = [nx]; s.i = 0; followPath(s, 1.3); return; }
-  }
-  if (!s.path || s.i >= s.path.length) {
-    const hx = s.home % W, hy = (s.home / W) | 0, body = waterBody[s.home];
-    for (let k = 0; k < 20; k++) {
-      const x = within(hx + ((rand() - 0.5) * 50 | 0), 0, W - 1), y = within(hy + ((rand() - 0.5) * 50 | 0), 0, H - 1), t = y * W + x;
-      if (terrain[t] || waterBody[t] !== body) continue;
-      const cur = shipTile(s);
-      const g = waterBFS([t], u => u === cur, 6000);
-      if (g >= 0) { s.path = tracePath(g); s.i = 0; break; }
-    }
-    if (!s.path) return;
-  }
-  followPath(s, 0.8);
-}
-
-// ════════════════ Structures ════════════════
-function countUnits(p, type) {
-  if (type === 'warship') return ships.filter(s => s.kind === 'warship' && s.owner === p.id).length;
-  let n = 0;
-  for (const s of structs) if (s.alive && s.owner === p.id && s.type === type) n += type === 'city' ? s.level : 1;
-  return n;
-}
-function costOf(p, type) {
-  // unitCost() in OpenFront
-  const n = countUnits(p, type);
-  switch (type) {
-    case 'city': case 'port': return Math.min(1e6, 2 ** n * 125000);
-    case 'defense': return Math.min(250000, (n + 1) * 50000);
-    case 'sam': return Math.min(3e6, (n + 1) * 1.5e6);
-    case 'silo': return 1e6;
-    case 'warship': return Math.min(1e6, (n + 1) * 250000);
-    case 'atom': return 750000;
-    case 'hydrogen': return 5e6;
-  }
-}
-function spacingOk(t, minD) {
-  const x = t % W, y = (t / W) | 0, m2 = minD * minD;
-  for (const s of structs) {
-    if (!s.alive) continue;
-    const dx = s.x - x, dy = s.y - y;
-    if (dx * dx + dy * dy < m2) return false;
-  }
-  return true;
-}
-function readySilo(p, t) {
-  let best = null, bd = 1e18;
-  const x = t % W, y = (t / W) | 0;
-  for (const s of structs) {
-    if (!s.alive || s.type !== 'silo' || s.owner !== p.id || s.doneAt > tick || s.readyAt > tick) continue;
-    const d = (s.x - x) ** 2 + (s.y - y) ** 2;
-    if (d < bd) { bd = d; best = s; }
-  }
-  return best;
-}
-function nearestPort(p, t) {
-  let best = null, bd = 50 * 50;
-  const x = t % W, y = (t / W) | 0;
-  for (const s of structs) {
-    if (!s.alive || s.type !== 'port' || s.owner !== p.id || s.doneAt > tick || waterBody[s.dock] !== waterBody[t]) continue;
-    const d = (s.x - x) ** 2 + (s.y - y) ** 2;
-    if (d < bd) { bd = d; best = s; }
-  }
-  return best;
-}
-// Returns null if p can build `type` on tile t, otherwise the reason it can't.
-function placeError(p, type, t) {
-  if (t < 0) return 'Off the map';
-  if (type === 'atom' || type === 'hydrogen') return readySilo(p, t) ? null : 'You need a ready missile silo';
-  if (type === 'warship') {
-    if (terrain[t]) return 'Place warships on water';
-    return nearestPort(p, t) ? null : 'Must be within 50 tiles of one of your ports';
-  }
-  if (owner[t] !== p.id) return 'Build on your own land';
-  const ex = structAt[t] >= 0 ? structs[structAt[t]] : null;
-  if (type === 'city' && ex && ex.type === 'city') return null;   // upgrade
-  if (type === 'port' && !coastal[t]) return 'Ports must be on the coast';
-  if (!spacingOk(t, 4)) return 'Too close to another building';
-  return null;
-}
-function build(p, type, t) {
-  const cost = costOf(p, type);
-  if (p.gold < cost) return 'Not enough gold';
-  const err = placeError(p, type, t);
-  if (err) return err;
-  if (type === 'atom' || type === 'hydrogen') return launchNuke(p, type, t, cost);
-  if (type === 'warship') {
-    const port = nearestPort(p, t);
-    p.gold -= cost;
-    const d = port.dock;
-    ships.push({ kind: 'warship', owner: p.id, x: d % W + 0.5, y: ((d / W) | 0) + 0.5, px: 0, py: 0, ang: 0, hp: 1000, home: t, path: null, i: 0, cd: 0 });
-    return null;
-  }
-  p.gold -= cost;
-  const ex = structAt[t] >= 0 ? structs[structAt[t]] : null;
-  if (type === 'city' && ex) { ex.level++; return null; }
-  const s = { id: structs.length, type, owner: p.id, t, x: t % W, y: (t / W) | 0, level: 1, doneAt: tick + BUILD[type].time, readyAt: 0, alive: true, dock: -1, nextTrade: tick + BUILD[type].time + 30 };
-  if (type === 'port') {
-    let bestW = -1;
-    for (const w of waterNbrs(t)) if (bestW < 0 || waterSizes[waterBody[w]] > waterSizes[waterBody[bestW]]) bestW = w;
-    s.dock = bestW;
-  }
-  structs.push(s);
-  structAt[t] = s.id;
-  return null;
-}
-function destroyStruct(s) {
-  if (!s.alive) return;
-  s.alive = false;
-  if (structAt[s.t] === s.id) structAt[s.t] = -1;
-}
-
-// ════════════════ Nukes ════════════════
-function launchNuke(p, type, t, cost) {
-  const silo = readySilo(p, t);
-  if (!silo) return 'You need a ready missile silo';
-  p.gold -= cost;
-  silo.readyAt = tick + 80;
-  const tx = t % W + 0.5, ty = ((t / W) | 0) + 0.5, x0 = silo.x + 0.5, y0 = silo.y + 0.5;
-  const dur = Math.max(25, Math.hypot(tx - x0, ty - y0) / 2.5 | 0);
-  const nk = { owner: p.id, type, x0, y0, tx, ty, t, start: tick, dur, intercept: -1 };
-  for (const s of structs) {
-    if (!s.alive || s.type !== 'sam' || s.doneAt > tick || s.readyAt > tick) continue;
-    if (s.owner === p.id || allied(s.owner, p.id)) continue;
-    if ((s.x - tx) ** 2 + (s.y - ty) ** 2 > SAM_RANGE * SAM_RANGE) continue;
-    nk.intercept = tick + Math.floor(dur * 0.75);
-    nk.sam = s;
-    s.readyAt = nk.intercept + 100;
-    break;
-  }
-  nukes.push(nk);
-  const v = owner[t];
-  if (v && v !== p.id) {
-    if (allied(p.id, v)) breakAlliance(p.id, v, true);
-    addHate(players[v], p.id, 12);
-    if (players[v] === human) addEvent(`&#9762; <b>${esc(p.name)}</b> launched a${type === 'atom' ? 'n atom bomb' : ' hydrogen bomb'} at you!`, 'bad');
-  }
-  if (p !== human && (!v || players[v] !== human)) addEvent(`&#9762; <b>${esc(p.name)}</b> launched a nuke${v ? ' at <b>' + esc(players[v].name) + '</b>' : ''}`, 'warn');
-  return null;
-}
-function detonate(nk) {
-  const R = NUKE[nk.type], cx = nk.t % W, cy = (nk.t / W) | 0;
-  const in2 = R.inner * R.inner, out2 = R.outer * R.outer;
-  for (const s of structs) if (s.alive && (s.x - cx) ** 2 + (s.y - cy) ** 2 <= out2) destroyStruct(s);
-  for (const s of ships) if ((s.x - cx) ** 2 + (s.y - cy) ** 2 <= out2) s.dead = true;
-  const lost = new Map(), before = new Map();
-  for (let dy = -R.outer; dy <= R.outer; dy++) for (let dx = -R.outer; dx <= R.outer; dx++) {
-    const x = cx + dx, y = cy + dy, d2 = dx * dx + dy * dy;
-    if (x < 0 || y < 0 || x >= W || y >= H || d2 > out2) continue;
-    if (d2 > in2 && rand() > 0.5) continue;
-    const t = y * W + x;
-    if (!terrain[t]) continue;
-    falloutUntil[t] = tick + 400 + (rand() * 500 | 0);
-    falloutList.push(t);
-    const o = owner[t];
-    if (o) {
-      if (!before.has(o)) before.set(o, players[o].tiles);
-      lost.set(o, (lost.get(o) || 0) + 1);
-      players[o].lastHitBy = nk.owner;
-      setOwner(t, 0);
-    } else paint(t);
-  }
-  // nukeDeathFactor() in OpenFront kills 5 × troops/tile per tile; softened to 3 for the smaller map.
-  for (const [o, l] of lost) {
-    const q = players[o];
-    q.troops -= Math.min(q.troops, q.troops * 3 * l / Math.max(1, before.get(o)));
-  }
-  boom(nk.tx, nk.ty, R.outer, true);
-}
-function boom(x, y, r, big) { effects.push({ kind: 'boom', x, y, r, t0: performance.now(), dur: big ? 1400 : 600, big }); }
-
-// ════════════════ Diplomacy ════════════════
-function formAlliance(a, b) {
-  const until = tick + ALLIANCE_TICKS;
-  players[a].allies.set(b, until); players[b].allies.set(a, until);
-  for (const at of attacks.slice()) if ((at.p === a && at.target === b) || (at.p === b && at.target === a)) removeAttack(at, 1);
-}
-function breakAlliance(a, b, betray) {
-  players[a].allies.delete(b); players[b].allies.delete(a);
-  if (betray) {
-    players[a].traitorUntil = tick + 300;
-    addHate(players[b], a, 8);
-    for (const q of players) if (q && q.type === 'nation' && q.id !== b && q.id !== a) addHate(q, a, 1);
-  }
-}
-function requestAlliance(p, q) {
-  // Nation q decides whether to accept p's request.
-  if ((askCooldown.get(q.id) || 0) > tick) return addEvent(`Wait before asking <b>${esc(q.name)}</b> again`, 'info');
-  askCooldown.set(q.id, tick + 300);
-  const hate = q.hate.get(p.id) || 0;
-  let chance = D.acc + (p.troops > q.troops ? 0.2 : 0) - hate * 0.08 - (p.traitorUntil > tick ? 0.5 : 0) - q.allies.size * 0.1;
-  if (q.type === 'bot') chance = 0.15;
-  if (rand() < chance) { formAlliance(p.id, q.id); addEvent(`<b>${esc(q.name)}</b> accepted your alliance`, 'good'); }
-  else addEvent(`<b>${esc(q.name)}</b> declined your alliance`, 'info');
-}
-function sendTroops(p, q, troops) {
-  if (troops < 1) return;
-  p.troops -= troops; q.troops += troops;
-  addEvent(`Sent ${fmt(troops)} troops to <b>${esc(q.name)}</b>`, 'good');
-}
-
-// ════════════════ AI ════════════════
-function aiTick(p) {
-  const info = neighbors(p), max = maxTroops(p), imm = tick < immunityUntil;
-  aiBuild(p, info);
-  aiDiplomacy(p, info);
-  if (p.troops < max * D.thr) return;
-  if (info.neutral > 0) {
-    startAttack(p, 0, p.troops * D.ratio);
-    if (!info.players.size || rand() < 0.6) return;
-  }
-  if (!imm && info.players.size) {
-    let best = null, bs = 1e9;
-    for (const [id] of info.players) {
-      if (allied(p.id, id)) continue;
-      const q = players[id];
-      let s = q.troops / Math.max(1, p.troops);
-      if (q.type === 'bot') s -= 0.6;
-      if (q.traitorUntil > tick) s -= 0.3;
-      s -= Math.min(10, p.hate.get(id) || 0) * 0.05;
-      if (s < bs) { bs = s; best = q; }
-    }
-    if (best && bs < 0.9 * D.aggr + (p.troops > max * 0.9 ? 0.5 : 0)) {
-      startAttack(p, best.id, p.troops * D.ratio * (best.type === 'bot' ? 0.8 : 1.2));
-      return;
-    }
-  }
-  if (!info.neutral && info.coastal && boatsOf(p) < 2 && (!info.players.size || rand() < 0.15)) aiBoat(p, imm);
-}
-function aiBoat(p, imm) {
-  let pick = -1, pd = 1e18;
-  for (let k = 0; k < 40; k++) {
-    const t = rand() * N | 0;
-    if (!coastal[t]) continue;
-    const o = owner[t];
-    if (o === p.id || allied(p.id, o) || (o && imm)) continue;
-    if (o && players[o].troops > p.troops * D.aggr) continue;
-    const d = (t % W - p.lx) ** 2 + (((t / W) | 0) - p.ly) ** 2 + (o ? 4000 : 0);
-    if (d < pd) { pd = d; pick = t; }
-  }
-  if (pick >= 0) sendBoat(p, pick, p.troops * D.ratio);
-}
-function aiBuild(p, info) {
-  if (rand() > 0.5) return;
-  const g = p.gold;
-  const ok = (type, t) => t >= 0 && g >= costOf(p, type) && !build(p, type, t);
-  if (g >= costOf(p, 'city') && countUnits(p, 'city') < 2 + p.tiles / 700) {
-    if (ok('city', findTile(p, t => distT[t] >= 3 && !placeError(p, 'city', t)))) return;
-  }
-  if (info.coastal && g >= costOf(p, 'port') && countUnits(p, 'port') < 1 + p.tiles / 1600) {
-    const opts = [];
-    for (const t of p.border) if (coastal[t] && !placeError(p, 'port', t)) { opts.push(t); if (opts.length > 30) break; }
-    if (opts.length && ok('port', opts[rand() * opts.length | 0])) return;
-  }
-  if (D.defense && tick > immunityUntil && g >= costOf(p, 'defense') && countUnits(p, 'defense') < 1 + p.tiles / 450) {
-    let threat = 0, tt = 0;
-    for (const [id] of info.players) { const q = players[id]; if (!allied(p.id, id) && q.type !== 'bot' && q.troops > tt) { tt = q.troops; threat = id; } }
-    if (threat && tt > p.troops * 0.7) {
-      const buf = new Int32Array(4); const opts = [];
-      for (const t of p.border) {
-        const c = nb4(t, buf);
-        for (let i = 0; i < c; i++) if (owner[buf[i]] === threat) { opts.push(t); break; }
-        if (opts.length > 40) break;
-      }
-      const t = opts.length ? opts[rand() * opts.length | 0] : -1;
-      if (t >= 0 && !placeError(p, 'defense', t) && ok('defense', t)) return;
-    }
-  }
-  if (D.nukes && p.tiles > landTotal * 0.05) {
-    if (!countUnits(p, 'silo') && g >= 1e6) { if (ok('silo', findTile(p, t => distT[t] >= 4 && !placeError(p, 'silo', t)))) return; }
-    const enemySilo = structs.some(s => s.alive && s.type === 'silo' && s.owner !== p.id && !allied(s.owner, p.id));
-    if (enemySilo && g >= costOf(p, 'sam') && countUnits(p, 'sam') < Math.min(3, countUnits(p, 'city'))) {
-      const city = structs.find(s => s.alive && s.type === 'city' && s.owner === p.id);
-      if (city) {
-        const t = findTile(p, u => (u % W - city.x) ** 2 + (((u / W) | 0) - city.y) ** 2 < 100 && !placeError(p, 'sam', u), 300);
-        if (ok('sam', t)) return;
-      }
-    }
-    if (countUnits(p, 'silo') && g >= 750000 + 250000 && rand() < 0.35) {
-      let tgt = null, ts = 0;
-      for (const q of players) {
-        if (!q || !q.alive || q === p || q.type === 'bot' || allied(p.id, q.id)) continue;
-        const s = q.tiles * (1 + Math.min(10, p.hate.get(q.id) || 0) * 0.2);
-        if (s > ts) { ts = s; tgt = q; }
-      }
-      if (tgt && tgt.bestT >= 0) {
-        const city = structs.find(s => s.alive && s.owner === tgt.id && s.type === 'city');
-        const t = city ? city.t : tgt.bestT;
-        if (ok(g >= 5.5e6 ? 'hydrogen' : 'atom', t)) return;
-      }
-    }
-  }
-  if (rand() < 0.3 && g >= costOf(p, 'warship') && countUnits(p, 'warship') < countUnits(p, 'port')) {
-    const port = structs.find(s => s.alive && s.type === 'port' && s.owner === p.id && s.doneAt <= tick);
-    if (port) ok('warship', port.dock);
-  }
-}
-function aiDiplomacy(p, info) {
-  if (tick < immunityUntil) return;
-  if (info.players.has(human.id) && human.alive && !allied(p.id, human.id) && !pendingReq.has(p.id) &&
-      rand() < 0.02 && (p.hate.get(human.id) || 0) < 2 && human.troops > p.troops * 0.7 && human.traitorUntil <= tick) {
-    pendingReq.set(p.id, tick + 200);
-    addEvent(`<b>${esc(p.name)}</b> requests an alliance`, 'info', [
-      ['Accept', 'yes', () => { if (p.alive && pendingReq.has(p.id)) { formAlliance(p.id, human.id); addEvent(`You are now allied with <b>${esc(p.name)}</b>`, 'good'); } pendingReq.delete(p.id); }],
-      ['Reject', 'no', () => { pendingReq.delete(p.id); addHate(p, human.id, 1); }],
-    ], 20000);
-    return;
-  }
-  if (rand() < 0.01) {
-    for (const [id] of info.players) {
-      const q = players[id];
-      if (q.type !== 'nation' || allied(p.id, id) || (p.hate.get(id) || 0) > 1 || (q.hate.get(p.id) || 0) > 1) continue;
-      if (p.allies.size >= 2 || q.allies.size >= 2) continue;
-      formAlliance(p.id, id);
-      break;
-    }
-  }
-}
-function botTick(p) {
-  const max = maxTroops(p);
-  if (p.troops < max * 0.35) return;
-  const info = neighbors(p);
-  if (info.neutral) { startAttack(p, 0, p.troops / 8); return; }
-  if (tick >= immunityUntil && info.players.size && rand() < 0.25) {
-    const ids = [...info.players.keys()].filter(id => !allied(p.id, id));
-    if (!ids.length) return;
-    const q = players[ids[rand() * ids.length | 0]];
-    if (q.troops < p.troops * 1.5) startAttack(p, q.id, p.troops / 10);
-  }
-}
-
-// ════════════════ Spawning ════════════════
-function canSpawn(t, minGap) {
-  if (t < 0 || !terrain[t] || owner[t] || landSizes[landBody[t]] < 60) return false;
-  const x = t % W, y = (t / W) | 0;
-  for (let dy = -minGap; dy <= minGap; dy++) for (let dx = -minGap; dx <= minGap; dx++) {
-    const xx = x + dx, yy = y + dy;
-    if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
-    const o = owner[yy * W + xx];
-    if (o && (human === null || o !== human.id)) return false;
-  }
-  return true;
-}
-function claimSpawn(p, t, R) {
-  const cx = t % W, cy = (t / W) | 0;
-  for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
-    const x = cx + dx, y = cy + dy;
-    if (x < 0 || y < 0 || x >= W || y >= H || dx * dx + dy * dy > R * R + 1) continue;
-    const u = y * W + x;
-    if (terrain[u] && !owner[u]) setOwner(u, p.id);
-  }
-  p.spawned = true;
-}
-function spawnAIs() {
-  const ais = players.filter(p => p && p !== human);
-  let gap = Math.max(4, Math.floor(Math.sqrt(landTotal / ais.length) * 0.45));
-  for (const p of ais) {
-    let done = false;
-    for (let round = 0; round < 6 && !done; round++) {
-      for (let k = 0; k < 600; k++) {
-        const t = rand() * N | 0;
-        if (canSpawn(t, gap)) { claimSpawn(p, t, p.type === 'bot' ? 2 : 3); done = true; break; }
-      }
-      if (!done) gap = Math.max(3, Math.floor(gap * 0.7));
-    }
-  }
-}
-function spawnHuman(t) {
-  if (!canSpawn(t, 5)) return false;
-  for (let u = 0; u < N; u++) if (owner[u] === human.id) setOwner(u, 0);
-  claimSpawn(human, t, 3);
-  computeLabels();
-  return true;
-}
-
-// ════════════════ Game loop ════════════════
-function gameTick() {
-  tick++;
-  if (state === 'spawn') {
-    spawnLeft--;
-    if (spawnLeft <= 0) beginPlay();
-    return;
-  }
-  for (const p of players) {
-    if (!p || !p.alive) continue;
-    p.troops = Math.max(0, p.troops + troopRate(p));
-    p.gold += goldRate(p);
-  }
-  for (const a of attacks.slice()) if (attacks.includes(a)) stepAttack(a);
-
-  for (const s of ships) { s.px = s.x; s.py = s.y; }
-  for (const s of ships) {
-    if (s.dead) continue;
-    if (!players[s.owner].alive) { s.dead = true; continue; }
-    if (s.kind === 'warship') { stepWarship(s); continue; }
-    if (followPath(s, s.speed)) {
-      s.dead = true;
-      if (s.kind === 'transport') landBoat(s);
-      else if (s.dest.alive && players[s.dest.owner].alive) {
-        players[s.owner].gold += s.value; players[s.dest.owner].gold += s.value;
-      }
-    }
-  }
-  ships = ships.filter(s => !s.dead);
-
-  for (const nk of nukes.slice()) {
-    if (nk.intercept >= 0 && tick >= nk.intercept) {
-      const p = (tick - nk.start) / nk.dur;
-      const x = nk.x0 + (nk.tx - nk.x0) * p, y = nk.y0 + (nk.ty - nk.y0) * p - Math.sin(Math.PI * p) * Math.hypot(nk.tx - nk.x0, nk.ty - nk.y0) * 0.25;
-      boom(x, y, 3);
-      if (nk.sam) effects.push({ kind: 'shot', x0: nk.sam.x + 0.5, y0: nk.sam.y + 0.5, x1: x, y1: y, t0: performance.now(), dur: 400 });
-      if (nk.owner === human.id) addEvent('Your nuke was shot down by a SAM', 'bad');
-      else if (nk.sam && nk.sam.owner === human.id) addEvent('Your SAM shot down a nuke!', 'good');
-      nukes.splice(nukes.indexOf(nk), 1);
-    } else if (tick - nk.start >= nk.dur) {
-      nukes.splice(nukes.indexOf(nk), 1);
-      detonate(nk);
-    }
-  }
-
-  for (const p of players) if (p) p.cityLevels = 0;
-  for (const s of structs) {
-    if (!s.alive) continue;
-    if (s.type === 'city' && s.doneAt <= tick) players[s.owner].cityLevels += s.level;
-    if (s.type === 'port' && s.doneAt <= tick && tick >= s.nextTrade && s.dock >= 0) {
-      s.nextTrade = tick + 100 + (rand() * 60 | 0);
-      if (ships.length < 140) spawnTrade(s);
-    }
-  }
-
-  for (const p of players) {
-    if (!p || !p.alive || p === human) continue;
-    if (p.type === 'bot') { if ((tick + p.aiPhase) % 15 === 0) botTick(p); }
-    else if ((tick + p.aiPhase) % D.every === 0) aiTick(p);
-  }
-
-  if (tick % 10 === 0) {
-    for (const p of players) {
-      if (!p) continue;
-      for (const [id, until] of p.allies) if (until <= tick && id > p.id) {
-        breakAlliance(p.id, id, false);
-        if (p === human || id === human.id) addEvent(`Your alliance with <b>${esc((p === human ? players[id] : p).name)}</b> expired`, 'info');
-      }
-      for (const [id, v] of p.hate) p.hate.set(id, v * 0.995);
-    }
-    for (const [id, until] of pendingReq) if (until <= tick) pendingReq.delete(id);
-  }
-  if (tick % 20 === 0) computeLabels();
-  if (tick % 50 === 0) {
-    for (let i = falloutList.length - 1; i >= 0; i--) {
-      const t = falloutList[i];
-      if (falloutUntil[t] <= tick) { paint(t); falloutList[i] = falloutList[falloutList.length - 1]; falloutList.pop(); }
-    }
-  }
-  checkElims();
-}
-function beginPlay() {
-  if (!human.spawned) {
-    for (let k = 0; k < 5000 && !human.spawned; k++) spawnHuman(rand() * N | 0);
-    if (human.spawned) addEvent('You were placed at a random spot', 'info');
-  }
-  for (const p of players) if (p && !p.spawned) p.alive = false;
-  state = 'play';
-  immunityUntil = tick + IMMUNITY_TICKS;
-  computeLabels();
-  $('banner').classList.add('hidden');
-  addEvent('The game has begun! Spawn protection lasts 30 seconds.', 'info');
-  centerOnHuman();
-}
-function checkElims() {
-  for (const p of players) {
-    if (!p || !p.alive || !p.spawned || p.tiles > 0) continue;
-    p.alive = false;
-    for (const a of attacks.slice()) {
-      if (a.p === p.id) removeAttack(a, 0);
-      else if (a.target === p.id) removeAttack(a, 1);
-    }
-    for (const s of ships) if (s.owner === p.id) s.dead = true;
-    for (const [id] of p.allies) breakAlliance(p.id, id, false);
-    const killer = players[p.lastHitBy];
-    if (killer && killer.alive) { killer.gold += p.gold; }
-    p.gold = 0;
-    if (killer === human) stats.kills++;
-    if (p.type !== 'bot' || killer === human) {
-      addEvent(`<b>${esc(p.name)}</b> was eliminated${killer ? ' by <b>' + esc(killer.name) + '</b>' : ''}`, p === human ? 'bad' : 'warn');
-    }
-    if (p === human && !ended) endGame(false);
-  }
-  if (tick % 10) return;
-  const share = human.tiles / landTotal;
-  if (share > stats.peak) stats.peak = share;
-  if (ended) return;
-  const alive = players.filter(p => p && p.alive);
-  for (const p of alive) {
-    if (p.tiles >= landTotal * WIN_SHARE || alive.length === 1) { endGame(p === human, p); return; }
-  }
-}
-function endGame(won, winner) {
-  ended = true;
-  $('endTitle').textContent = won ? 'VICTORY' : 'DEFEATED';
-  $('endTitle').style.color = won ? '#2ecc71' : '#e74c3c';
-  const lines = [];
-  if (won) lines.push(`You control ${(human.tiles / landTotal * 100).toFixed(1)}% of the land.`);
-  else if (winner) lines.push(`<b>${esc(winner.name)}</b> has conquered the world.`);
-  else lines.push('Your nation has fallen.');
-  lines.push(`Time: ${fmtTime(tick)} · Peak land: ${(stats.peak * 100).toFixed(1)}% · Players eliminated: ${stats.kills}`);
-  $('endText').innerHTML = lines.join('<br>');
-  $('watchBtn').classList.toggle('hidden', !!winner);
-  $('endOv').classList.remove('hidden');
+function sendAct(i) {
+  if (!G) return;
+  if (mode === 'sp') { const err = G.act(meId, i); if (err) addEvent(esc(err), 'warn', { ttl: 2500 }); }
+  else netSend({ t: 'act', i });
 }
 
 // ════════════════ Rendering ════════════════
@@ -1523,29 +518,32 @@ addEventListener('resize', resize);
 resize();
 
 function fitCamera() {
-  cam.s = Math.min(VW / W, VH / H) * 0.98;
-  cam.ox = (VW - W * cam.s) / 2; cam.oy = (VH - H * cam.s) / 2;
+  cam.s = Math.min(VW / G.W, VH / G.H) * 0.98;
+  cam.ox = (VW - G.W * cam.s) / 2; cam.oy = (VH - G.H * cam.s) / 2;
 }
-function centerOnHuman() {
-  if (!human || human.bestT < 0) return;
-  cam.s = Math.max(cam.s, Math.min(VW / W, VH / H) * 2.2);
-  cam.ox = VW / 2 - human.lx * cam.s; cam.oy = VH / 2 - human.ly * cam.s;
+function centerOnMe() {
+  const p = me();
+  if (!p || p.bestT < 0) return;
+  cam.s = Math.max(cam.s, Math.min(VW / G.W, VH / G.H) * 2.2);
+  cam.ox = VW / 2 - p.lx * cam.s; cam.oy = VH / 2 - p.ly * cam.s;
 }
 function zoomAt(sx, sy, f) {
-  const minS = Math.min(VW / W, VH / H) * 0.6, maxS = 40;
+  if (!G) return;
+  const minS = Math.min(VW / G.W, VH / G.H) * 0.6, maxS = 40;
   const ns = within(cam.s * f, minS, maxS);
   const wx = (sx - cam.ox) / cam.s, wy = (sy - cam.oy) / cam.s;
   cam.s = ns; cam.ox = sx - wx * ns; cam.oy = sy - wy * ns;
 }
 function screenToTile(sx, sy) {
+  if (!G) return -1;
   const x = Math.floor((sx - cam.ox) / cam.s), y = Math.floor((sy - cam.oy) / cam.s);
-  if (x < 0 || y < 0 || x >= W || y >= H) return -1;
-  return y * W + x;
+  if (x < 0 || y < 0 || x >= G.W || y >= G.H) return -1;
+  return y * G.W + x;
 }
 
 function drawStruct(s, k) {
-  const p = players[s.owner], r = Math.max(1.5, 7 * k), x = s.x + 0.5, y = s.y + 0.5;
-  ctx.globalAlpha = s.doneAt > tick ? 0.45 : 1;
+  const p = G.players[s.owner], r = Math.max(1.5, 7 * k), x = s.x + 0.5, y = s.y + 0.5;
+  ctx.globalAlpha = s.doneAt > G.tick ? 0.45 : 1;
   ctx.fillStyle = rgb(p.color);
   ctx.strokeStyle = '#fff';
   ctx.lineWidth = r * 0.28;
@@ -1565,14 +563,14 @@ function drawStruct(s, k) {
     ctx.fillStyle = '#fff'; ctx.font = `900 ${r * 1.1}px Segoe UI`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(s.level, x, y + r * 0.25);
   }
-  if (s.type === 'silo' && s.doneAt <= tick && s.readyAt > tick) {
+  if (s.type === 'silo' && s.doneAt <= G.tick && s.readyAt > G.tick) {
     ctx.strokeStyle = '#f5c518'; ctx.lineWidth = r * 0.25; ctx.beginPath();
-    ctx.arc(x, y, r * 1.6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - (s.readyAt - tick) / 80)); ctx.stroke();
+    ctx.arc(x, y, r * 1.6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - (s.readyAt - G.tick) / 80)); ctx.stroke();
   }
   ctx.globalAlpha = 1;
 }
 function drawShip(s, k, alpha) {
-  const p = players[s.owner];
+  const p = G.players[s.owner];
   const x = s.px + (s.x - s.px) * alpha, y = s.py + (s.y - s.py) * alpha;
   ctx.save(); ctx.translate(x, y); ctx.rotate(s.ang);
   ctx.fillStyle = rgb(p.color); ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(0.2, 1.2 * k);
@@ -1583,24 +581,21 @@ function drawShip(s, k, alpha) {
   ctx.fill(); ctx.stroke();
   ctx.restore();
 }
-function nukePos(nk, alpha) {
-  const p = Math.min(1, (tick - nk.start + alpha) / nk.dur);
-  const d = Math.hypot(nk.tx - nk.x0, nk.ty - nk.y0);
-  return [nk.x0 + (nk.tx - nk.x0) * p, nk.y0 + (nk.ty - nk.y0) * p - Math.sin(Math.PI * p) * d * 0.25];
-}
 
-let acc = 0, last = performance.now();
+let acc = 0, last = performance.now(), lastHud = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(250, now - last); last = now;
-  if ((state === 'spawn' || state === 'play') && !paused) {
+  let alpha = 0;
+  if (G && mode === 'sp' && !paused) {
     acc += dt * speed;
     let steps = 0;
-    while (acc >= TICK_MS && steps < 8) { gameTick(); acc -= TICK_MS; steps++; }
+    while (acc >= TICK_MS && steps < 8) { G.step(); acc -= TICK_MS; steps++; }
     if (steps === 8) acc = 0;
-  }
+    alpha = acc / TICK_MS;
+  } else if (G && mode === 'mp') alpha = Math.min(1, (now - lastTickAt) / TICK_MS);
   panKeys(dt);
-  render(now, paused ? 0 : acc / TICK_MS);
+  render(now, alpha);
   if (now - lastHud > 200) { lastHud = now; updateHUD(); }
 }
 
@@ -1608,22 +603,20 @@ function render(now, alpha) {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.fillStyle = '#18365a';
   ctx.fillRect(0, 0, VW, VH);
-  if (!W || state === 'menu') return;
+  if (!G || $('hud').classList.contains('hidden')) return;
   if (mapDirty) { mapCtx.putImageData(img, 0, 0); mapDirty = false; }
-  const k = 1 / cam.s;
+  const k = 1 / cam.s, tick = G.tick;
   ctx.setTransform(DPR * cam.s, 0, 0, DPR * cam.s, DPR * cam.ox, DPR * cam.oy);
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(mapCv, 0, 0);
 
-  // Defense post ranges for your own posts, faint
-  for (const s of structs) if (s.alive && s.type === 'defense' && s.owner === human.id) {
+  for (const s of G.structs) if (s.alive && s.type === 'defense' && s.owner === meId) {
     ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = k; ctx.beginPath(); ctx.arc(s.x + 0.5, s.y + 0.5, DEFENSE_RANGE, 0, Math.PI * 2); ctx.stroke();
   }
-  for (const s of structs) if (s.alive) drawStruct(s, k);
-  for (const s of ships) drawShip(s, k, alpha);
+  for (const s of G.structs) if (s.alive) drawStruct(s, k);
+  for (const s of G.ships) drawShip(s, k, alpha);
 
-  // Nukes
-  for (const nk of nukes) {
+  for (const nk of G.nukes) {
     const R = NUKE[nk.type];
     ctx.setLineDash([3 * k, 3 * k]); ctx.strokeStyle = 'rgba(231,76,60,0.85)'; ctx.lineWidth = 1.5 * k;
     ctx.beginPath(); ctx.arc(nk.tx, nk.ty, R.outer, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
@@ -1635,12 +628,11 @@ function render(now, alpha) {
       if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
     }
     ctx.stroke();
-    const [x, y] = nukePos(nk, alpha);
+    const [x, y] = G.nukePos(nk, alpha);
     ctx.fillStyle = nk.type === 'atom' ? '#f5c518' : '#ff5a3c';
     ctx.beginPath(); ctx.arc(x, y, Math.max(1.2, 4.5 * k), 0, Math.PI * 2); ctx.fill();
   }
 
-  // Effects
   effects = effects.filter(e => now - e.t0 < e.dur);
   for (const e of effects) {
     const f = (now - e.t0) / e.dur;
@@ -1657,10 +649,10 @@ function render(now, alpha) {
     }
   }
 
-  // Build preview
-  if (buildMode && hoverTile >= 0 && state === 'play') {
-    const hx = hoverTile % W + 0.5, hy = ((hoverTile / W) | 0) + 0.5;
-    const err = placeError(human, buildMode, hoverTile) || (human.gold < costOf(human, buildMode) ? 'gold' : null);
+  const p = me();
+  if (buildMode && hoverTile >= 0 && G.state === 'play' && p) {
+    const hx = hoverTile % G.W + 0.5, hy = ((hoverTile / G.W) | 0) + 0.5;
+    const err = G.placeError(p, buildMode, hoverTile) || (p.gold < G.costOf(p, buildMode) ? 'gold' : null);
     ctx.strokeStyle = err ? 'rgba(231,76,60,0.95)' : 'rgba(46,204,113,0.95)';
     ctx.lineWidth = 2 * k;
     const rr = NUKE[buildMode] ? NUKE[buildMode].outer : buildMode === 'defense' ? DEFENSE_RANGE : buildMode === 'sam' ? SAM_RANGE : Math.max(2, 8 * k);
@@ -1668,32 +660,30 @@ function render(now, alpha) {
     if (NUKE[buildMode]) { ctx.beginPath(); ctx.arc(hx, hy, NUKE[buildMode].inner, 0, Math.PI * 2); ctx.stroke(); }
   }
 
-  // Labels (screen space)
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.lineJoin = 'round';
-  for (const p of players) {
-    if (!p || !p.alive || p.bestT < 0 || p.tiles === 0) continue;
-    const fs = Math.min(64, p.lfs * cam.s);
+  for (const q of G.players) {
+    if (!q || !q.alive || q.bestT < 0 || q.tiles === 0) continue;
+    const fs = Math.min(64, q.lfs * cam.s);
     if (fs < 7) continue;
-    const sx = p.lx * cam.s + cam.ox, sy = p.ly * cam.s + cam.oy;
+    const sx = q.lx * cam.s + cam.ox, sy = q.ly * cam.s + cam.oy;
     if (sx < -200 || sy < -50 || sx > VW + 200 || sy > VH + 50) continue;
-    const ally = allied(human.id, p.id);
+    const ally = G.allied(meId, q.id);
     ctx.font = `800 ${fs}px Segoe UI, sans-serif`;
     ctx.lineWidth = Math.max(2, fs * 0.18); ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-    const name = (ally ? '🤝 ' : '') + p.name;
+    const name = (ally ? '🤝 ' : '') + q.name;
     ctx.strokeText(name, sx, sy - fs * 0.32);
-    ctx.fillStyle = p === human ? '#fff' : ally ? '#b8f5c8' : p.traitorUntil > tick ? '#ffb3a8' : '#fff';
+    ctx.fillStyle = q.id === meId ? '#fff' : ally ? '#b8f5c8' : q.traitorUntil > tick ? '#ffb3a8' : '#fff';
     ctx.fillText(name, sx, sy - fs * 0.32);
     ctx.font = `700 ${fs * 0.72}px Segoe UI, sans-serif`;
-    ctx.strokeText(fmt(p.troops), sx, sy + fs * 0.5);
+    ctx.strokeText(fmt(q.troops), sx, sy + fs * 0.5);
     ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    ctx.fillText(fmt(p.troops), sx, sy + fs * 0.5);
+    ctx.fillText(fmt(q.troops), sx, sy + fs * 0.5);
   }
-  // Transport troop counts when zoomed in
   if (cam.s > 3) {
     ctx.font = '700 11px Segoe UI'; ctx.fillStyle = '#fff';
-    for (const s of ships) if (s.kind === 'transport') {
+    for (const s of G.ships) if (s.kind === 'transport') {
       const x = (s.px + (s.x - s.px) * alpha) * cam.s + cam.ox, y = (s.py + (s.y - s.py) * alpha) * cam.s + cam.oy;
       ctx.fillText(fmt(s.troops), x, y - 12);
     }
@@ -1701,83 +691,90 @@ function render(now, alpha) {
 }
 
 // ════════════════ HUD ════════════════
-let lastHud = 0;
 function fmtTime(t) { const s = Math.max(0, Math.floor(t / 10)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 function ratio() { return +$('ratio').value / 100; }
+function relation(o) {
+  if (!o) return 'Unclaimed';
+  const p = G.players[o];
+  if (o === meId) return 'You';
+  const tags = [p.type === 'bot' ? 'Tribe' : p.type === 'human' ? 'Player' : 'Nation'];
+  if (G.allied(meId, o)) tags.push('<span style="color:#2ecc71">Ally</span>');
+  if (p.traitorUntil > G.tick) tags.push('<span style="color:#e74c3c">Traitor</span>');
+  return tags.join(' · ');
+}
 function updateHUD() {
-  if (state === 'menu' || !human) return;
-  const max = maxTroops(human);
-  $('timer').textContent = state === 'spawn' ? '--:--' : fmtTime(tick - (immunityUntil - IMMUNITY_TICKS));
-  $('sTroops').textContent = fmt(human.troops) + ' / ' + fmt(max);
-  const tr = state === 'play' && human.alive ? troopRate(human) * 10 : 0;
+  const p = me();
+  if (!G || !p || $('hud').classList.contains('hidden')) return;
+  const max = G.maxTroops(p), play = G.state === 'play';
+  $('timer').textContent = play ? fmtTime(G.tick - (G.immunityUntil - IMMUNITY_TICKS)) : '--:--';
+  $('sTroops').textContent = fmt(p.troops) + ' / ' + fmt(max);
+  const tr = play && p.alive ? G.troopRate(p) * 10 : 0;
   $('sTroopRate').textContent = tr > 0 ? '+' + fmt(tr) + '/s' : '';
-  $('troopBar').style.width = within(human.troops / max * 100, 0, 100) + '%';
-  $('troopBar').style.background = human.troops / max > 0.35 && human.troops / max < 0.7 ? 'linear-gradient(90deg,#27ae60,#2ecc71)' : '';
-  $('sGold').textContent = fmt(human.gold);
-  $('sGoldRate').textContent = state === 'play' && human.alive ? '+' + fmt(goldRate(human) * 10) + '/s' : '';
-  $('sLand').textContent = (human.tiles / landTotal * 100).toFixed(1) + '%';
-  $('ratioVal').textContent = Math.round(ratio() * 100) + '% · ' + fmt(human.troops * ratio()) + ' troops';
+  $('troopBar').style.width = within(p.troops / max * 100, 0, 100) + '%';
+  $('troopBar').style.background = p.troops / max > 0.35 && p.troops / max < 0.7 ? 'linear-gradient(90deg,#27ae60,#2ecc71)' : '';
+  $('sGold').textContent = fmt(p.gold);
+  $('sGoldRate').textContent = play && p.alive ? '+' + fmt(G.goldRate(p) * 10) + '/s' : '';
+  $('sLand').textContent = (p.tiles / G.landTotal * 100).toFixed(1) + '%';
+  $('ratioVal').textContent = Math.round(ratio() * 100) + '% · ' + fmt(p.troops * ratio()) + ' troops';
   for (const b of document.querySelectorAll('.bb')) {
-    const type = b.dataset.t, c = costOf(human, type);
+    const type = b.dataset.t, c = G.costOf(p, type);
     b.querySelector('.c').textContent = fmt(c);
-    b.classList.toggle('off', human.gold < c);
+    b.classList.toggle('off', p.gold < c);
     b.classList.toggle('sel', buildMode === type);
   }
-  // Leaderboard
-  const ranked = players.filter(p => p && p.alive && p.tiles > 0).sort((a, b) => b.tiles - a.tiles);
+  const ranked = G.players.filter(q => q && q.alive && q.tiles > 0).sort((a, b) => b.tiles - a.tiles);
   const rows = ranked.slice(0, 8);
-  const myRank = ranked.indexOf(human);
-  if (myRank >= 8) rows.push(human);
+  if (ranked.indexOf(p) >= 8) rows.push(p);
   $('boardT').innerHTML = '<tr><td></td><td style="color:rgba(255,255,255,.45)">Nation</td><td class="r" style="color:rgba(255,255,255,.45)">Land</td><td class="r" style="color:rgba(255,255,255,.45)">Troops</td></tr>' +
-    rows.map(p => `<tr class="${p === human ? 'me' : ''}"><td>${ranked.indexOf(p) + 1}</td><td class="nm"><span class="sw" style="background:${rgb(p.color)}"></span>${allied(human.id, p.id) ? '🤝 ' : ''}${esc(p.name)}</td><td class="r">${(p.tiles / landTotal * 100).toFixed(1)}%</td><td class="r">${fmt(p.troops)}</td></tr>`).join('');
-  // Attacks
-  const mine = attacks.filter(a => a.p === human.id);
-  const boats = ships.filter(s => s.kind === 'transport' && s.owner === human.id);
-  const inc = attacks.filter(a => a.target === human.id);
+    rows.map(q => `<tr class="${q === p ? 'me' : ''}"><td>${ranked.indexOf(q) + 1}</td><td class="nm"><span class="sw" style="background:${rgb(q.color)}"></span>${G.allied(meId, q.id) ? '🤝 ' : ''}${q.type === 'human' && q !== p ? '👤 ' : ''}${esc(q.name)}</td><td class="r">${(q.tiles / G.landTotal * 100).toFixed(1)}%</td><td class="r">${fmt(q.troops)}</td></tr>`).join('');
+  const mine = G.attacks.filter(a => a.p === meId);
+  const boats = G.ships.filter(s => s.kind === 'transport' && s.owner === meId);
+  const inc = G.attacks.filter(a => a.target === meId).sort((a, b) => b.troops - a.troops);
   let html = '';
-  for (const a of mine) html += `<div class="atk panel" style="border-left:3px solid #e67e22">&#9876; ${a.target ? esc(players[a.target].name) : 'Unclaimed land'} · ${fmt(a.troops)}<button class="x" data-retreat="${a.target}" title="Retreat (lose 25%)">RETREAT</button></div>`;
+  for (const a of mine) html += `<div class="atk panel" style="border-left:3px solid #e67e22">&#9876; ${a.target ? esc(G.players[a.target].name) : 'Unclaimed land'} · ${fmt(a.troops)}<button class="x" data-retreat="${a.target}" title="Retreat (lose 25%)">RETREAT</button></div>`;
   for (const s of boats) html += `<div class="atk panel" style="border-left:3px solid #3498db">&#9973; Boat · ${fmt(s.troops)}</div>`;
-  inc.sort((a, b) => b.troops - a.troops);
-  for (const a of inc.slice(0, 3)) html += `<div class="atk panel" style="border-left:3px solid #e74c3c">&#9888; ${esc(players[a.p].name)} attacking · ${fmt(a.troops)}</div>`;
+  for (const a of inc.slice(0, 3)) html += `<div class="atk panel" style="border-left:3px solid #e74c3c">&#9888; ${esc(G.players[a.p].name)} attacking · ${fmt(a.troops)}</div>`;
   if (inc.length > 3) html += `<div class="atk panel" style="border-left:3px solid #e74c3c">&#9888; +${inc.length - 3} more attacks</div>`;
   $('attacks').innerHTML = html;
-  // Banner
   const bn = $('banner');
-  if (state === 'spawn') {
+  if (netLost && mode === 'mp') {
     bn.classList.remove('hidden');
-    bn.innerHTML = `<div>${human.spawned ? 'Spawn chosen! Click elsewhere to move.' : 'Click anywhere on land to choose your spawn'}<small>Game starts in ${Math.ceil(spawnLeft / 10)}s</small></div>` +
-      (human.spawned ? '<button class="gbtn sm" id="goNow">START NOW</button>' : '');
-  } else if (tick < immunityUntil) {
+    bn.innerHTML = '<div>Connection lost, reconnecting…<small>Your nation keeps its land while you are away.</small></div>';
+  } else if (G.state === 'spawn') {
     bn.classList.remove('hidden');
-    bn.innerHTML = `<div>Spawn protection: ${Math.ceil((immunityUntil - tick) / 10)}s<small>Players can't attack each other yet. Grab unclaimed land!</small></div>`;
+    bn.innerHTML = `<div>${p.spawned ? 'Spawn chosen! Click elsewhere to move.' : 'Click anywhere on land to choose your spawn'}<small>Game starts in ${Math.ceil(G.spawnLeft / 10)}s</small></div>` +
+      (p.spawned && mode === 'sp' ? '<button class="gbtn sm" id="goNow">START NOW</button>' : '');
+  } else if (G.tick < G.immunityUntil) {
+    bn.classList.remove('hidden');
+    bn.innerHTML = `<div>Spawn protection: ${Math.ceil((G.immunityUntil - G.tick) / 10)}s<small>Players can't attack each other yet. Grab unclaimed land!</small></div>`;
   } else bn.classList.add('hidden');
+  if (p.spawned && !p.alive && !endShown) showEnd(null);
   updateTip();
 }
 document.addEventListener('click', e => {
-  if (e.target.closest('#goNow') && state === 'spawn') { spawnLeft = 1; return; }
+  if (e.target.closest('#goNow')) { sendAct({ a: 'startNow' }); return; }
   const r = e.target.closest('[data-retreat]');
-  if (!r) return;
-  const a = attacks.find(a => a.p === human.id && a.target === +r.dataset.retreat);
-  if (a) { removeAttack(a, 0.75); addEvent('Troops retreated', 'info'); updateHUD(); }
+  if (r) sendAct({ a: 'retreat', target: +r.dataset.retreat });
 });
 
-function addEvent(html, cls, actions, ttl) {
+function addEvent(html, cls, extra) {
   const wrap = $('feedWrap');
   const d = document.createElement('div');
   d.className = 'ev panel ' + (cls || 'info');
   d.innerHTML = html;
-  if (actions) {
+  if (extra && extra.req) {
+    const from = extra.req;
     const row = document.createElement('div'); row.className = 'acts';
-    for (const [label, c, fn] of actions) {
+    for (const [label, c, yes] of [['Accept', 'yes', true], ['Reject', 'no', false]]) {
       const b = document.createElement('button'); b.className = c; b.textContent = label;
-      b.onclick = () => { fn(); d.remove(); };
+      b.onclick = () => { sendAct({ a: 'allyReply', from, yes }); d.remove(); };
       row.appendChild(b);
     }
     d.appendChild(row);
   }
   wrap.prepend(d);
   while (wrap.children.length > 6) wrap.lastChild.remove();
-  setTimeout(() => d.remove(), ttl || 7000);
+  setTimeout(() => d.remove(), (extra && extra.ttl) || 7000);
 }
 
 function buildButtons() {
@@ -1785,28 +782,28 @@ function buildButtons() {
   for (const b of document.querySelectorAll('.bb')) b.onclick = () => toggleBuild(b.dataset.t);
 }
 function toggleBuild(t) {
-  if (state !== 'play' || !human.alive) return;
+  const p = me();
+  if (!G || G.state !== 'play' || !p || !p.alive) return;
   buildMode = buildMode === t ? null : t;
-  if (buildMode) addEvent(`<b>${BUILD[t].name}</b>: ${BUILD[t].tip}. Click to place, Esc to cancel.`, 'info', null, 3500);
+  if (buildMode) addEvent(`<b>${BUILD[t].name}</b>: ${BUILD[t].tip}. Click to place, Esc to cancel.`, 'info', { ttl: 3500 });
   updateHUD();
 }
 
 function updateTip() {
-  const tip = $('tip');
-  if (!mouse.inside || hoverTile < 0 || state === 'menu' || !$('ctx').classList.contains('hidden')) { tip.classList.add('hidden'); return; }
-  const t = hoverTile, o = owner[t];
+  const tip = $('tip'), p = me();
+  if (!G || !p || !mouse.inside || hoverTile < 0 || !$('ctx').classList.contains('hidden')) { tip.classList.add('hidden'); return; }
+  const t = hoverTile, o = G.owner[t];
   let html;
-  if (!terrain[t]) html = '<b>Ocean</b>';
-  else if (!o) html = `<b>Unclaimed ${TERR[terrain[t]].name.toLowerCase()}</b>${falloutUntil[t] > tick ? '<br><span style="color:#9be36b">Nuclear fallout</span>' : ''}`;
+  if (!G.terrain[t]) html = '<b>Ocean</b>';
+  else if (!o) html = `<b>Unclaimed ${TERR[G.terrain[t]].name.toLowerCase()}</b>${G.falloutUntil[t] > G.tick ? '<br><span style="color:#9be36b">Nuclear fallout</span>' : ''}`;
   else {
-    const p = players[o];
-    html = `<b style="color:${rgb(p.color)}">${esc(p.name)}</b><br>${relation(o)}<br>Troops: ${fmt(p.troops)} · Land: ${(p.tiles / landTotal * 100).toFixed(1)}%<br>Gold: ${fmt(p.gold)}`;
-    if (hasDefensePost(t, o)) html += '<br><span style="color:#f5c518">Protected by a defense post</span>';
+    const q = G.players[o];
+    html = `<b style="color:${rgb(q.color)}">${esc(q.name)}</b><br>${relation(o)}<br>Troops: ${fmt(q.troops)} · Land: ${(q.tiles / G.landTotal * 100).toFixed(1)}%<br>Gold: ${fmt(q.gold)}`;
+    if (G.hasDefensePost(t, o)) html += '<br><span style="color:#f5c518">Protected by a defense post</span>';
   }
-  if (buildMode && state === 'play') {
-    const err = placeError(human, buildMode, t);
-    const c = costOf(human, buildMode);
-    html += `<br><span style="color:${err || human.gold < c ? '#e74c3c' : '#2ecc71'}">${err || (human.gold < c ? 'Need ' + fmt(c) + ' gold' : 'Click to build ' + BUILD[buildMode].name)}</span>`;
+  if (buildMode && G.state === 'play') {
+    const err = G.placeError(p, buildMode, t), c = G.costOf(p, buildMode);
+    html += `<br><span style="color:${err || p.gold < c ? '#e74c3c' : '#2ecc71'}">${err || (p.gold < c ? 'Need ' + fmt(c) + ' gold' : 'Click to build ' + BUILD[buildMode].name)}</span>`;
   }
   tip.innerHTML = html;
   tip.classList.remove('hidden');
@@ -1816,69 +813,38 @@ function updateTip() {
 
 // ════════════════ Player actions ════════════════
 function primaryAction(t) {
-  if (t < 0) return;
-  if (state === 'spawn') {
-    if (!spawnHuman(t)) addEvent('You can\'t spawn there. Pick open land away from other nations.', 'warn', null, 2500);
-    return;
-  }
-  if (state !== 'play' || !human.alive) return;
-  if (buildMode) {
-    const err = build(human, buildMode, t);
-    if (err) addEvent(err, 'warn', null, 2500);
-    else if (!['atom', 'hydrogen', 'warship'].includes(buildMode) && !(BUILD[buildMode].time === 0)) {
-      addEvent(`${BUILD[buildMode].name} under construction`, 'good', null, 2000);
-    }
-    buildMode = null; updateHUD();
-    return;
-  }
-  attackTile(t);
+  const p = me();
+  if (t < 0 || !p) return;
+  if (G.state === 'spawn') { sendAct({ a: 'spawn', t }); return; }
+  if (G.state !== 'play' || !p.alive) return;
+  if (buildMode) { sendAct({ a: 'build', k: buildMode, t }); buildMode = null; updateHUD(); return; }
+  if (G.terrain[t] && G.owner[t] !== meId) sendAct({ a: 'click', t, r: ratio() });
 }
-function attackTile(t) {
-  if (!terrain[t]) return;
-  const o = owner[t];
-  if (o === human.id) return;
-  if (o && allied(human.id, o)) return addEvent(`<b>${esc(players[o].name)}</b> is your ally`, 'info', null, 2500);
-  if (o && tick < immunityUntil) return addEvent(`Spawn protection: ${Math.ceil((immunityUntil - tick) / 10)}s left`, 'warn', null, 2500);
-  const troops = human.troops * ratio();
-  if (troops < 1) return addEvent('Not enough troops', 'warn', null, 2000);
-  if (touches(human, o, o ? -1 : landBody[t])) { startAttack(human, o, troops); updateHUD(); return; }
-  if (coastal[t]) { const err = sendBoat(human, t, troops); if (err) addEvent(err, 'warn', null, 2500); updateHUD(); return; }
-  addEvent('You need to border that land, or click its coast to send a boat', 'warn', null, 2500);
-}
-
 function openCtx(sx, sy) {
-  const t = screenToTile(sx, sy), m = $('ctx');
-  if (t < 0 || state !== 'play' || !human.alive) return;
-  const o = owner[t];
+  const t = screenToTile(sx, sy), m = $('ctx'), p = me();
+  if (t < 0 || !p || G.state !== 'play' || !p.alive) return;
+  const o = G.owner[t], r = ratio();
   const items = [];
+  const buildItem = (b, label) => {
+    const c = G.costOf(p, b);
+    items.push([`${label || BUILD[b].name} · <span style="color:#f5c518">${fmt(c)}</span>`, () => sendAct({ a: 'build', k: b, t }), !!G.placeError(p, b, t) || p.gold < c]);
+  };
   let head;
-  if (!terrain[t]) {
-    head = 'Ocean';
-    items.push(['&#9875; Build warship here', () => { const e = build(human, 'warship', t); if (e) addEvent(e, 'warn', null, 2500); }, !!placeError(human, 'warship', t)]);
-  } else if (o === human.id) {
-    head = 'Your land';
-    for (const b of ['city', 'port', 'defense', 'silo', 'sam']) {
-      const c = costOf(human, b);
-      items.push([`Build ${BUILD[b].name} · <span style="color:#f5c518">${fmt(c)}</span>`, () => { const e = build(human, b, t); if (e) addEvent(e, 'warn', null, 2500); }, !!placeError(human, b, t) || human.gold < c]);
-    }
-  } else {
-    const p = o ? players[o] : null;
-    head = p ? esc(p.name) + ' · ' + relation(o) : 'Unclaimed land';
-    const ally = o && allied(human.id, o);
-    items.push([`&#9876; Attack (${fmt(human.troops * ratio())})`, () => attackTile(t), ally]);
-    if (coastal[t]) items.push(['&#9973; Send boat here', () => { const e = sendBoat(human, t, human.troops * ratio()); if (e) addEvent(e, 'warn', null, 2500); }, ally]);
-    if (p) {
+  if (!G.terrain[t]) { head = 'Ocean'; buildItem('warship', '&#9875; Build warship here'); }
+  else if (o === meId) { head = 'Your land'; for (const b of ['city', 'port', 'defense', 'silo', 'sam']) buildItem(b, 'Build ' + BUILD[b].name); }
+  else {
+    const q = o ? G.players[o] : null, ally = o && G.allied(meId, o);
+    head = q ? esc(q.name) + ' · ' + relation(o) : 'Unclaimed land';
+    items.push([`&#9876; Attack (${fmt(p.troops * r)})`, () => sendAct({ a: 'click', t, r }), ally]);
+    if (G.coastal[t]) items.push(['&#9973; Send boat here', () => sendAct({ a: 'boat', t, r }), ally]);
+    if (q) {
       if (ally) {
-        items.push([`&#10148; Send ${fmt(human.troops * ratio())} troops`, () => sendTroops(human, p, human.troops * ratio()), false]);
-        items.push(['&#10007; Break alliance (traitor!)', () => { breakAlliance(human.id, p.id, true); addEvent(`You betrayed <b>${esc(p.name)}</b>. Others will trust you less.`, 'bad'); }, false]);
-      } else {
-        items.push(['&#129309; Request alliance', () => requestAlliance(human, p), false]);
-      }
+        items.push([`&#10148; Send ${fmt(p.troops * r)} troops`, () => sendAct({ a: 'donate', target: o, r }), false]);
+        items.push(['&#10007; Break alliance (traitor!)', () => sendAct({ a: 'break', target: o }), false]);
+      } else items.push(['&#129309; Request alliance', () => sendAct({ a: 'ally', target: o }), false]);
     }
-    for (const b of ['atom', 'hydrogen']) {
-      const c = costOf(human, b);
-      items.push([`&#9762; ${BUILD[b].name} · <span style="color:#f5c518">${fmt(c)}</span>`, () => { const e = build(human, b, t); if (e) addEvent(e, 'warn', null, 2500); }, !!placeError(human, b, t) || human.gold < c]);
-    }
+    buildItem('atom', '&#9762; ' + BUILD.atom.name);
+    buildItem('hydrogen', '&#9762; ' + BUILD.hydrogen.name);
   }
   m.innerHTML = `<div class="hd">${head}</div>`;
   for (const [label, fn, dis] of items) {
@@ -1893,6 +859,27 @@ function openCtx(sx, sy) {
   updateTip();
 }
 function hideCtx() { $('ctx').classList.add('hidden'); }
+
+function showEnd(winnerId) {
+  if (endShown) return;
+  endShown = true;
+  const p = me(), won = winnerId === meId, winner = winnerId ? G.players[winnerId] : null;
+  $('endTitle').textContent = won ? 'VICTORY' : winner ? 'GAME OVER' : 'DEFEATED';
+  $('endTitle').style.color = won ? '#2ecc71' : '#e74c3c';
+  const lines = [];
+  if (won) lines.push(`You control ${(p.tiles / G.landTotal * 100).toFixed(1)}% of the land.`);
+  else if (winner) lines.push(`<b>${esc(winner.name)}</b> has conquered the world.`);
+  else lines.push('Your nation has fallen.');
+  lines.push(`Time: ${fmtTime(G.tick - (G.immunityUntil - IMMUNITY_TICKS))} · Players eliminated: ${p.kills || 0}`);
+  $('endText').innerHTML = lines.join('<br>');
+  $('watchBtn').classList.toggle('hidden', !!winner);
+  $('endOv').classList.remove('hidden');
+}
+function backToMenu() {
+  if (mode === 'mp') netSend({ t: 'leave' });
+  G = null; mode = null; paintReady = false;
+  $('endOv').classList.add('hidden'); $('hud').classList.add('hidden'); $('menu').classList.remove('hidden');
+}
 
 // ════════════════ Input ════════════════
 const pts = new Map();
@@ -1913,7 +900,7 @@ cv.addEventListener('pointerdown', e => {
 });
 cv.addEventListener('pointermove', e => {
   mouse.x = e.clientX; mouse.y = e.clientY; mouse.inside = e.pointerType === 'mouse';
-  hoverTile = W ? screenToTile(e.clientX, e.clientY) : -1;
+  hoverTile = screenToTile(e.clientX, e.clientY);
   if (!pts.has(e.pointerId)) { updateTip(); return; }
   pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pts.size === 2 && pinch) {
@@ -1951,12 +938,12 @@ cv.addEventListener('wheel', e => { e.preventDefault(); hideCtx(); zoomAt(e.clie
 
 const keys = new Set();
 addEventListener('keydown', e => {
-  if (state === 'menu' || e.target.tagName === 'INPUT') return;
+  if (!G || $('hud').classList.contains('hidden') || e.target.tagName === 'INPUT') return;
   const k = e.key.toLowerCase();
   keys.add(k);
   if (k === 'escape') { buildMode = null; hideCtx(); updateHUD(); }
   else if (k === 'p') togglePause();
-  else if (k === 'c') centerOnHuman();
+  else if (k === 'c') centerOnMe();
   else if (k === '=' || k === '+') zoomAt(VW / 2, VH / 2, 1.25);
   else if (k === '-') zoomAt(VW / 2, VH / 2, 0.8);
   else if (k === 'q' || k === 'e') { const r = $('ratio'); r.value = within(+r.value + (k === 'e' ? 5 : -5), 1, 100); updateHUD(); }
@@ -1972,14 +959,14 @@ function panKeys(dt) {
   if (keys.has('d') || keys.has('arrowright')) cam.ox -= v;
 }
 function togglePause() {
-  if (state !== 'play') return;
+  if (mode !== 'sp' || G.state !== 'play') return;
   paused = !paused;
   $('paused').classList.toggle('hidden', !paused);
   $('pauseBtn').innerHTML = paused ? '&#9654;' : '&#10074;&#10074;';
 }
 $('pauseBtn').onclick = togglePause;
 $('speedBtn').onclick = () => { speed = speed === 1 ? 2 : speed === 2 ? 4 : 1; $('speedBtn').innerHTML = speed + '&times;'; };
-$('homeBtn').onclick = centerOnHuman;
+$('homeBtn').onclick = centerOnMe;
 $('ratio').oninput = updateHUD;
 $('boardHd').onclick = () => { $('board').classList.toggle('collapsed'); $('boardTog').innerHTML = $('board').classList.contains('collapsed') ? '&#9656;' : '&#9662;'; };
 
@@ -1992,54 +979,146 @@ for (const seg of document.querySelectorAll('.seg')) {
     menuCfg[seg.dataset.key] = b.dataset.v;
   });
 }
-for (const id of ['nNations', 'nBots']) {
-  $(id).oninput = () => { $(id + 'V').textContent = $(id).value; };
-}
+for (const id of ['nNations', 'nBots']) $(id).oninput = () => { $(id + 'V').textContent = $(id).value; };
 for (const tab of document.querySelectorAll('.tab')) {
   tab.onclick = () => {
     for (const t of document.querySelectorAll('.tab')) t.classList.toggle('on', t === tab);
     $('tab-sp').classList.toggle('hidden', tab.dataset.tab !== 'sp');
     $('tab-mp').classList.toggle('hidden', tab.dataset.tab !== 'mp');
+    if (tab.dataset.tab === 'mp') netConnect();
   };
 }
-$('toSp').onclick = () => document.querySelector('.tab[data-tab=sp]').click();
 try { $('nameIn').value = localStorage.getItem('frontier-name') || ''; } catch (e) { }
 if (window.innerWidth < 760) $('board').classList.add('collapsed');
-
-function startGame() {
+function playerName() {
   const name = ($('nameIn').value.trim() || 'Player').slice(0, 16);
   try { localStorage.setItem('frontier-name', name); } catch (e) { }
-  cfg = { ...menuCfg, nations: +$('nNations').value, bots: +$('nBots').value, name };
-  D = DIFF[cfg.diff];
-  players = [null]; attacks = []; ships = []; nukes = []; structs = []; effects = [];
-  tick = 0; ended = false; watching = false; paused = false; speed = 1; buildMode = null; human = null;
-  pendingReq = new Map(); askCooldown = new Map(); stats = { peak: 0, kills: 0 };
-  $('speedBtn').innerHTML = '1&times;'; $('pauseBtn').innerHTML = '&#10074;&#10074;'; $('paused').classList.add('hidden');
-  $('feedWrap').innerHTML = '';
-  genMap();
-  human = makePlayer(name, 'human', [30, 96, 255]);
-  const names = NATION_NAMES.slice().sort(() => rand() - 0.5);
-  for (let i = 0; i < cfg.nations; i++) {
-    let hue = (i * 137.508 + 20) % 360;
-    if (hue > 195 && hue < 240) hue = (hue + 60) % 360;
-    makePlayer(names[i % names.length] + (i >= names.length ? ' II' : ''), 'nation', hsl2rgb(hue, 62, 52));
-  }
-  for (let i = 0; i < cfg.bots; i++) makePlayer(botName(), 'bot', hsl2rgb(rand() * 360, 18 + rand() * 14, 40 + rand() * 16));
-  spawnAIs();
-  computeLabels();
-  state = 'spawn'; spawnLeft = SPAWN_TICKS; immunityUntil = SPAWN_TICKS + IMMUNITY_TICKS;
-  fitCamera();
-  $('menu').classList.add('hidden');
-  $('endOv').classList.add('hidden');
-  $('hud').classList.remove('hidden');
-  updateHUD();
+  return name;
 }
-$('startBtn').onclick = startGame;
-$('againBtn').onclick = () => {
-  state = 'menu';
-  $('endOv').classList.add('hidden'); $('hud').classList.add('hidden'); $('menu').classList.remove('hidden');
+$('nameIn').addEventListener('change', () => netSend({ t: 'name', name: playerName() }));
+
+$('startBtn').onclick = () => {
+  const cfg = { ...menuCfg, nations: +$('nNations').value, bots: +$('nBots').value, seed: (Math.random() * 2 ** 31) | 0 };
+  paintReady = false;
+  const game = FrontierCore.createGame({ cfg, humans: [{ name: playerName() }], allowStartNow: true, hooks });
+  initGame(game, 1, 'sp');
 };
-$('watchBtn').onclick = () => { watching = true; $('endOv').classList.add('hidden'); };
+$('againBtn').onclick = backToMenu;
+$('watchBtn').onclick = () => $('endOv').classList.add('hidden');
+
+// ════════════════ Multiplayer ════════════════
+let ws = null, netOpen = false, netLost = false, retryMs = 1000, retryT = null, room = null;
+function setStatus(cls, text) { $('mpDot').className = 'dot ' + cls; $('mpStatus').textContent = text; }
+function netSend(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
+function netConnect() {
+  if (ws && ws.readyState <= 1) return;
+  clearTimeout(retryT);
+  setStatus('wait', 'Connecting to the game server… (it can take up to a minute to wake up)');
+  try { ws = new WebSocket(SERVER_URL); } catch (e) { setStatus('off', 'Could not reach the game server'); return; }
+  ws.onopen = () => {
+    netOpen = true; retryMs = 1000;
+    let token = null;
+    try { token = sessionStorage.getItem('frontier-token'); } catch (e) { }
+    netSend({ t: 'hello', name: playerName(), token });
+  };
+  ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch { return; } onNet(m); };
+  ws.onclose = () => {
+    const wasOpen = netOpen; netOpen = false; ws = null;
+    if (mode === 'mp' && G) netLost = true;
+    setStatus('off', wasOpen ? 'Disconnected. Reconnecting…' : 'Game server is offline or waking up. Retrying…');
+    if (mode === 'mp' || !$('tab-mp').classList.contains('hidden')) {
+      retryT = setTimeout(netConnect, retryMs);
+      retryMs = Math.min(15000, retryMs * 1.7);
+    }
+  };
+}
+function onNet(m) {
+  switch (m.t) {
+    case 'welcome':
+      try { sessionStorage.setItem('frontier-token', m.token); } catch (e) { }
+      netLost = false;
+      setStatus('on', 'Connected');
+      break;
+    case 'lobbies':
+      setStatus('on', `Online · ${m.online} connected · ${m.games} game${m.games === 1 ? '' : 's'} running`);
+      if (!room) renderLobbies(m.list);
+      break;
+    case 'room': room = m; renderRoom(); break;
+    case 'err':
+      $('mpErr').textContent = m.msg;
+      if (G && mode === 'mp') addEvent(esc(m.msg), 'warn');
+      break;
+    case 'start': {
+      room = null; renderRoom(); $('mpErr').textContent = '';
+      paintReady = false;
+      const game = FrontierCore.createGame({ mirror: true, cfg: m.cfg, players: m.players, hooks });
+      initGame(game, m.me, 'mp');
+      if (m.rejoin) addEvent('Reconnected', 'good', { ttl: 2500 });
+      break;
+    }
+    case 'tick':
+      if (G && mode === 'mp') {
+        G.apply(m); lastTickAt = performance.now();
+        if (m.full) centerOnMe();
+      }
+      break;
+    case 'ev': if (G && mode === 'mp') addEvent(m.html, m.cls, { req: m.req, ttl: m.ttl }); break;
+    case 'end': if (G && mode === 'mp') showEnd(m.winner); break;
+    case 'closed':
+      try { sessionStorage.removeItem('frontier-token'); } catch (e) { }
+      if (mode === 'mp') backToMenu();
+      break;
+  }
+}
+function renderLobbies(list) {
+  const MAPN = { continents: 'Continents', pangaea: 'Pangaea', archipelago: 'Archipelago' };
+  $('pubList').innerHTML = list.length ? list.map(l => `<div class="lrow">Public lobby · ${MAPN[l.map]} · Free for All
+    <span class="pc">${l.players} / ${l.max}${l.startsIn !== null ? ' · starts in ' + l.startsIn + 's' : ' · waiting for players'}</span>
+    <button class="mpbtn" data-joinpub="${l.id}">JOIN</button></div>`).join('')
+    : '<div class="lrow" style="color:rgba(255,255,255,.5)">No public lobby right now</div>';
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-joinpub]');
+  if (b) { $('mpErr').textContent = ''; netSend({ t: 'name', name: playerName() }); netSend({ t: 'joinPublic', id: b.dataset.joinpub }); }
+});
+$('mpCreate').onclick = () => {
+  $('mpErr').textContent = '';
+  netSend({ t: 'name', name: playerName() });
+  netSend({ t: 'create', cfg: { map: 'continents', size: 'medium', diff: 'medium', nations: 8, bots: 30 } });
+};
+$('mpJoin').onclick = () => {
+  const code = $('codeIn').value.trim().toUpperCase();
+  if (code.length !== 4) { $('mpErr').textContent = 'Codes are 4 letters'; return; }
+  $('mpErr').textContent = '';
+  netSend({ t: 'name', name: playerName() });
+  netSend({ t: 'join', code });
+};
+$('codeIn').addEventListener('keydown', e => { if (e.key === 'Enter') $('mpJoin').click(); });
+$('roomLeave').onclick = () => { netSend({ t: 'leave' }); room = null; renderRoom(); };
+$('roomStart').onclick = () => netSend({ t: 'start' });
+function renderRoom() {
+  $('mpLobbyView').classList.toggle('hidden', !!room);
+  $('mpRoomView').classList.toggle('hidden', !room);
+  if (!room) return;
+  const head = room.isPublic
+    ? `<span class="fl">Public lobby · ${esc(room.cfg.map)}</span><p style="font-size:.85rem;font-weight:700">${room.startsIn !== null ? 'Starting in ' + room.startsIn + 's…' : 'Waiting for at least 2 players…'}</p>`
+    : `<span class="fl">Private lobby · share this code</span><div class="roomCode">${esc(room.code)}</div>`;
+  $('roomHead').innerHTML = head;
+  $('roomPlayers').innerHTML = room.players.map(n => `<span>${esc(n)}</span>`).join('') + `<span style="background:none;color:rgba(255,255,255,.5)">${room.players.length} / ${room.max}</span>`;
+  $('roomStart').classList.toggle('hidden', !room.isHost);
+  const c = room.cfg;
+  if (room.isHost) {
+    const sel = (key, opts) => `<div><span class="fl">${key}</span><select data-cfg="${key}">${opts.map(o => `<option value="${o}" ${String(c[key]) === String(o) ? 'selected' : ''}>${o}</option>`).join('')}</select></div>`;
+    $('roomCfg').innerHTML = `<div class="mpsel">${sel('map', ['continents', 'pangaea', 'archipelago'])}${sel('size', ['small', 'medium', 'large'])}${sel('diff', ['easy', 'medium', 'hard', 'impossible'])}${sel('nations', [0, 2, 4, 6, 8, 10, 14, 18, 24])}${sel('bots', [0, 10, 20, 30, 40, 60, 80, 120])}</div>`;
+    for (const s of document.querySelectorAll('[data-cfg]')) s.onchange = () => {
+      const cfg = { ...room.cfg };
+      for (const x of document.querySelectorAll('[data-cfg]')) cfg[x.dataset.cfg] = isNaN(+x.value) ? x.value : +x.value;
+      netSend({ t: 'cfg', cfg });
+    };
+  } else if (!room.isPublic) {
+    $('roomCfg').innerHTML = `<p style="font-size:.8rem;color:rgba(255,255,255,.65);margin-bottom:.9rem">${esc(c.map)} · ${esc(c.size)} · ${esc(c.diff)} AI · ${c.nations} nations · ${c.bots} bots. Waiting for the host to start…</p>`;
+  } else $('roomCfg').innerHTML = '';
+}
 
 buildButtons();
 requestAnimationFrame(frame);
