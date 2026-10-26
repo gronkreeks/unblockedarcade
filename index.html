@@ -561,6 +561,310 @@
 
   </div>
 
+<!-- ── EduArcade Chatroom ── -->
+<section class="cr" id="chatroom">
+  <div class="cr-wrap">
+    <div class="cr-head">
+      <div>
+        <h2>EduArcade Chatroom</h2>
+        <p>Talk games, strategies and homework with other players.</p>
+      </div>
+      <span class="cr-age" title="For people aged 13 and older">13+</span>
+    </div>
+
+    <!-- Step 1: name + age -->
+    <div class="cr-card" id="crJoin">
+      <div class="cr-cols">
+        <div class="cr-form">
+          <label class="cr-lbl" for="crName">Pick a chat name</label>
+          <input class="cr-in" id="crName" maxlength="16" placeholder="e.g. PixelFox" autocomplete="off" spellcheck="false">
+          <p class="cr-hint">Use a nickname, not your real name.</p>
+          <label class="cr-check"><input type="checkbox" id="crAge"> I am 13 years old or older</label>
+          <button class="cr-btn" id="crEnter">Enter Chatroom</button>
+          <div class="cr-err" id="crJoinErr"></div>
+        </div>
+        <div class="cr-rules">
+          <b>Chat rules</b>
+          <ul>
+            <li>Be kind. No bullying, hate or swearing.</li>
+            <li>Never share personal info: your real name, school, address, phone number or social accounts.</li>
+            <li>No links. They're removed automatically.</li>
+            <li>If anyone makes you uncomfortable, mute or report them and tell a trusted adult.</li>
+            <li>Messages aren't saved. People who get reported by several others are removed.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: pick a room -->
+    <div class="cr-card cr-hidden" id="crRooms">
+      <div class="cr-bar">
+        <span>Chatting as <b id="crMe"></b></span>
+        <button class="cr-link" id="crRename">Change name</button>
+      </div>
+      <span class="cr-lbl">Public rooms</span>
+      <div id="crPub" class="cr-pub"></div>
+      <div class="cr-cols cr-priv">
+        <div class="cr-box">
+          <span class="cr-lbl">Chat with friends</span>
+          <p class="cr-hint">Create a private room and share its 4-letter code.</p>
+          <button class="cr-btn" id="crCreate">Create Private Room</button>
+        </div>
+        <div class="cr-box">
+          <span class="cr-lbl">Join with code</span>
+          <div class="cr-row">
+            <input class="cr-in cr-code" id="crCode" maxlength="4" placeholder="ABCD" autocomplete="off" spellcheck="false">
+            <button class="cr-btn" id="crJoinCode">Join</button>
+          </div>
+        </div>
+      </div>
+      <div class="cr-err" id="crRoomsErr"></div>
+    </div>
+
+    <!-- Step 3: chat -->
+    <div class="cr-card cr-hidden" id="crChat">
+      <div class="cr-bar">
+        <div><b id="crTitle"></b> <span id="crCodeTag" class="cr-tag cr-hidden"></span> <span class="cr-count" id="crCount"></span></div>
+        <button class="cr-link" id="crLeave">← Rooms</button>
+      </div>
+      <div class="cr-main">
+        <div class="cr-log" id="crLog" aria-live="polite"></div>
+        <div class="cr-users" id="crUsers"></div>
+      </div>
+      <div class="cr-row cr-send">
+        <input class="cr-in" id="crMsg" maxlength="240" placeholder="Type a message…" autocomplete="off">
+        <button class="cr-btn" id="crSend">Send</button>
+      </div>
+      <div class="cr-err" id="crChatErr"></div>
+    </div>
+
+    <div class="cr-status" id="crStatus"></div>
+  </div>
+</section>
+
+<style>
+  .cr { width: 100%; background: #0b1730; border-top: 1px solid rgba(255,255,255,0.06); padding: 2.5rem 1rem 3rem; display: flex; justify-content: center; font-family: 'Segoe UI', sans-serif; color: #fff; }
+  .cr-wrap { width: 100%; max-width: 900px; }
+  .cr-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
+  .cr-head h2 { font-size: 1.3rem; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; }
+  .cr-head p { font-size: 0.8rem; color: rgba(255,255,255,0.55); margin-top: 0.2rem; }
+  .cr-age { background: #f5c518; color: #000; font-weight: 900; font-size: 0.75rem; letter-spacing: 1px; padding: 0.25rem 0.7rem; border-radius: 20px; }
+  .cr-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 1.1rem 1.2rem; }
+  .cr-hidden { display: none !important; }
+  .cr-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+  .cr-form { display: flex; flex-direction: column; align-items: flex-start; gap: 0.45rem; }
+  .cr-lbl { display: block; font-size: 0.62rem; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.5); margin-bottom: 0.35rem; }
+  .cr-in { width: 100%; padding: 0.55rem 0.8rem; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.25); color: #fff; font-family: inherit; font-size: 0.9rem; font-weight: 600; outline: none; }
+  .cr-in:focus { border-color: #5dade2; }
+  .cr-code { text-transform: uppercase; letter-spacing: 6px; font-weight: 900; }
+  .cr-hint { font-size: 0.74rem; color: rgba(255,255,255,0.5); line-height: 1.5; margin-bottom: 0.4rem; }
+  .cr-check { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 700; cursor: pointer; margin: 0.2rem 0 0.4rem; }
+  .cr-check input { width: 17px; height: 17px; accent-color: #27ae60; }
+  .cr-btn { font-family: inherit; font-size: 0.8rem; font-weight: 900; letter-spacing: 1px; color: #fff; border: none; border-radius: 20px; padding: 0.5rem 1.2rem; cursor: pointer; background: #27ae60; white-space: nowrap; }
+  .cr-btn:hover { filter: brightness(1.1); }
+  .cr-btn:disabled { opacity: 0.45; cursor: default; }
+  .cr-link { background: none; border: 1px solid rgba(255,255,255,0.25); color: #fff; border-radius: 20px; padding: 0.25rem 0.8rem; font-family: inherit; font-size: 0.75rem; font-weight: 700; cursor: pointer; }
+  .cr-link:hover { background: rgba(255,255,255,0.1); }
+  .cr-rules { background: rgba(0,0,0,0.2); border-radius: 12px; padding: 0.8rem 1rem; font-size: 0.78rem; line-height: 1.6; color: rgba(255,255,255,0.75); }
+  .cr-rules ul { padding-left: 1.1rem; margin-top: 0.3rem; }
+  .cr-err { color: #ff9a8a; font-size: 0.78rem; font-weight: 700; min-height: 1.1rem; margin-top: 0.4rem; }
+  .cr-err.ok { color: #7fe0a8; }
+  .cr-bar { display: flex; justify-content: space-between; align-items: center; gap: 0.8rem; margin-bottom: 0.9rem; font-size: 0.85rem; }
+  .cr-pub { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.6rem; margin-bottom: 1rem; }
+  .cr-room { text-align: left; background: rgba(0,0,0,0.25); border: 1.5px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 0.7rem 0.9rem; color: #fff; font-family: inherit; cursor: pointer; transition: border-color 0.12s, transform 0.12s; }
+  .cr-room:hover { border-color: #27ae60; transform: translateY(-2px); }
+  .cr-room b { display: block; font-size: 0.9rem; }
+  .cr-room span { display: block; font-size: 0.72rem; color: rgba(255,255,255,0.55); margin-top: 0.15rem; }
+  .cr-room i { font-style: normal; font-size: 0.7rem; color: #7fe0a8; font-weight: 800; }
+  .cr-box { background: rgba(0,0,0,0.2); border-radius: 12px; padding: 0.8rem 0.9rem; }
+  .cr-row { display: flex; gap: 0.5rem; align-items: center; }
+  .cr-tag { background: rgba(245,197,24,0.18); border: 1px solid rgba(245,197,24,0.5); color: #f5c518; font-weight: 900; letter-spacing: 3px; padding: 0.1rem 0.5rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer; }
+  .cr-count { color: rgba(255,255,255,0.5); font-size: 0.75rem; margin-left: 0.3rem; }
+  .cr-main { display: grid; grid-template-columns: 1fr 170px; gap: 0.8rem; }
+  .cr-log { height: 320px; overflow-y: auto; background: rgba(0,0,0,0.25); border-radius: 12px; padding: 0.6rem 0.8rem; font-size: 0.85rem; line-height: 1.5; }
+  .cr-log .m { padding: 0.15rem 0; word-wrap: break-word; position: relative; }
+  .cr-log .m b { font-weight: 800; margin-right: 0.35rem; }
+  .cr-log .m.me b { text-decoration: underline; text-underline-offset: 3px; }
+  .cr-log .m time { color: rgba(255,255,255,0.3); font-size: 0.68rem; margin-right: 0.4rem; }
+  .cr-log .sys { color: rgba(255,255,255,0.45); font-style: italic; font-size: 0.78rem; padding: 0.1rem 0; }
+  .cr-log .acts { display: none; margin-left: 0.4rem; }
+  .cr-log .m:hover .acts { display: inline; }
+  .cr-log .acts button { background: none; border: none; color: rgba(255,255,255,0.5); font-family: inherit; font-size: 0.68rem; font-weight: 700; cursor: pointer; padding: 0 0.25rem; }
+  .cr-log .acts button:hover { color: #fff; }
+  .cr-users { background: rgba(0,0,0,0.2); border-radius: 12px; padding: 0.6rem 0.7rem; font-size: 0.78rem; height: 320px; overflow-y: auto; }
+  .cr-users div { padding: 0.15rem 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cr-send { margin-top: 0.7rem; }
+  .cr-status { font-size: 0.72rem; color: rgba(255,255,255,0.4); margin-top: 0.6rem; min-height: 1rem; }
+  @media (max-width: 700px) {
+    .cr-cols { grid-template-columns: 1fr; }
+    .cr-main { grid-template-columns: 1fr; }
+    .cr-users { height: auto; max-height: 90px; }
+    .cr-log { height: 260px; }
+  }
+</style>
+
+<script>
+// EduArcade Chatroom. Connects only when you press "Enter Chatroom". The server filters every
+// message, removes links and contact details, and rate-limits spam. Nothing is saved.
+(() => {
+  const SERVER = new URLSearchParams(location.search).get('server') || 'wss://frontier-server.onrender.com';
+  const $ = id => document.getElementById(id);
+  let ws = null, me = null, room = null, wantRoom = null, retry = 1000, retryT = null, active = false, refreshT = null;
+  const muted = new Set();
+  try { $('crName').value = localStorage.getItem('edu-chat-name') || ''; } catch (e) { }
+
+  const show = step => { for (const id of ['crJoin', 'crRooms', 'crChat']) $(id).classList.toggle('cr-hidden', id !== step); };
+  const status = t => { $('crStatus').textContent = t; };
+  const err = (id, t, ok) => { $(id).textContent = t || ''; $(id).classList.toggle('ok', !!ok); };
+  const hue = s => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 360; };
+  const send = m => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
+
+  function connect() {
+    if (ws && ws.readyState <= 1) return;
+    clearTimeout(retryT);
+    status('Connecting… the chat server can take up to a minute to wake up.');
+    try { ws = new WebSocket(SERVER); } catch (e) { status("Couldn't reach the chat server."); return; }
+    ws.onopen = () => { retry = 1000; status('Connected'); send({ t: 'c_hello', name: $('crName').value.trim(), over13: true }); };
+    ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (x) { return; } onMsg(m); };
+    ws.onclose = () => {
+      ws = null;
+      if (!active) return;
+      status('Disconnected. Reconnecting…');
+      retryT = setTimeout(connect, retry);
+      retry = Math.min(15000, retry * 1.7);
+    };
+  }
+  function stop() { active = false; clearInterval(refreshT); if (ws) { try { ws.close(); } catch (e) { } } ws = null; }
+
+  function onMsg(m) {
+    switch (m.t) {
+      case 'c_welcome':
+        me = { name: m.name };
+        try { localStorage.setItem('edu-chat-name', m.name); } catch (e) { }
+        $('crMe').textContent = m.name;
+        renderRooms(m.rooms);
+        if (wantRoom) { send(wantRoom.code ? { t: 'c_code', code: wantRoom.code } : { t: 'c_join', id: wantRoom.id }); }
+        else show('crRooms');
+        clearInterval(refreshT);
+        refreshT = setInterval(() => { if (!room) send({ t: 'c_list' }); }, 5000);
+        break;
+      case 'c_denied':
+        stop(); show('crJoin'); err('crJoinErr', m.msg); status('');
+        break;
+      case 'c_kicked':
+        stop(); room = null; wantRoom = null; show('crJoin'); err('crJoinErr', m.msg); status('');
+        break;
+      case 'c_rooms': renderRooms(m.rooms); break;
+      case 'c_you': me = { name: m.name, uid: m.uid }; break;
+      case 'c_room':
+        room = m; wantRoom = { id: m.id, code: m.code };
+        renderRoom(); show('crChat'); err('crRoomsErr', '');
+        break;
+      case 'c_history': $('crLog').innerHTML = ''; for (const x of m.list) addMsg(x); break;
+      case 'c_msg': addMsg(m); break;
+      case 'c_err':
+        if (room) err('crChatErr', m.msg, m.ok);
+        else { err('crRoomsErr', m.msg); if (wantRoom) { wantRoom = null; show('crRooms'); } }
+        break;
+    }
+  }
+  function renderRooms(list) {
+    const box = $('crPub');
+    box.innerHTML = '';
+    for (const r of list) {
+      const b = document.createElement('button');
+      b.className = 'cr-room';
+      const t = document.createElement('b'); t.textContent = r.name;
+      const d = document.createElement('span'); d.textContent = r.desc;
+      const n = document.createElement('i'); n.textContent = `${r.users} online`;
+      b.append(t, d, n);
+      b.onclick = () => { err('crRoomsErr', ''); send({ t: 'c_join', id: r.id }); };
+      box.appendChild(b);
+    }
+  }
+  function renderRoom() {
+    $('crTitle').textContent = room.isPublic ? room.name : 'Private room';
+    $('crCodeTag').classList.toggle('cr-hidden', room.isPublic);
+    $('crCodeTag').textContent = room.code || '';
+    $('crCodeTag').title = 'Share this code with friends. Click to copy.';
+    $('crCount').textContent = `${room.users.length} online`;
+    const u = $('crUsers');
+    u.innerHTML = '';
+    const head = document.createElement('div'); head.className = 'cr-lbl'; head.textContent = 'In this room'; u.appendChild(head);
+    for (const n of room.users) {
+      const d = document.createElement('div');
+      d.textContent = n + (me && n === me.name ? ' (you)' : '');
+      d.style.color = `hsl(${hue(n)},75%,72%)`;
+      u.appendChild(d);
+    }
+  }
+  function addMsg(x) {
+    const log = $('crLog');
+    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+    const line = document.createElement('div');
+    if (x.sys) { line.className = 'sys'; line.textContent = x.text; }
+    else {
+      if (muted.has(x.uid)) return;
+      const mine = me && x.uid === me.uid;
+      line.className = 'm' + (mine ? ' me' : '');
+      line.dataset.uid = x.uid;
+      const tm = document.createElement('time');
+      tm.textContent = new Date(x.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const nm = document.createElement('b');
+      nm.textContent = x.from;
+      nm.style.color = `hsl(${hue(x.from)},75%,72%)`;
+      line.append(tm, nm, document.createTextNode(x.text));
+      if (!mine) {
+        const acts = document.createElement('span'); acts.className = 'acts';
+        const mu = document.createElement('button'); mu.textContent = 'Mute';
+        mu.onclick = () => {
+          muted.add(x.uid);
+          for (const l of [...log.querySelectorAll('.m')]) if (l.dataset.uid === x.uid) l.remove();
+          const s = document.createElement('div'); s.className = 'sys'; s.textContent = `${x.from} is muted for you`; log.appendChild(s);
+        };
+        const rp = document.createElement('button'); rp.textContent = 'Report';
+        rp.onclick = () => { if (confirm(`Report this message from ${x.from}?\n\n"${x.text}"`)) send({ t: 'c_report', id: x.id }); };
+        acts.append(mu, rp);
+        line.appendChild(acts);
+      }
+    }
+    log.appendChild(line);
+    while (log.children.length > 150) log.firstChild.remove();
+    if (atBottom) log.scrollTop = log.scrollHeight;
+  }
+  function sendMsg() {
+    const t = $('crMsg').value.trim();
+    if (!t) return;
+    if (!ws || ws.readyState !== 1) { err('crChatErr', 'Not connected right now'); return; }
+    send({ t: 'c_msg', text: t });
+    $('crMsg').value = '';
+    err('crChatErr', '');
+  }
+
+  $('crEnter').onclick = () => {
+    const name = $('crName').value.trim();
+    if (name.length < 2) return err('crJoinErr', 'Pick a name with at least 2 characters');
+    if (!$('crAge').checked) return err('crJoinErr', 'You need to be 13 or older to use the chatroom');
+    err('crJoinErr', '');
+    active = true; wantRoom = null;
+    if (ws && ws.readyState === 1) send({ t: 'c_hello', name, over13: true }); else connect();
+  };
+  $('crName').addEventListener('keydown', e => { if (e.key === 'Enter') $('crEnter').click(); });
+  $('crRename').onclick = () => { stop(); room = null; wantRoom = null; show('crJoin'); status(''); };
+  $('crCreate').onclick = () => { err('crRoomsErr', ''); send({ t: 'c_create' }); };
+  $('crJoinCode').onclick = () => {
+    const code = $('crCode').value.trim().toUpperCase();
+    if (!/^[A-Z]{4}$/.test(code)) return err('crRoomsErr', 'Codes are 4 letters');
+    err('crRoomsErr', ''); send({ t: 'c_code', code });
+  };
+  $('crCode').addEventListener('keydown', e => { if (e.key === 'Enter') $('crJoinCode').click(); });
+  $('crLeave').onclick = () => { send({ t: 'c_leave' }); room = null; wantRoom = null; $('crLog').innerHTML = ''; show('crRooms'); };
+  $('crSend').onclick = sendMsg;
+  $('crMsg').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); sendMsg(); } });
+  $('crCodeTag').onclick = () => { try { navigator.clipboard.writeText(room.code); err('crChatErr', 'Code copied', true); } catch (e) { } };
+})();
+</script>
+
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "f19965aca353444c9351b9a951d995e7"}'></script><!-- End Cloudflare Web Analytics -->
 
 <script>

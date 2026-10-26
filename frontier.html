@@ -263,6 +263,26 @@
     .mpsel { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.6rem; margin-bottom: 0.9rem; }
     .mpsel select { width: 100%; padding: 0.4rem; border-radius: 8px; background: #16294d; color: #fff; border: 1px solid rgba(255,255,255,0.2); font-family: inherit; font-weight: 700; }
     @media (max-width: 760px) { .mpgrid { grid-template-columns: 1fr; } }
+
+    /* Chat (lobby + in-game) */
+    .chat { margin: 0.2rem 0 0.9rem; background: rgba(0,0,0,0.25); border-radius: 12px; padding: 0.5rem 0.6rem; }
+    .chat.float { position: fixed; right: 10px; bottom: 132px; width: 300px; z-index: 11; margin: 0; background: rgba(10,20,45,0.88); border: 1px solid rgba(255,255,255,0.12); }
+    .chatHd { display: flex; justify-content: space-between; align-items: center; font-size: 0.6rem; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.5); margin-bottom: 0.35rem; cursor: pointer; }
+    .chat.min #chatBody { display: none; }
+    .chat.min .chatHd { margin-bottom: 0; }
+    .chatLog { height: 130px; overflow-y: auto; font-size: 0.75rem; line-height: 1.45; padding-right: 4px; user-select: text; -webkit-user-select: text; }
+    .chat.float .chatLog { height: 120px; }
+    .chatLog div { word-wrap: break-word; padding: 1px 0; }
+    .chatLog b { font-weight: 800; margin-right: 0.3rem; }
+    .chatLog .sys { color: rgba(255,255,255,0.45); font-style: italic; }
+    .chatLog .mute { opacity: 0; margin-left: 0.3rem; font-size: 0.6rem; background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-family: inherit; }
+    .chatLog div:hover .mute { opacity: 1; }
+    .chatRow { display: flex; gap: 0.35rem; margin-top: 0.4rem; }
+    .chatRow input { flex: 1; min-width: 0; padding: 0.4rem 0.6rem; border-radius: 8px; border: 1.5px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: #fff; font-family: inherit; font-size: 0.78rem; outline: none; user-select: text; -webkit-user-select: text; }
+    .chatRow input:focus { border-color: #5dade2; }
+    .chatErr { color: #ffb08a; font-size: 0.68rem; font-weight: 700; min-height: 0.9rem; margin-top: 0.2rem; }
+    .chatGate { font-size: 0.75rem; line-height: 1.5; color: rgba(255,255,255,0.7); display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start; }
+    @media (max-width: 760px) { .chat.float { bottom: 186px; width: min(240px, calc(100% - 20px)); } .chat.float .chatLog { height: 80px; } }
   </style>
 </head>
 <body>
@@ -399,6 +419,20 @@
     <div id="mpRoomView" class="hidden">
       <div id="roomHead"></div>
       <div class="plist" id="roomPlayers"></div>
+      <div id="chat" class="chat">
+        <div class="chatHd" id="chatHd"><span>Chat</span><span id="chatTog">&#9662;</span></div>
+        <div id="chatBody">
+          <div id="chatGate" class="chatGate">
+            Chat is only for players aged 13 and older. Be kind, and never share personal info like your full name, school, address or social accounts.
+            <button class="mpbtn" id="chatEnable">I'M 13 OR OLDER · TURN ON CHAT</button>
+          </div>
+          <div id="chatMain" class="hidden">
+            <div id="chatLog" class="chatLog"></div>
+            <div class="chatRow"><input id="chatIn" maxlength="240" placeholder="Type a message…" autocomplete="off"><button class="mpbtn" id="chatSend">SEND</button></div>
+            <div id="chatErr" class="chatErr"></div>
+          </div>
+        </div>
+      </div>
       <div id="roomCfg"></div>
       <div style="display:flex;gap:.5rem;flex-wrap:wrap">
         <button class="mpbtn" id="roomStart">START GAME</button>
@@ -495,6 +529,7 @@ function initGame(game, myId, m) {
   $('speedBtn').innerHTML = '1&times;'; $('pauseBtn').innerHTML = '&#10074;&#10074;'; $('paused').classList.add('hidden');
   $('pauseBtn').classList.toggle('hidden', m === 'mp'); $('speedBtn').classList.toggle('hidden', m === 'mp');
   $('feedWrap').innerHTML = '';
+  if (m !== 'mp') chatPlace('lobby');
   fitCamera();
   $('menu').classList.add('hidden'); $('endOv').classList.add('hidden'); $('hud').classList.remove('hidden');
   updateHUD();
@@ -876,7 +911,8 @@ function showEnd(winnerId) {
   $('endOv').classList.remove('hidden');
 }
 function backToMenu() {
-  if (mode === 'mp') netSend({ t: 'leave' });
+  if (mode === 'mp') { netSend({ t: 'leave' }); chatClear(); }
+  chatPlace('lobby');
   G = null; mode = null; paintReady = false;
   $('endOv').classList.add('hidden'); $('hud').classList.add('hidden'); $('menu').classList.remove('hidden');
 }
@@ -1038,12 +1074,17 @@ function onNet(m) {
       try { sessionStorage.setItem('frontier-token', m.token); } catch (e) { }
       netLost = false;
       setStatus('on', 'Connected');
+      if (chatOn) netSend({ t: 'chatOn', on: true });
       break;
     case 'lobbies':
       setStatus('on', `Online · ${m.online} connected · ${m.games} game${m.games === 1 ? '' : 's'} running`);
       if (!room) renderLobbies(m.list);
       break;
-    case 'room': room = m; renderRoom(); break;
+    case 'room':
+      if (!room || room.id !== m.id) chatClear();
+      room = m; renderRoom(); break;
+    case 'chat': chatAdd(m.from, m.text, m.pid); break;
+    case 'chatErr': chatError(m.msg); break;
     case 'err':
       $('mpErr').textContent = m.msg;
       if (G && mode === 'mp') addEvent(esc(m.msg), 'warn');
@@ -1053,6 +1094,7 @@ function onNet(m) {
       paintReady = false;
       const game = FrontierCore.createGame({ mirror: true, cfg: m.cfg, players: m.players, hooks });
       initGame(game, m.me, 'mp');
+      chatPlace('hud');
       if (m.rejoin) addEvent('Reconnected', 'good', { ttl: 2500 });
       break;
     }
@@ -1099,6 +1141,7 @@ $('roomStart').onclick = () => netSend({ t: 'start' });
 function renderRoom() {
   $('mpLobbyView').classList.toggle('hidden', !!room);
   $('mpRoomView').classList.toggle('hidden', !room);
+  if (!(G && mode === 'mp')) chatPlace('lobby');
   if (!room) return;
   const head = room.isPublic
     ? `<span class="fl">Public lobby · ${esc(room.cfg.map)}</span><p style="font-size:.85rem;font-weight:700">${room.startsIn !== null ? 'Starting in ' + room.startsIn + 's…' : 'Waiting for at least 2 players…'}</p>`
@@ -1119,6 +1162,81 @@ function renderRoom() {
     $('roomCfg').innerHTML = `<p style="font-size:.8rem;color:rgba(255,255,255,.65);margin-bottom:.9rem">${esc(c.map)} · ${esc(c.size)} · ${esc(c.diff)} AI · ${c.nations} nations · ${c.bots} bots. Waiting for the host to start…</p>`;
   } else $('roomCfg').innerHTML = '';
 }
+
+// ════════════════ Chat ════════════════
+// Lobby and in-game chat for multiplayer. The server filters every message and only delivers
+// chat to players who confirmed they're 13+ and switched it on.
+let chatOn = false, chatErrT = null;
+const chatMuted = new Set();
+try { chatOn = sessionStorage.getItem('frontier-chat') === '1'; } catch (e) { }
+function chatPlace(where) {
+  const c = $('chat');
+  if (where === 'hud') { $('hud').appendChild(c); c.classList.add('float'); }
+  else { $('mpRoomView').insertBefore(c, $('roomCfg')); c.classList.remove('float'); }
+  chatRender();
+}
+function chatRender() {
+  $('chatGate').classList.toggle('hidden', chatOn);
+  $('chatMain').classList.toggle('hidden', !chatOn);
+}
+function chatClear() { $('chatLog').innerHTML = ''; }
+function chatError(msg) {
+  $('chatErr').textContent = msg;
+  clearTimeout(chatErrT); chatErrT = setTimeout(() => { $('chatErr').textContent = ''; }, 4000);
+}
+function chatAdd(from, text, pid) {
+  if (chatMuted.has(from)) return;
+  const log = $('chatLog'), line = document.createElement('div');
+  const nm = document.createElement('b');
+  nm.textContent = from + ':';
+  const p = G && mode === 'mp' && pid ? G.players[pid] : null;
+  nm.style.color = p ? rgb(p.color) : '#8fc3ff';
+  line.append(nm, document.createTextNode(text));
+  if (from !== playerName()) {
+    const mb = document.createElement('button');
+    mb.className = 'mute'; mb.textContent = 'mute'; mb.title = 'Hide messages from ' + from;
+    mb.onclick = () => {
+      chatMuted.add(from);
+      for (const l of [...log.children]) if (l.dataset.from === from) l.remove();
+      const s = document.createElement('div'); s.className = 'sys'; s.textContent = from + ' is muted for you';
+      log.appendChild(s);
+    };
+    line.appendChild(mb);
+  }
+  line.dataset.from = from;
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 30;
+  log.appendChild(line);
+  while (log.children.length > 80) log.firstChild.remove();
+  if (atBottom) log.scrollTop = log.scrollHeight;
+}
+function chatSendNow() {
+  const t = $('chatIn').value.trim();
+  if (!t) { $('chatIn').blur(); return; }
+  if (!netOpen) { chatError('Not connected'); return; }
+  netSend({ t: 'chat', text: t });
+  $('chatIn').value = '';
+}
+$('chatEnable').onclick = () => {
+  chatOn = true;
+  try { sessionStorage.setItem('frontier-chat', '1'); } catch (e) { }
+  netSend({ t: 'chatOn', on: true });
+  chatRender();
+};
+$('chatSend').onclick = chatSendNow;
+$('chatHd').onclick = () => { $('chat').classList.toggle('min'); $('chatTog').innerHTML = $('chat').classList.contains('min') ? '&#9656;' : '&#9662;'; };
+$('chatIn').addEventListener('keydown', e => {
+  e.stopPropagation();
+  if (e.key === 'Enter') { e.preventDefault(); chatSendNow(); }
+  else if (e.key === 'Escape') $('chatIn').blur();
+});
+// In a multiplayer game, Enter jumps to the chat box
+addEventListener('keydown', e => {
+  if (e.key === 'Enter' && G && mode === 'mp' && chatOn && document.activeElement !== $('chatIn')) {
+    e.preventDefault();
+    $('chat').classList.remove('min');
+    $('chatIn').focus();
+  }
+});
 
 buildButtons();
 requestAnimationFrame(frame);

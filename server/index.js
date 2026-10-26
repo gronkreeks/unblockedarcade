@@ -1,12 +1,14 @@
-// Frontier multiplayer server.
+// Frontier multiplayer server, plus chat.
 // The server runs the real game (frontier-core.js) and streams changes to every player over
 // WebSockets. Players only send intents ("attack this tile", "build a city here"), so nobody
 // can cheat by editing their own copy of the game.
+// It also hosts the EduArcade chatroom and Frontier's lobby/in-game chat (see chat.js).
 'use strict';
 const http = require('http');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const Core = require('../frontier-core.js');
+const { filterMessage, checkName, newRate, rateCheck, createChat } = require('./chat.js');
 
 const PORT = process.env.PORT || 8080;
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ||
@@ -33,6 +35,8 @@ const now = () => Date.now();
 function send(ws, msg) { if (ws && ws.readyState === 1) ws.send(typeof msg === 'string' ? msg : JSON.stringify(msg)); }
 function cleanName(n) {
   n = String(n || '').replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 16);
+  // Nation names are shown to everyone, so offensive ones become "Player"
+  if (n && !checkName(n).ok && checkName(n).reason === 'Please pick a different name') return 'Player';
   return n || 'Player';
 }
 function cleanCfg(c) {
@@ -181,6 +185,8 @@ setInterval(() => {
   for (const ws of clients) if (!ws.session || !ws.session.room) send(ws, list);
 }, 1000);
 
+const chat = createChat({ send, now, log });
+
 // ──────────── Messages ────────────
 function onMessage(ws, raw) {
   // Simple flood protection: at most 30 messages per second.
@@ -190,6 +196,7 @@ function onMessage(ws, raw) {
   let m;
   try { m = JSON.parse(raw); } catch { return; }
   if (!m || typeof m.t !== 'string') return;
+  if (m.t.startsWith('c_')) { chat.handle(ws, m); return; }
 
   if (m.t === 'hello') {
     const old = typeof m.token === 'string' && sessions.get(m.token);
@@ -203,7 +210,7 @@ function onMessage(ws, raw) {
       send(ws, { t: 'tick', ...g.full() });
       return;
     }
-    const s = { token: crypto.randomBytes(16).toString('hex'), name: cleanName(m.name), ws, room: null, pid: 0 };
+    const s = { token: crypto.randomBytes(16).toString('hex'), name: cleanName(m.name), ws, room: null, pid: 0, chatOn: false, chatRate: newRate() };
     sessions.set(s.token, s);
     ws.session = s;
     send(ws, { t: 'welcome', token: s.token });
@@ -240,6 +247,18 @@ function onMessage(ws, raw) {
       if (s.room && s.room.state !== 'lobby') { s.room.members = s.room.members.filter(x => x !== s); }
       leaveRoom(s);
       break;
+    // Lobby and in-game chat. Only players who said they're 13+ and turned chat on send or receive it.
+    case 'chatOn': s.chatOn = m.on === true; break;
+    case 'chat': {
+      if (!s.chatOn || !s.room) return;
+      const f = filterMessage(m.text);
+      if (!f.ok) return send(ws, { t: 'chatErr', msg: f.reason });
+      const lim = rateCheck(s.chatRate, f.text, now());
+      if (lim) return send(ws, { t: 'chatErr', msg: lim });
+      const msg = JSON.stringify({ t: 'chat', from: s.name, pid: s.pid, text: f.text });
+      for (const x of s.room.members) if (x.chatOn) send(x.ws, msg);
+      break;
+    }
     case 'act': {
       const room = s.room;
       if (!room || !room.game || !s.pid) return;
@@ -255,11 +274,11 @@ function onMessage(ws, raw) {
 const server = http.createServer((req, res) => {
   if (req.url === '/status') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-    res.end(JSON.stringify({ ok: true, online: clients.size, games: runningGames(), lobbies: rooms.size - runningGames() }));
+    res.end(JSON.stringify({ ok: true, online: clients.size, games: runningGames(), lobbies: rooms.size - runningGames(), chat: chat.stats() }));
     return;
   }
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Frontier multiplayer server is running.\n');
+  res.end('Frontier multiplayer and EduArcade chat server is running.\n');
 });
 function originAllowed(origin) {
   if (!origin || origin === 'null') return true;   // opened from a file, or a non-browser client
@@ -271,13 +290,19 @@ const wss = new WebSocketServer({
   perMessageDeflate: { threshold: 512 },
   verifyClient: ({ origin }) => originAllowed(origin) && clients.size < MAX_CLIENTS,
 });
-wss.on('connection', ws => {
+wss.on('connection', (ws, req) => {
   clients.add(ws);
+  // Only a hash of the address is kept, used for chat timeouts. The last X-Forwarded-For entry is
+  // the one added by the hosting proxy; earlier entries can be faked by the client.
+  const fwd = String(req.headers['x-forwarded-for'] || '').split(',').map(x => x.trim()).filter(Boolean);
+  const ip = String(req.headers['cf-connecting-ip'] || '') || fwd[fwd.length - 1] || req.socket.remoteAddress || '';
+  ws.ipKey = crypto.createHash('sha256').update(ip + 'eduarcade-chat').digest('hex').slice(0, 16);
   ws.rateStart = now(); ws.rateCount = 0; ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
   ws.on('message', raw => onMessage(ws, raw));
   ws.on('close', () => {
     clients.delete(ws);
+    chat.close(ws);
     const s = ws.session;
     if (!s || s.ws !== ws) return;
     s.ws = null;
