@@ -272,7 +272,7 @@
     .chat.min .chatHd { margin-bottom: 0; }
     .chatLog { height: 130px; overflow-y: auto; font-size: 0.75rem; line-height: 1.45; padding-right: 4px; user-select: text; -webkit-user-select: text; }
     .chat.float .chatLog { height: 120px; }
-    .chatLog div { word-wrap: break-word; padding: 1px 0; }
+    .chatLog div { overflow-wrap: anywhere; padding: 1px 0; }
     .chatLog b { font-weight: 800; margin-right: 0.3rem; }
     .chatLog .sys { color: rgba(255,255,255,0.45); font-style: italic; }
     .chatLog .mute { opacity: 0; margin-left: 0.3rem; font-size: 0.6rem; background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-family: inherit; }
@@ -280,6 +280,12 @@
     .chatRow { display: flex; gap: 0.35rem; margin-top: 0.4rem; }
     .chatRow input { flex: 1; min-width: 0; padding: 0.4rem 0.6rem; border-radius: 8px; border: 1.5px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: #fff; font-family: inherit; font-size: 0.78rem; outline: none; user-select: text; -webkit-user-select: text; }
     .chatRow input:focus { border-color: #5dade2; }
+    .chatLog .ping { background: rgba(245,197,24,0.14); border-left: 3px solid #f5c518; padding-left: 4px; border-radius: 3px; }
+    .chatLog .at { color: #8fc3ff; font-weight: 700; }
+    .chatLog .at.me { color: #f5c518; }
+    .chatLog b { cursor: pointer; }
+    .chatBell { background: none; border: none; cursor: pointer; font-size: 0.75rem; padding: 0 0.4rem; opacity: 0.8; }
+    .chatBell:hover { opacity: 1; }
     .chatErr { color: #ffb08a; font-size: 0.68rem; font-weight: 700; min-height: 0.9rem; margin-top: 0.2rem; }
     .chatGate { font-size: 0.75rem; line-height: 1.5; color: rgba(255,255,255,0.7); display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start; }
     @media (max-width: 760px) { .chat.float { bottom: 186px; width: min(240px, calc(100% - 20px)); } .chat.float .chatLog { height: 80px; } }
@@ -420,7 +426,7 @@
       <div id="roomHead"></div>
       <div class="plist" id="roomPlayers"></div>
       <div id="chat" class="chat">
-        <div class="chatHd" id="chatHd"><span>Chat</span><span id="chatTog">&#9662;</span></div>
+        <div class="chatHd" id="chatHd"><span>Chat</span><span><button class="chatBell" id="chatBell"></button><span id="chatTog">&#9662;</span></span></div>
         <div id="chatBody">
           <div id="chatGate" class="chatGate">
             Chat is only for players aged 13 and older. Be kind, and never share personal info like your full name, school, address or social accounts.
@@ -428,7 +434,7 @@
           </div>
           <div id="chatMain" class="hidden">
             <div id="chatLog" class="chatLog"></div>
-            <div class="chatRow"><input id="chatIn" maxlength="240" placeholder="Type a message…" autocomplete="off"><button class="mpbtn" id="chatSend">SEND</button></div>
+            <div class="chatRow"><input id="chatIn" maxlength="200" placeholder="Type a message…" autocomplete="off"><button class="mpbtn" id="chatSend">SEND</button></div>
             <div id="chatErr" class="chatErr"></div>
           </div>
         </div>
@@ -459,6 +465,7 @@
 </div>
 
 <script src="frontier-core.js"></script>
+<script src="chat-alerts.js"></script>
 <script>
 'use strict';
 // Frontier client: renders the game and sends the player's actions. The rules live in
@@ -1191,7 +1198,14 @@ function chatAdd(from, text, pid) {
   nm.textContent = from + ':';
   const p = G && mode === 'mp' && pid ? G.players[pid] : null;
   nm.style.color = p ? rgb(p.color) : '#8fc3ff';
-  line.append(nm, document.createTextNode(text));
+  nm.title = 'Click to mention';
+  nm.onclick = () => { const i = $('chatIn'); i.value = (i.value && !i.value.endsWith(' ') ? i.value + ' ' : i.value) + '@' + from + ' '; i.focus(); };
+  line.appendChild(nm);
+  ChatAlerts.renderText(line, text, playerName());
+  if (from !== playerName() && ChatAlerts.mentions(text, playerName())) {
+    line.classList.add('ping');
+    ChatAlerts.notify(from, text, 'Frontier');
+  }
   if (from !== playerName()) {
     const mb = document.createElement('button');
     mb.className = 'mute'; mb.textContent = 'mute'; mb.title = 'Hide messages from ' + from;
@@ -1216,7 +1230,14 @@ function chatSendNow() {
   netSend({ t: 'chat', text: t });
   $('chatIn').value = '';
 }
+function chatBell() {
+  $('chatBell').textContent = ChatAlerts.enabled ? '🔔' : '🔕';
+  $('chatBell').title = ChatAlerts.enabled ? 'Mention alerts on: sound, tab badge and a popup when someone writes @' + playerName() : 'Mention alerts off';
+}
+$('chatBell').onclick = e => { e.stopPropagation(); ChatAlerts.setEnabled(!ChatAlerts.enabled); chatBell(); };
+chatBell();
 $('chatEnable').onclick = () => {
+  if (ChatAlerts.enabled) ChatAlerts.askPermission();
   chatOn = true;
   try { sessionStorage.setItem('frontier-chat', '1'); } catch (e) { }
   netSend({ t: 'chatOn', on: true });

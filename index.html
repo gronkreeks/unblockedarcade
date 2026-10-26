@@ -625,14 +625,18 @@
     <div class="cr-card cr-hidden" id="crChat">
       <div class="cr-bar">
         <div><b id="crTitle"></b> <span id="crCodeTag" class="cr-tag cr-hidden"></span> <span class="cr-count" id="crCount"></span></div>
-        <button class="cr-link" id="crLeave">← Rooms</button>
+        <div class="cr-row">
+          <button class="cr-link" id="crBell" title="Sound, tab badge and a desktop popup when someone writes @yourname"></button>
+          <button class="cr-link" id="crLeave">← Rooms</button>
+        </div>
       </div>
       <div class="cr-main">
         <div class="cr-log" id="crLog" aria-live="polite"></div>
         <div class="cr-users" id="crUsers"></div>
       </div>
       <div class="cr-row cr-send">
-        <input class="cr-in" id="crMsg" maxlength="240" placeholder="Type a message…" autocomplete="off">
+        <input class="cr-in" id="crMsg" maxlength="200" placeholder="Type a message…" autocomplete="off">
+        <span class="cr-left" id="crLeft"></span>
         <button class="cr-btn" id="crSend">Send</button>
       </div>
       <div class="cr-err" id="crChatErr"></div>
@@ -682,9 +686,16 @@
   .cr-count { color: rgba(255,255,255,0.5); font-size: 0.75rem; margin-left: 0.3rem; }
   .cr-main { display: grid; grid-template-columns: 1fr 170px; gap: 0.8rem; }
   .cr-log { height: 320px; overflow-y: auto; background: rgba(0,0,0,0.25); border-radius: 12px; padding: 0.6rem 0.8rem; font-size: 0.85rem; line-height: 1.5; }
-  .cr-log .m { padding: 0.15rem 0; word-wrap: break-word; position: relative; }
+  .cr-log .m { padding: 0.15rem 0; overflow-wrap: anywhere; position: relative; }
+  .cr-left { font-size: 0.72rem; font-weight: 800; color: rgba(255,255,255,0.4); min-width: 2.2rem; text-align: right; font-variant-numeric: tabular-nums; }
+  .cr-left.low { color: #ffb08a; }
+  .cr-left:empty { display: none; }
   .cr-log .m b { font-weight: 800; margin-right: 0.35rem; }
   .cr-log .m.me b { text-decoration: underline; text-underline-offset: 3px; }
+  .cr-log .m.ping { background: rgba(245,197,24,0.12); border-left: 3px solid #f5c518; padding-left: 0.4rem; margin-left: -0.55rem; border-radius: 4px; }
+  .cr-log .at { color: #8fc3ff; font-weight: 700; }
+  .cr-log .at.me { color: #f5c518; }
+  .cr-log .m b, .cr-users div { cursor: pointer; }
   .cr-log .m time { color: rgba(255,255,255,0.3); font-size: 0.68rem; margin-right: 0.4rem; }
   .cr-log .sys { color: rgba(255,255,255,0.45); font-style: italic; font-size: 0.78rem; padding: 0.1rem 0; }
   .cr-log .acts { display: none; margin-left: 0.4rem; }
@@ -703,6 +714,7 @@
   }
 </style>
 
+<script src="chat-alerts.js"></script>
 <script>
 // EduArcade Chatroom. Connects only when you press "Enter Chatroom". The server filters every
 // message, removes links and contact details, and rate-limits spam. Nothing is saved.
@@ -768,7 +780,7 @@
         renderRoom(); show('crChat'); err('crRoomsErr', '');
         break;
       case 'c_history': $('crLog').innerHTML = ''; for (const x of m.list) addMsg(x); break;
-      case 'c_msg': addMsg(m); break;
+      case 'c_msg': addMsg(m, true); break;
       case 'c_err':
         if (room) err('crChatErr', m.msg, m.ok);
         else { err('crRoomsErr', m.msg); if (wantRoom) { wantRoom = null; show('crRooms'); } }
@@ -802,10 +814,26 @@
       const d = document.createElement('div');
       d.textContent = n + (me && n === me.name ? ' (you)' : '');
       d.style.color = `hsl(${hue(n)},75%,72%)`;
+      d.title = 'Click to mention';
+      d.onclick = () => mention(n);
       u.appendChild(d);
     }
   }
-  function addMsg(x) {
+  // Click a name to start a message with @name
+  function mention(n) {
+    if (me && n === me.name) return;
+    const i = $('crMsg');
+    i.value = (i.value && !i.value.endsWith(' ') ? i.value + ' ' : i.value) + '@' + n + ' ';
+    i.focus();
+  }
+  function bell() {
+    const on = ChatAlerts.enabled, perm = ChatAlerts.permission();
+    $('crBell').textContent = on ? '🔔 Alerts on' : '🔕 Alerts off';
+    $('crBell').title = on && perm === 'denied'
+      ? 'Popups are blocked in your browser settings, so you get the sound and tab badge only'
+      : 'Sound, tab badge and a desktop popup when someone writes @yourname';
+  }
+  function addMsg(x, live) {
     const log = $('crLog');
     const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
     const line = document.createElement('div');
@@ -820,7 +848,13 @@
       const nm = document.createElement('b');
       nm.textContent = x.from;
       nm.style.color = `hsl(${hue(x.from)},75%,72%)`;
-      line.append(tm, nm, document.createTextNode(x.text));
+      nm.onclick = () => mention(x.from);
+      line.append(tm, nm);
+      ChatAlerts.renderText(line, x.text, me && me.name);
+      if (!mine && me && ChatAlerts.mentions(x.text, me.name)) {
+        line.classList.add('ping');
+        if (live) ChatAlerts.notify(x.from, x.text, room && room.isPublic ? room.name : 'a private room');
+      }
       if (!mine) {
         const acts = document.createElement('span'); acts.className = 'acts';
         const mu = document.createElement('button'); mu.textContent = 'Mute';
@@ -844,7 +878,7 @@
     if (!t) return;
     if (!ws || ws.readyState !== 1) { err('crChatErr', 'Not connected right now'); return; }
     send({ t: 'c_msg', text: t });
-    $('crMsg').value = '';
+    $('crMsg').value = ''; $('crLeft').textContent = '';
     err('crChatErr', '');
   }
 
@@ -853,6 +887,7 @@
     if (name.length < 2) return err('crJoinErr', 'Pick a name with at least 2 characters');
     if (!$('crAge').checked) return err('crJoinErr', 'You need to be 13 or older to use the chatroom');
     err('crJoinErr', '');
+    if (ChatAlerts.enabled) ChatAlerts.askPermission();
     active = true; wantRoom = null;
     if (ws && ws.readyState === 1) send({ t: 'c_hello', name, over13: true }); else connect();
   };
@@ -867,7 +902,12 @@
   $('crCode').addEventListener('keydown', e => { if (e.key === 'Enter') $('crJoinCode').click(); });
   $('crLeave').onclick = () => { send({ t: 'c_leave' }); room = null; wantRoom = null; $('crLog').innerHTML = ''; show('crRooms'); };
   $('crSend').onclick = sendMsg;
+  $('crBell').onclick = () => { ChatAlerts.setEnabled(!ChatAlerts.enabled); bell(); };
+  bell();
   $('crMsg').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); sendMsg(); } });
+  // Characters left, shown once you get close to the 200 limit
+  const left = () => { const n = 200 - $('crMsg').value.length; $('crLeft').textContent = n <= 50 ? n : ''; $('crLeft').classList.toggle('low', n <= 15); };
+  $('crMsg').addEventListener('input', left);
   $('crCodeTag').onclick = () => { try { navigator.clipboard.writeText(room.code); err('crChatErr', 'Code copied', true); } catch (e) { } };
 })();
 </script>

@@ -43,9 +43,11 @@ function tidy(raw, max) {
     .replace(/[\u0000-\u001f\u007f​-‏‪-‮⁠-⁤﻿]/g, '')
     .replace(/\s+/g, ' ').trim().slice(0, max);
 }
+const MAX_MSG = 200;
 // Returns { ok, text } or { ok: false, reason }.
 function filterMessage(raw) {
-  let text = tidy(raw, 240);
+  // Squash runs of the same character ("!!!!!!!!", "loooooool") to 4 before applying the length cap
+  let text = tidy(String(raw == null ? '' : raw).slice(0, MAX_MSG * 4).replace(/(.)\1{4,}/gu, '$1$1$1$1'), MAX_MSG);
   if (!text) return { ok: false, reason: 'Type a message first' };
   if ((CONTACT_RE.test(text) && INTENT_RE.test(text)) || ADDRESS_RE.test(text)) {
     return { ok: false, reason: "For safety, sharing contact details or social accounts isn't allowed here" };
@@ -246,4 +248,4 @@ function createChat({ send, now, log }) {
   return { handle, close, stats: () => ({ users: users.size, rooms: rooms.size }), roomList };
 }
 
-module.exports = { filterMessage, checkName, newRate, rateCheck, createChat };
+module.exports = { MAX_MSG, filterMessage, checkName, newRate, rateCheck, createChat };
