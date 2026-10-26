@@ -59,8 +59,7 @@
     /* ── Overlay ── */
     #overlay {
       position: fixed; inset: 0; z-index: 10; overflow-y: auto; padding: 1rem;
-      background: radial-gradient(ellipse at center, rgba(8,12,34,0.72), rgba(3,5,16,0.94));
-      backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+      background: radial-gradient(ellipse at center, rgba(8,12,34,0.8), rgba(3,5,16,0.95));
       display: flex; align-items: flex-start; justify-content: center;
     }
     .panel { display: flex; flex-direction: column; align-items: center; gap: 0.55rem; width: 100%; max-width: 760px; margin: auto; }
@@ -965,7 +964,7 @@ function applyMove(S, p, fx) {
   const link = S.ltI === i && S.ltId === 'set' && S.f - S.ltF < 110;
   const third = S.touches[i] >= MAX_TOUCH || (S.serving && S.serveBy === i);
   const err = perfect ? 0 : (heat0 * 14 + inSpd * 1.1) * (rnd(S) - 0.5) * (id === 'dig' ? 1.3 : 1);
-  let tag = saveTag, hs = 3, meter = 1, kind = 'pass', touchId = id;
+  let tag = saveTag, hs = 1, meter = 1, kind = 'pass', touchId = id;
   b.float = 0;
   switch (id) {
     case 'bump': case 'dig': case 'apass': {
@@ -1002,7 +1001,7 @@ function applyMove(S, p, fx) {
         const spin = a.v === 'f' ? 0.25 : 0.5;
         aimShot(b, f, d[0], d[1], spd, g + MAGNUS * spin * spd * d[0]);
         b.spin = spin * f;
-        hs = 5 + b.heat; meter += 2; kind = 'spike';
+        hs = 3 + (b.heat >> 1); meter += 2; kind = 'spike';
         tag = tag || (link ? 'SET ▸ SPIKE' : a.v === 'd' ? 'CUT SHOT' : a.v === 'f' ? 'LINE DRIVE' : null);
         p.stats.spikes++;
       }
@@ -1028,7 +1027,7 @@ function applyMove(S, p, fx) {
     case 'super': {
       b.heat = 5; b.super = true; b.fromSuper = true;
       if (p.air) aimShot(b, f, 0.6, 0.8, 24, g); else aimShot(b, f, 0.97, 0.24, 23, g);
-      b.spin = 0.2 * f; hs = 16; kind = 'super'; tag = p.air ? 'METEOR SPIKE' : 'COMET DRIVE';
+      b.spin = 0.2 * f; hs = 14; kind = 'super'; tag = p.air ? 'METEOR SPIKE' : 'COMET DRIVE';
       break;
     }
   }
@@ -1036,7 +1035,7 @@ function applyMove(S, p, fx) {
   finishTouch(S, p, touchId, fx);
   if (perfect) p.stats.perfects++;
   gainMeter(S, p, meter + (perfect ? 2 : 0), fx);
-  S.hitstop = Math.max(S.hitstop, hs + (perfect ? 3 : 0));
+  S.hitstop = Math.max(S.hitstop, hs + (perfect ? 2 : 0));
   ev(fx, 'contact', { i, kind, x: b.x, y: b.y, heat: b.heat, perfect, tag, chain: S.chain[i] });
   return true;
 }
@@ -1053,7 +1052,7 @@ function doBlock(S, p, fx) {
   finishTouch(S, p, 'block', fx);
   b.ign[i] = 14;
   gainMeter(S, p, 10, fx);
-  S.hitstop = Math.max(S.hitstop, 9);
+  S.hitstop = Math.max(S.hitstop, 7);
   p.stats.blocks++;
   ev(fx, 'contact', { i, kind: 'block', x: b.x, y: b.y, heat: b.heat, tag: 'BLOCK!', chain: S.chain[i] });
   return true;
@@ -1080,7 +1079,7 @@ function doCatch(S, p, perfect, fx) {
   finishTouch(S, p, 'catch', fx);
   gainMeter(S, S.p[1 - i], 10, fx);
   if (perfect) { p.stats.perfects++; gainMeter(S, p, 2, fx); }
-  S.hitstop = Math.max(S.hitstop, 6);
+  S.hitstop = Math.max(S.hitstop, 4);
   p.stats.catches++;
   ev(fx, 'contact', { i, kind: 'catch', x: b.x, y: b.y, heat: 0, perfect, tag });
   return true;
@@ -1145,7 +1144,7 @@ function bodyHit(S, p, ov, fx) {
   S.chain[o]++; S.chain[i] = 0;
   if (S.chain[o] > S.p[o].stats.maxChain) S.p[o].stats.maxChain = S.chain[o];
   gainMeter(S, p, 2, fx); gainMeter(S, S.p[o], 2, fx);
-  S.hitstop = Math.max(S.hitstop, 5 + b.heat);
+  S.hitstop = Math.max(S.hitstop, 4 + (b.heat >> 1));
   ev(fx, 'bodyhit', { i, x: b.x, y: b.y, heat: b.heat, pinned, chain: S.chain[o], n: p.bodyHits });
   chip(S, p, 2 + b.heat, fx);
 }
@@ -1509,10 +1508,17 @@ function rr(x, y, w, h, r) {
 }
 
 // ── Static stage (pre-rendered) ────────────────────────────────────────────
-const bg = document.createElement('canvas'); bg.width = W; bg.height = H;
+const bg = document.createElement('canvas');
+let RS = Math.min(2, window.devicePixelRatio || 1);
+function applyRes() {
+  canvas.width = Math.round(W * RS); canvas.height = Math.round(H * RS);
+  bg.width = canvas.width; bg.height = canvas.height;
+  buildStage();
+}
 const FANS = [];
 function buildStage() {
   const g = bg.getContext('2d');
+  g.setTransform(RS, 0, 0, RS, 0, 0);
   const sky = g.createLinearGradient(0, 0, 0, FLOOR);
   sky.addColorStop(0, '#04061a'); sky.addColorStop(0.45, '#0d1440'); sky.addColorStop(1, '#22185a');
   g.fillStyle = sky; g.fillRect(0, 0, W, FLOOR);
@@ -1639,11 +1645,12 @@ function drawStageDynamic() {
     const gr = ctx.createLinearGradient(x, 0, x + WALL_L, 0);
     gr.addColorStop(0, k === 0 ? '#0b1030' : '#1a0b20'); gr.addColorStop(1, k === 0 ? '#1a2250' : '#0b1030');
     ctx.fillStyle = gr; ctx.fillRect(x, 60, WALL_L, FLOOR - 60);
-    ctx.save();
-    ctx.shadowColor = col; ctx.shadowBlur = 12 + gl * 30;
-    ctx.fillStyle = col; ctx.globalAlpha = 0.6 + gl * 0.4;
+    const ex = k === 0 ? WALL_L : WALL_R, gw = ctx.createLinearGradient(ex, 0, k === 0 ? ex + 18 : ex - 18, 0);
+    gw.addColorStop(0, hexA(col, 0.4 + gl * 0.5)); gw.addColorStop(1, hexA(col, 0));
+    ctx.fillStyle = gw; ctx.fillRect(k === 0 ? ex : ex - 18, 60, 18, FLOOR - 60);
+    ctx.fillStyle = col; ctx.globalAlpha = 0.7 + gl * 0.3;
     ctx.fillRect(k === 0 ? WALL_L - 3 : WALL_R, 60, 3, FLOOR - 60);
-    ctx.restore();
+    ctx.globalAlpha = 1;
     ctx.fillStyle = 'rgba(255,255,255,0.08)';
     for (let y = 80; y < FLOOR; y += 40) ctx.fillRect(x + 3, y, WALL_L - 6, 2);
     if (gl > 0.02) {
@@ -1675,9 +1682,8 @@ function drawNet() {
     ctx.beginPath(); ctx.moveTo(NET_X + x, NET_TOP); ctx.lineTo(NET_X + x + Math.sin(t * 25) * wob * 2, FLOOR - 4); ctx.stroke();
   }
   // Tape
-  ctx.fillStyle = '#fff'; ctx.shadowColor = 'rgba(255,255,255,0.6)'; ctx.shadowBlur = 8;
-  ctx.fillRect(NET_X - 14, NET_TOP - 5, 28, 9);
-  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillRect(NET_X - 16, NET_TOP - 7, 32, 13);
+  ctx.fillStyle = '#fff'; ctx.fillRect(NET_X - 14, NET_TOP - 5, 28, 9);
   ctx.fillStyle = '#ffd23f'; ctx.beginPath(); ctx.arc(NET_X, NET_TOP - 26, 5, 0, 6.283); ctx.fill();
 }
 
@@ -1891,11 +1897,11 @@ function drawFighterInner(p, P, opt) {
   ctx.fillStyle = white || ghost ? C.main : '#070a18';
   ctx.beginPath(); ctx.ellipse(hx + f * 4.5, hy, 6.5, 4.2, 0, 0, 6.283); ctx.fill();
   if (!white && !ghost) {
-    ctx.save(); ctx.shadowColor = pal.glow; ctx.shadowBlur = 8;
-    ctx.fillStyle = C.visor;
     const blink = (Math.sin(R.t * 1.3 + i * 3) > 0.985) ? 0.4 : 1;
+    ctx.fillStyle = hexA(pal.glow, 0.35);
+    ctx.fillRect(hx + f * 1, hy - 2.6 * blink, f * 9.5, 5.2 * blink);
+    ctx.fillStyle = C.visor;
     ctx.fillRect(hx + f * 2, hy - 1.2 * blink, f * 7.5, 2.4 * blink);
-    ctx.restore();
   }
   // Front arm
   seg([sh, eF, hF], 10.5, C.out); seg([sh, eF, hF], 7, C.main);
@@ -1961,7 +1967,7 @@ function drawBall(b, S) {
   ctx.restore();
   // Super lightning
   if (b.super) {
-    ctx.save(); ctx.strokeStyle = '#bffcff'; ctx.lineWidth = 2; ctx.shadowColor = '#5ef2ff'; ctx.shadowBlur = 10;
+    ctx.save(); ctx.strokeStyle = '#bffcff'; ctx.lineWidth = 2;
     for (let k = 0; k < 3; k++) {
       let x = b.x, y = b.y; const a0 = Math.random() * 6.283;
       ctx.beginPath(); ctx.moveTo(x, y);
@@ -2105,7 +2111,9 @@ function updateRender(dt) {
   // Trail
   const b = S.ball;
   if (b.held < 0 && (S.phase === 'rally' || S.phase === 'point' || S.phase === 'ko')) {
-    R.trail.push([b.x, b.y]);
+    R.trailT = (R.trailT || 0) + dt;
+    if (R.trailT >= 1 / 60 || !R.trail.length) { R.trailT = 0; R.trail.push([b.x, b.y]); }
+    else R.trail[R.trail.length - 1] = [b.x, b.y];
     const max = b.super ? 18 : 8 + b.heat * 2;
     while (R.trail.length > max) R.trail.shift();
     if (b.heat >= 3 && Math.random() < 0.6 * n60) R.parts.push({ x: b.x + (Math.random() - 0.5) * 12, y: b.y + (Math.random() - 0.5) * 12, vx: (Math.random() - 0.5), vy: -1 - Math.random(), life: 22, max: 22, size: 4 + Math.random() * 4, col: HEAT_COL[b.heat], kind: 'ember', g: -0.03 });
@@ -2132,15 +2140,15 @@ function updateRender(dt) {
 
 function render(dt) {
   updateRender(dt);
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.setTransform(RS, 0, 0, RS, 0, 0);
   ctx.clearRect(0, 0, W, H);
-  if (!S) { ctx.drawImage(bg, 0, 0); drawStageDynamic(); return; }
+  if (!S) { ctx.drawImage(bg, 0, 0, W, H); drawStageDynamic(); return; }
   // World with camera
   const z = R.cam.z;
   let cx = clamp(R.cam.x, W / 2 / z, W - W / 2 / z), cy = clamp(R.cam.y, H / 2 / z, H - H / 2 / z);
   const sx = (Math.random() - 0.5) * R.shake * 2, sy = (Math.random() - 0.5) * R.shake * 2;
-  ctx.setTransform(z, 0, 0, z, W / 2 - cx * z + sx, H / 2 - cy * z + sy);
-  ctx.drawImage(bg, 0, 0);
+  ctx.setTransform(z * RS, 0, 0, z * RS, (W / 2 - cx * z + sx) * RS, (H / 2 - cy * z + sy) * RS);
+  ctx.drawImage(bg, 0, 0, W, H);
   drawStageDynamic();
   drawNet();
   const b = S.ball;
@@ -2148,14 +2156,14 @@ function render(dt) {
   for (const p of S.p) drawShadow(p.x, p.y, 16);
   if (b.held < 0) drawShadow(b.x, b.y, 13);
   // Poses
-  const k = Math.min(1, dt * 26);
+  const k = 1 - Math.exp(-dt * 30), kSnap = 1 - Math.exp(-dt * 90);
   for (let i = 0; i < 2; i++) {
     const p = S.p[i];
     const tp = targetPose(p, S, i);
     if (!R.pose[i]) R.pose[i] = clonePose(tp);
     else {
       const snap = p.st === 'atk' || p.st === 'hitstun' || p.st === 'splat';
-      lerpPose(R.pose[i], tp, snap ? Math.min(1, k * 2) : k);
+      lerpPose(R.pose[i], tp, snap ? kSnap : k);
     }
   }
   // Floor reflections
@@ -2190,8 +2198,12 @@ function render(dt) {
     ctx.fillStyle = rim; ctx.fillRect(p.x - 70, p.y - 115, 140, 140);
     ctx.restore();
     if (superOn && i === S.freezeBy) {
-      ctx.save(); ctx.shadowColor = PAL[i].glow; ctx.shadowBlur = 30;
-      drawFighter(p, R.pose[i]); ctx.restore();
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const sg = ctx.createRadialGradient(p.x, p.y - 45, 10, p.x, p.y - 45, 95);
+      sg.addColorStop(0, hexA(PAL[i].glow, 0.55)); sg.addColorStop(1, hexA(PAL[i].glow, 0));
+      ctx.fillStyle = sg; ctx.fillRect(p.x - 95, p.y - 140, 190, 190);
+      ctx.restore();
+      drawFighter(p, R.pose[i]);
     }
     else {
       const jx = (p.st === 'hitstun' || p.st === 'splat') && S.hitstop > 0 ? (Math.random() - 0.5) * 5 : 0;
@@ -2246,7 +2258,7 @@ function render(dt) {
   }
   if (R.hitboxes) drawHitboxes();
   // HUD in screen space
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.setTransform(RS, 0, 0, RS, 0, 0);
   drawHUD();
   if (R.flash > 0) { ctx.fillStyle = hexA(R.flashCol, Math.min(0.8, R.flash)); ctx.fillRect(0, 0, W, H); }
 }
@@ -2383,9 +2395,7 @@ function drawHUD() {
   for (let k = 0; k < 5; k++) {
     const x = NET_X - 34 + k * 17, on = k < S.ball.heat;
     ctx.fillStyle = on ? HEAT_COL[k + 1] : 'rgba(255,255,255,0.12)';
-    if (on) { ctx.shadowColor = HEAT_COL[k + 1]; ctx.shadowBlur = 8; }
     ctx.beginPath(); ctx.moveTo(x - 6, 72); ctx.lineTo(x + 2, 72); ctx.lineTo(x + 7, 77); ctx.lineTo(x + 2, 82); ctx.lineTo(x - 6, 82); ctx.lineTo(x - 1, 77); ctx.closePath(); ctx.fill();
-    ctx.shadowBlur = 0;
   }
   ctx.restore();
   // Wind
@@ -2484,9 +2494,8 @@ function drawSuperCut() {
   hg.addColorStop(0, pal.light); hg.addColorStop(0.6, pal.main); hg.addColorStop(1, pal.dark);
   ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(px, py, 56, 0, 6.283); ctx.fill();
   ctx.fillStyle = '#070a18'; ctx.beginPath(); ctx.ellipse(px + f * 22, py, 34, 22, 0, 0, 6.283); ctx.fill();
-  ctx.shadowColor = pal.glow; ctx.shadowBlur = 25; ctx.fillStyle = pal.visor;
-  ctx.fillRect(px + (L ? 8 : -48), py - 5, 40, 10);
-  ctx.shadowBlur = 0;
+  ctx.fillStyle = hexA(pal.glow, 0.35); ctx.fillRect(px + (L ? 4 : -52), py - 10, 48, 20);
+  ctx.fillStyle = pal.visor; ctx.fillRect(px + (L ? 8 : -48), py - 5, 40, 10);
   ctx.restore();
   ctx.textAlign = L ? 'left' : 'right'; ctx.textBaseline = 'middle';
   ctx.font = `48px ${FONT}`; ctx.lineWidth = 8; ctx.strokeStyle = '#05070f';
@@ -2824,7 +2833,7 @@ function resetRender() {
   R.cam = { x: W / 2, y: H / 2, z: 1 };
 }
 function beginMatch(m, state) {
-  mode = m; S = state; paused = false; resultsShown = false; FX.length = 0; acc = 0;
+  mode = m; S = state; paused = false; resultsShown = false; FX.length = 0; acc = 0; PREV = null;
   resetRender();
   if (m === 'cpu') AIS = [null, newAI(settings.cpu)];
   else if (m === 'demo') AIS = [newAI('hard'), newAI('normal')];
@@ -2937,7 +2946,21 @@ window.addEventListener('blur', () => { held.clear(); latched.clear(); });
 document.addEventListener('pointerdown', () => au(), { once: true });
 
 // ── Main loop ──────────────────────────────────────────────────────────────
-let acc = 0, lastT = 0;
+let acc = 0, lastT = 0, PREV = null, slowFrames = 0, statusTxt = '';
+const capturePos = () => [S.p[0].x, S.p[0].y, S.p[1].x, S.p[1].y, S.ball.x, S.ball.y];
+function setStatus(t) { if (t !== statusTxt) { statusTxt = t; document.getElementById('status').textContent = t; } }
+// Draw positions blended between the last two sim frames, so motion is smooth on 120/144 Hz screens
+function renderInterp(dt) {
+  if (!S || !PREV || paused) { render(dt); return; }
+  const a = clamp(acc / STEP, 0, 1), cur = capturePos();
+  const objs = [S.p[0], S.p[1], S.ball];
+  for (let k = 0; k < 3; k++) {
+    const o = objs[k], px = PREV[k * 2], py = PREV[k * 2 + 1];
+    if (Math.abs(o.x - px) < 60 && Math.abs(o.y - py) < 60) { o.x = px + (o.x - px) * a; o.y = py + (o.y - py) * a; }
+  }
+  try { render(dt); }
+  finally { for (let k = 0; k < 3; k++) { objs[k].x = cur[k * 2]; objs[k].y = cur[k * 2 + 1]; } }
+}
 function tick() {
   if (mode === 'online') { rbTick(); return; }
   let i0, i1;
@@ -2955,8 +2978,10 @@ function frame(ts) {
   if (S && !paused) {
     acc += dt;
     let n = 0;
-    while (acc >= STEP && n < 5) { tick(); acc -= STEP; n++; }
+    while (acc >= STEP && n < 5) { PREV = capturePos(); tick(); acc -= STEP; n++; }
     if (n === 5) acc = 0;
+    // If the machine can't keep up at high resolution, drop to 1x
+    if (RS > 1 && mode !== 'demo') { slowFrames = dt > 1 / 40 ? slowFrames + 1 : Math.max(0, slowFrames - 2); if (slowFrames > 90) { RS = 1; applyRes(); } }
   }
   for (const e of FX) handleFx(e);
   FX.length = 0;
@@ -2968,13 +2993,13 @@ function frame(ts) {
     const now = performance.now();
     if (now - NET.pingT > 1000) { NET.pingT = now; netSend({ t: 'ping', ts: now }); }
     if (now - NET.lastRecv > 6000) netLost('Lost connection to your opponent.');
-    document.getElementById('status').textContent = RB ? `ONLINE · ${Math.round(NET.rtt)} ms${RB.stalls > 0 && RB.cur - RB.remoteConf > MAXRB ? ' · WAITING' : ''}` : '';
-  } else if (mode === 'cpu') document.getElementById('status').textContent = 'VS CPU · ' + settings.cpu.toUpperCase();
-  else if (mode === 'local') document.getElementById('status').textContent = '2 PLAYERS' + (pads.length ? ` · ${pads.length} PAD${pads.length > 1 ? 'S' : ''}` : '');
-  else document.getElementById('status').textContent = '';
-  render(dt);
+    setStatus(RB ? `ONLINE · ${Math.round(NET.rtt / 10) * 10} ms${RB.cur - RB.remoteConf > MAXRB ? ' · WAITING' : ''}` : '');
+  } else if (mode === 'cpu') setStatus('VS CPU · ' + settings.cpu.toUpperCase());
+  else if (mode === 'local') setStatus('2 PLAYERS' + (pads.length ? ` · ${pads.length} PAD${pads.length > 1 ? 'S' : ''}` : ''));
+  else setStatus('');
+  renderInterp(dt);
 }
-buildStage();
+applyRes();
 if (document.fonts && document.fonts.load) document.fonts.load(`30px ${FONT}`).then(buildStage, () => {});
 startDemo();
 showPanel('pMenu');
