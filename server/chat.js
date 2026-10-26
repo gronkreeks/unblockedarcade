@@ -7,15 +7,14 @@ const crypto = require('crypto');
 // ──────────── Safety filter ────────────
 // Roots are caught anywhere inside a word ("fucking", "bullshit"); whole words only match exactly,
 // because they hide inside normal words ("class", "grape", "peacock").
-const ROOTS = ['fuck', 'shit', 'bitch', 'cunt', 'nigg', 'nigga', 'fagg', 'whore', 'slut', 'pussy', 'bastard',
-  'asshole', 'wank', 'twat', 'retard', 'porn', 'penis', 'vagina', 'jizz', 'dildo', 'motherf', 'cocksuck',
-  'blowjob', 'handjob', 'tranny', 'kike', 'wetback', 'beaner', 'chink', 'faggot', 'boner', 'hentai'];
-const WORDS = new Set(['ass', 'asses', 'arse', 'dick', 'dicks', 'cum', 'fag', 'fags', 'hoe', 'hoes', 'tit', 'tits',
-  'titty', 'titties', 'boob', 'boobs', 'sex', 'sexy', 'sexting', 'rape', 'raped', 'raping', 'cock', 'cocks', 'kys',
-  'nude', 'nudes', 'horny', 'milf', 'stfu', 'wtf', 'fk', 'fck', 'fuk', 'fuq', 'fking', 'fcking', 'sht', 'btch',
-  'rapist', 'rapists', 'spic', 'coon', 'gook', 'dyke', 'nazi', 'thot', 'pedo', 'damn', 'dammit', 'piss', 'pissed', 'crap', 'bollocks',
-  'bugger', 'prick', 'skank', 'douche', 'jackass', 'dumbass', 'smartass', 'badass', 'lmfao']);
-const SHORT_ROOTS = ['fuck', 'shit', 'cunt', 'nigg', 'fagg', 'bitch', 'whore', 'slut', 'pussy', 'porn', 'dick', 'cock', 'kys'];
+// Everyday swearing (fuck, shit, damn…) is allowed. Slurs, sexual words and "kys"-style harassment are not.
+const ROOTS = ['cunt', 'nigg', 'nigga', 'fagg', 'whore', 'slut', 'pussy', 'wank', 'twat', 'retard', 'porn', 'penis',
+  'vagina', 'jizz', 'dildo', 'cocksuck', 'blowjob', 'handjob', 'tranny', 'kike', 'wetback', 'beaner', 'chink',
+  'faggot', 'boner', 'hentai'];
+const WORDS = new Set(['dick', 'dicks', 'cum', 'fag', 'fags', 'hoe', 'hoes', 'tit', 'tits', 'titty', 'titties',
+  'boob', 'boobs', 'sex', 'sexy', 'sexting', 'rape', 'raped', 'raping', 'cock', 'cocks', 'kys', 'nude', 'nudes',
+  'horny', 'milf', 'rapist', 'rapists', 'spic', 'coon', 'gook', 'dyke', 'nazi', 'thot', 'pedo', 'skank']);
+const SHORT_ROOTS = ['cunt', 'nigg', 'fagg', 'whore', 'slut', 'pussy', 'porn', 'dick', 'cock', 'kys'];
 const LEET = { '0': 'o', '1': 'i', '!': 'i', '|': 'i', '3': 'e', '4': 'a', '@': 'a', '5': 's', '$': 's', '7': 't', '+': 't', '8': 'b', '9': 'g' };
 const squash = w => w.replace(/(.)\1+/g, '$1');
 function core(token) {
