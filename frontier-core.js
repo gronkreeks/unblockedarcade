@@ -51,7 +51,7 @@ const TICK_MS = 100;
 const SPAWN_TICKS = 100;          // 10 s to pick a spawn
 const IMMUNITY_TICKS = 300;       // 30 s of no player-vs-player attacks
 const ALLIANCE_TICKS = 3000;      // alliances last 5 minutes
-const WIN_SHARE = 0.8;
+const WIN_SHARE = 1;              // own every land tile to win
 const CITY_TROOPS = 250000;
 // OpenFront maps have roughly 10x more land tiles. Each tile here stands in for several
 // OpenFront tiles so troop density, and so the attacker/defender balance, stays similar.
@@ -60,6 +60,8 @@ const FRONT_SLOWDOWN = Math.sqrt(TILE_SCALE);   // fronts advance in tiles, so s
 const DEFENSE_RANGE = 10;
 const SAM_RANGE = 24;
 const MAX_BOATS = 3;
+const BOAT_SPEED = 0.6;           // transport ships, tiles per tick
+const WARSHIP_SPEED = 1.1;        // warships sailing to an ordered spot
 const NUKE = { atom: { inner: 7, outer: 12 }, hydrogen: { inner: 16, outer: 26 } };
 // terrainAttackBase() in OpenFront
 const TERR = [null, { mag: 80, cost: 16.5, name: 'Plains' }, { mag: 100, cost: 20, name: 'Highland' }, { mag: 120, cost: 25, name: 'Mountains' }];
@@ -85,7 +87,7 @@ const BUILD = {
   defense:  { name: 'Defense',   key: '4', time: 40,  tip: 'Land within 10 tiles is 5× harder to take' },
   silo:     { name: 'Silo',      key: '5', time: 100, tip: 'Launches nukes' },
   sam:      { name: 'SAM',       key: '6', time: 80,  tip: 'Shoots down nukes aimed within 24 tiles' },
-  warship:  { name: 'Warship',   key: '7', time: 0,   tip: 'Click water near your port. Sinks enemy boats.' },
+  warship:  { name: 'Warship',   key: '7', time: 0,   tip: 'Click water near your port. Sinks enemy boats. Click it, then click water, to move it.' },
   atom:     { name: 'Atom Bomb', key: '8', time: 0,   tip: 'Small blast. Needs a ready silo.' },
   hydrogen: { name: 'H-Bomb',    key: '9', time: 0,   tip: 'Huge blast. Needs a ready silo.' },
 };
@@ -531,7 +533,7 @@ function createGame(opt) {
     if (!path) return 'No sea route to that coast';
     p.troops -= troops;
     const s0 = path[0];
-    addShip({ kind: 'transport', owner: p.id, path, i: 0, x: s0 % W + 0.5, y: ((s0 / W) | 0) + 0.5, troops, target: T, speed: 1 });
+    addShip({ kind: 'transport', owner: p.id, path, i: 0, x: s0 % W + 0.5, y: ((s0 / W) | 0) + 0.5, troops, target: T, speed: BOAT_SPEED });
     if (tgt) {
       addHate(players[tgt], p.id, 1);
       if (isHuman(players[tgt])) ev(tgt, `<b>${esc(p.name)}</b> sent a boat with ${fmt(troops)} troops toward you`, 'warn');
@@ -590,6 +592,7 @@ function createGame(opt) {
         }
       } else if (d2 < bd) { bd = d2; best = o; }
     }
+    if (s.ordered && bd > 4) best = null;   // on its way: only takes ships it runs into
     if (best) {
       if (bd <= 4) {
         best.dead = true;
@@ -611,6 +614,10 @@ function createGame(opt) {
         if (d2 < nd) { nd = d2; nx = n; }
       }
       if (nx >= 0) { s.path = [nx]; s.i = 0; followPath(s, 1.3); return; }
+    }
+    if (s.ordered) {
+      if (s.path && s.i < s.path.length) { followPath(s, WARSHIP_SPEED); return; }
+      s.ordered = false; s.path = null;   // arrived: patrol around the new spot
     }
     if (!s.path || s.i >= s.path.length) {
       const hx = s.home % W, hy = (s.home / W) | 0, body = waterBody[s.home];
@@ -1146,7 +1153,7 @@ function createGame(opt) {
     if (tick % 10 || ended) return;
     const alive = players.filter(p => p && p.alive);
     for (const p of alive) {
-      if (p.tiles >= landTotal * WIN_SHARE || alive.length === 1) { ended = true; winner = p.id; hooks.end(p.id); return; }
+      if (p.tiles >= landTotal * WIN_SHARE) { ended = true; winner = p.id; hooks.end(p.id); return; }
     }
   }
 
@@ -1180,6 +1187,17 @@ function createGame(opt) {
       case 'click': return t >= 0 && t < N ? attackTile(p, t, r) : null;
       case 'boat': return t >= 0 && t < N ? sendBoat(p, t, p.troops * r) : null;
       case 'build': return build(p, String(i.k), t);
+      case 'move': {
+        const s = ships.find(x => x.id === (i.id | 0) && x.kind === 'warship' && x.owner === pid && !x.dead);
+        if (!s) return null;
+        if (!(t >= 0 && t < N) || terrain[t]) return 'Warships can only sail on water';
+        const cur = shipTile(s);
+        if (waterBody[t] !== waterBody[cur]) return "Your warship can't reach that water";
+        const g = waterBFS([t], u => u === cur, 60000);
+        if (g < 0) return "Your warship can't reach that water";
+        s.path = tracePath(g); s.i = 0; s.home = t; s.ordered = true;
+        return null;
+      }
       case 'retreat': {
         const a = attacks.find(a => a.p === pid && a.target === target);
         if (a) { removeAttack(a, 0.75); ev(pid, 'Troops retreated', 'info', { ttl: 2000 }); }

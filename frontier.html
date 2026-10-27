@@ -409,7 +409,8 @@
         <li><b>Troops or civilians?</b> The second slider splits your population. Civilians earn gold but don't fight, so more civilians means a richer nation that's easier to invade.</li>
         <li><b>Spend gold on buildings</b>: Cities raise your population cap, Ports earn trade gold, Factories produce gold every second, Defense Posts make nearby land 5&times; harder to take, and Silos and SAMs are for nukes.</li>
         <li><b>Right-click</b> (or long-press) any nation to ally, break an alliance, or send troops. Breaking an alliance marks you as a traitor.</li>
-        <li><b>Win</b> by owning 80% of the land. Scroll or pinch to zoom, drag to pan, and press P to pause.</li>
+        <li><b>Warships</b> patrol near their port and sink enemy boats. Click one, then click water, to send it somewhere else.</li>
+        <li><b>Win</b> by owning 100% of the land. Scroll or pinch to zoom, drag to pan, and press P to pause.</li>
       </ul>
     </div>
   </div>
@@ -545,7 +546,7 @@ function initGame(game, myId, m) {
   img = mapCtx.createImageData(G.W, G.H); pix = img.data;
   paintReady = true;
   for (let t = 0; t < G.N; t++) paint(t);
-  paused = false; speed = 1; buildMode = null; endShown = false; effects = [];
+  paused = false; speed = 1; buildMode = null; endShown = false; effects = []; trails.clear(); selShip = -1; shipOrders.clear();
   $('speedBtn').innerHTML = '1&times;'; $('pauseBtn').innerHTML = '&#10074;&#10074;'; $('paused').classList.add('hidden');
   $('pauseBtn').classList.toggle('hidden', m === 'mp'); $('speedBtn').classList.toggle('hidden', m === 'mp');
   $('feedWrap').innerHTML = '';
@@ -640,6 +641,73 @@ function drawShip(s, k, alpha) {
   ctx.restore();
 }
 
+// Wakes behind transport ships (drawn only, not part of the game state)
+const trails = new Map();
+function drawTrails(k, alpha) {
+  const seen = new Set();
+  ctx.lineCap = 'round';
+  for (const s of G.ships) {
+    if (s.kind !== 'transport') continue;
+    seen.add(s.id);
+    const x = s.px + (s.x - s.px) * alpha, y = s.py + (s.y - s.py) * alpha;
+    let tr = trails.get(s.id);
+    if (!tr) trails.set(s.id, tr = []);
+    const l = tr[tr.length - 1];
+    if (!l || Math.hypot(l[0] - x, l[1] - y) > 0.35) { tr.push([x, y]); if (tr.length > 70) tr.shift(); }
+    // Owner's colour lightened so it reads on dark water, with a white foam core
+    const c = G.players[s.owner].color.map(v => (v + 255 * 1.2) / 2.2 | 0), w = Math.max(0.6, 4 * k);
+    for (let i = 1; i <= tr.length; i++) {
+      const a = i / tr.length, p0 = tr[i - 1], p1 = i < tr.length ? tr[i] : [x, y];
+      ctx.strokeStyle = `rgba(${c[0]},${c[1]},${c[2]},${a * 0.7})`;
+      ctx.lineWidth = w * (0.3 + a * 0.7);
+      ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke();
+      ctx.strokeStyle = `rgba(255,255,255,${a * a * 0.6})`;
+      ctx.lineWidth = w * (0.12 + a * 0.25);
+      ctx.stroke();
+    }
+  }
+  for (const id of trails.keys()) if (!seen.has(id)) trails.delete(id);
+}
+
+// ── Warship orders: click your warship, then click water ──
+let selShip = -1;
+const shipOrders = new Map();   // ship id -> tile it was sent to
+function shipAt(sx, sy) {
+  if (!G) return -1;
+  const px = lastPointer === 'touch' ? 26 : 16;
+  let best = -1, bd = px * px;
+  for (const s of G.ships) {
+    if (s.kind !== 'warship' || s.owner !== meId) continue;
+    const dx = cam.ox + s.x * cam.s - sx, dy = cam.oy + s.y * cam.s - sy, d = dx * dx + dy * dy;
+    if (d < bd) { bd = d; best = s.id; }
+  }
+  return best;
+}
+function drawWarshipOrders(k, alpha) {
+  if (selShip >= 0 && !G.ships.some(s => s.id === selShip)) selShip = -1;
+  for (const s of G.ships) {
+    if (s.kind !== 'warship' || s.owner !== meId) continue;
+    const x = s.px + (s.x - s.px) * alpha, y = s.py + (s.y - s.py) * alpha;
+    const order = shipOrders.get(s.id);
+    if (order) {
+      const dest = order.t, dx = dest % G.W + 0.5, dy = ((dest / G.W) | 0) + 0.5;
+      if (Math.hypot(dx - s.x, dy - s.y) < 2 || G.tick > order.until) shipOrders.delete(s.id);
+      else {
+        ctx.setLineDash([3 * k, 3 * k]); ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1.2 * k;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(dx, dy); ctx.stroke(); ctx.setLineDash([]);
+        ctx.strokeStyle = '#f5c518'; ctx.lineWidth = 1.6 * k; const r = 5 * k;
+        ctx.beginPath(); ctx.moveTo(dx - r, dy - r); ctx.lineTo(dx + r, dy + r); ctx.moveTo(dx + r, dy - r); ctx.lineTo(dx - r, dy + r); ctx.stroke();
+      }
+    }
+    if (s.id === selShip) {
+      const r = (12 + Math.sin(performance.now() / 160) * 2) * k;
+      ctx.strokeStyle = '#f5c518'; ctx.lineWidth = 2 * k;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+  for (const id of shipOrders.keys()) if (!G.ships.some(s => s.id === id)) shipOrders.delete(id);
+}
+
 let acc = 0, last = performance.now(), lastHud = 0;
 function frame(now) {
   requestAnimationFrame(frame);
@@ -672,7 +740,9 @@ function render(now, alpha) {
     ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = k; ctx.beginPath(); ctx.arc(s.x + 0.5, s.y + 0.5, DEFENSE_RANGE, 0, Math.PI * 2); ctx.stroke();
   }
   for (const s of G.structs) if (s.alive) drawStruct(s, k);
+  drawTrails(k, alpha);
   for (const s of G.ships) drawShip(s, k, alpha);
+  drawWarshipOrders(k, alpha);
 
   for (const nk of G.nukes) {
     const R = NUKE[nk.type];
@@ -865,6 +935,8 @@ function updateTip() {
     html = `<b style="color:${rgb(q.color)}">${esc(q.name)}</b><br>${relation(o)}<br>Troops: ${fmt(q.troops)} · Land: ${(q.tiles / G.landTotal * 100).toFixed(1)}%<br>Gold: ${fmt(q.gold)}`;
     if (G.hasDefensePost(t, o)) html += '<br><span style="color:#f5c518">Protected by a defense post</span>';
   }
+  if (!buildMode && shipAt(mouse.x, mouse.y) >= 0) html = '<b>Your warship</b><br>Click it, then click water to send it there';
+  else if (selShip >= 0) html += '<br><span style="color:#f5c518">Click water to send your warship here</span>';
   if (buildMode && G.state === 'play') {
     const err = G.placeError(p, buildMode, snapTarget(t)), c = G.costOf(p, buildMode);
     html += `<br><span style="color:${err || p.gold < c ? '#e74c3c' : '#2ecc71'}">${err || (p.gold < c ? 'Need ' + fmt(c) + ' gold' : 'Click to build ' + BUILD[buildMode].name)}</span>`;
@@ -918,11 +990,31 @@ function snapTarget(t) {
   }
   return t;
 }
-function primaryAction(t, multi) {
+function primaryAction(t, multi, sx, sy) {
   const p = me();
   if (t < 0 || !p) return;
   if (G.state === 'spawn') { sendAct({ a: 'spawn', t }); sendShare(); return; }
   if (G.state !== 'play' || !p.alive) return;
+  if (!buildMode && sx !== undefined) {
+    const id = shipAt(sx, sy);
+    if (id >= 0) {
+      selShip = selShip === id ? -1 : id;
+      if (selShip >= 0) addEvent('Warship selected. Click water to send it there, Esc to cancel.', 'info', { ttl: 2500 });
+      return;
+    }
+  }
+  if (selShip >= 0) {
+    const w = nearestTile(t, u => !G.terrain[u]);
+    if (w >= 0) {
+      sendAct({ a: 'move', id: selShip, t: w });
+      // Show the route until it arrives (or should have: sea routes wind, so allow extra time)
+      const s = G.ships.find(x => x.id === selShip), d = s ? Math.hypot(w % G.W - s.x, ((w / G.W) | 0) - s.y) : 0;
+      shipOrders.set(selShip, { t: w, until: G.tick + Math.ceil(d * 2.2) + 20 });
+    }
+    else addEvent('Click on water to move your warship', 'warn', { ttl: 2000 });
+    selShip = -1;
+    return;
+  }
   t = snapTarget(t);
   if (buildMode) {
     sendAct({ a: 'build', k: buildMode, t });
@@ -1045,7 +1137,7 @@ function endPointer(e) {
   if (pts.size === 0) {
     if (down && !dragging && e.type === 'pointerup') {
       if (down.btn === 2) openCtx(e.clientX, e.clientY);
-      else if (down.btn === 0) primaryAction(screenToTile(e.clientX, e.clientY), e.shiftKey);
+      else if (down.btn === 0) primaryAction(screenToTile(e.clientX, e.clientY), e.shiftKey, e.clientX, e.clientY);
     }
     down = null;
   }
@@ -1061,7 +1153,7 @@ addEventListener('keydown', e => {
   if (!G || $('hud').classList.contains('hidden') || e.target.tagName === 'INPUT') return;
   const k = e.key.toLowerCase();
   keys.add(k);
-  if (k === 'escape') { buildMode = null; hideCtx(); updateHUD(); }
+  if (k === 'escape') { buildMode = null; selShip = -1; hideCtx(); updateHUD(); }
   else if (k === 'p') togglePause();
   else if (k === 'c') centerOnMe();
   else if (k === '=' || k === '+') zoomAt(VW / 2, VH / 2, 1.25);
