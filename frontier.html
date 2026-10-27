@@ -104,6 +104,8 @@
     #ratioBox .lbl { font-size: 0.55rem; letter-spacing: 2px; color: rgba(255,255,255,0.45); text-transform: uppercase; font-weight: 800; }
     #ratioVal { font-size: 0.78rem; font-weight: 800; font-variant-numeric: tabular-nums; }
     input[type=range] { width: 100%; accent-color: #e67e22; }
+    input[type=range].share { accent-color: #f5c518; }
+    #shareVal { font-size: 0.72rem; font-weight: 800; font-variant-numeric: tabular-nums; color: rgba(255,255,255,0.8); }
     #builds { display: flex; gap: 0.35rem; flex: 1; overflow-x: auto; scrollbar-width: none; }
     #builds::-webkit-scrollbar { display: none; }
     .bb {
@@ -320,6 +322,7 @@
     <div id="stats">
       <div class="stat"><span class="lbl">Troops</span><span id="sTroops">0</span><span class="rate" id="sTroopRate"></span></div>
       <div class="bar"><div id="troopBar"></div></div>
+      <div class="stat"><span class="lbl">Civs</span><span id="sCivs">0</span><span class="rate" id="sCivGold" style="color:#f5c518"></span></div>
       <div class="stat"><span class="lbl">Gold</span><span id="sGold" style="color:#f5c518">0</span><span class="rate" id="sGoldRate"></span></div>
       <div class="stat"><span class="lbl">Land</span><span id="sLand">0%</span></div>
     </div>
@@ -327,6 +330,9 @@
       <span class="lbl">Attack ratio</span>
       <input type="range" id="ratio" min="1" max="100" value="20">
       <span id="ratioVal">20%</span>
+      <span class="lbl" style="margin-top:0.25rem" title="Civilians earn gold but don't fight. Troops attack and defend your land.">Troops / civilians</span>
+      <input type="range" id="share" min="10" max="100" value="80" class="share">
+      <span id="shareVal">80% troops</span>
     </div>
     <div id="builds"></div>
   </div>
@@ -399,8 +405,9 @@
       <ul>
         <li><b>Pick a spawn</b> by clicking land at the start. Every player is protected for the first 30 seconds.</li>
         <li><b>Click land next to you</b> to attack it. The <b>attack ratio</b> sets how many of your troops go. Click land across the water to send a boat.</li>
-        <li><b>Troops regrow fastest at about half your cap.</b> Sitting at the cap wastes growth, and sending everything leaves you open.</li>
-        <li><b>Spend gold on buildings</b>: Cities raise your troop cap, Ports earn trade gold, Defense Posts make nearby land 5&times; harder to take, and Silos and SAMs are for nukes.</li>
+        <li><b>Your population regrows fastest at about half your cap.</b> Sitting at the cap wastes growth, and sending everything leaves you open.</li>
+        <li><b>Troops or civilians?</b> The second slider splits your population. Civilians earn gold but don't fight, so more civilians means a richer nation that's easier to invade.</li>
+        <li><b>Spend gold on buildings</b>: Cities raise your population cap, Ports earn trade gold, Factories produce gold every second, Defense Posts make nearby land 5&times; harder to take, and Silos and SAMs are for nukes.</li>
         <li><b>Right-click</b> (or long-press) any nation to ally, break an alliance, or send troops. Breaking an alliance marks you as a traitor.</li>
         <li><b>Win</b> by owning 80% of the land. Scroll or pinch to zoom, drag to pan, and press P to pause.</li>
       </ul>
@@ -483,6 +490,7 @@ const rgb = (c, a) => a === undefined ? `rgb(${c[0]},${c[1]},${c[2]})` : `rgba($
 const ICON_SVG = {
   city: '<svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7v9H4z" fill="#fff"/><rect x="10" y="14" width="4" height="6" fill="#0f1e3d"/></svg>',
   port: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="5" r="2"/><path d="M12 7v13M6 14a6 6 0 0 0 12 0M8 10h8"/></svg>',
+  factory: '<svg viewBox="0 0 24 24"><path d="M3 21V11l5 3v-3l5 3v-3l5 3V4h3v17z" fill="#fff"/><rect x="6" y="16" width="3" height="3" fill="#0f1e3d"/><rect x="12" y="16" width="3" height="3" fill="#0f1e3d"/></svg>',
   defense: '<svg viewBox="0 0 24 24"><path d="M12 3 20 6v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" fill="#fff"/></svg>',
   silo: '<svg viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="18" rx="4" fill="#fff"/><circle cx="12" cy="8" r="1.8" fill="#0f1e3d"/></svg>',
   sam: '<svg viewBox="0 0 24 24"><path d="M12 3 21 20H3z" fill="#fff"/><path d="M12 9v6" stroke="#0f1e3d" stroke-width="2"/></svg>',
@@ -603,6 +611,9 @@ function drawStruct(s, k) {
       ctx.moveTo(x, y - r * 1.1); ctx.lineTo(x + r, y - r * 0.55); ctx.lineTo(x + r * 0.8, y + r * 0.5); ctx.lineTo(x, y + r * 1.1); ctx.lineTo(x - r * 0.8, y + r * 0.5); ctx.lineTo(x - r, y - r * 0.55); ctx.closePath(); break;
     case 'silo': ctx.rect(x - r * 0.6, y - r * 1.1, r * 1.2, r * 2.2); break;
     case 'sam': ctx.moveTo(x, y - r * 1.1); ctx.lineTo(x + r, y + r * 0.9); ctx.lineTo(x - r, y + r * 0.9); ctx.closePath(); break;
+    case 'factory':   // sawtooth roof with a chimney
+      ctx.moveTo(x - r, y + r); ctx.lineTo(x - r, y - r * 0.1); ctx.lineTo(x - r * 0.33, y - r * 0.5); ctx.lineTo(x - r * 0.33, y - r * 0.1);
+      ctx.lineTo(x + r * 0.33, y - r * 0.5); ctx.lineTo(x + r * 0.33, y - r * 1.1); ctx.lineTo(x + r, y - r * 1.1); ctx.lineTo(x + r, y + r); ctx.closePath(); break;
   }
   ctx.fill(); ctx.stroke();
   if (s.type === 'port') { ctx.fillStyle = '#fff'; ctx.fillRect(x - r * 0.12, y - r * 0.6, r * 0.24, r * 1.2); ctx.fillRect(x - r * 0.45, y - r * 0.2, r * 0.9, r * 0.2); }
@@ -757,8 +768,14 @@ function updateHUD() {
   $('sTroops').textContent = fmt(p.troops) + ' / ' + fmt(max);
   const tr = play && p.alive ? G.troopRate(p) * 10 : 0;
   $('sTroopRate').textContent = tr > 0 ? '+' + fmt(tr) + '/s' : '';
-  $('troopBar').style.width = within(p.troops / max * 100, 0, 100) + '%';
-  $('troopBar').style.background = p.troops / max > 0.35 && p.troops / max < 0.7 ? 'linear-gradient(90deg,#27ae60,#2ecc71)' : '';
+  // Growth depends on the whole population, so the bar shows troops + civilians against the cap
+  const pop = (p.troops + (p.civs || 0)) / max;
+  $('troopBar').style.width = within(pop * 100, 0, 100) + '%';
+  $('troopBar').style.background = pop > 0.35 && pop < 0.7 ? 'linear-gradient(90deg,#27ae60,#2ecc71)' : '';
+  $('sCivs').textContent = fmt(p.civs || 0);
+  $('sCivGold').textContent = play && p.alive && p.civs >= 1 ? '+' + fmt(G.civGold(p) * 10) + '/s' : '';
+  const sh = +$('share').value;
+  $('shareVal').textContent = sh + '% troops · ' + (100 - sh) + '% civilians';
   $('sGold').textContent = fmt(p.gold);
   $('sGoldRate').textContent = play && p.alive ? '+' + fmt(G.goldRate(p) * 10) + '/s' : '';
   $('sLand').textContent = (p.tiles / G.landTotal * 100).toFixed(1) + '%';
@@ -862,7 +879,7 @@ function updateTip() {
 function primaryAction(t) {
   const p = me();
   if (t < 0 || !p) return;
-  if (G.state === 'spawn') { sendAct({ a: 'spawn', t }); return; }
+  if (G.state === 'spawn') { sendAct({ a: 'spawn', t }); sendShare(); return; }
   if (G.state !== 'play' || !p.alive) return;
   if (buildMode) { sendAct({ a: 'build', k: buildMode, t }); buildMode = null; updateHUD(); return; }
   if (G.terrain[t] && G.owner[t] !== meId) sendAct({ a: 'click', t, r: ratio() });
@@ -878,7 +895,7 @@ function openCtx(sx, sy) {
   };
   let head;
   if (!G.terrain[t]) { head = 'Ocean'; buildItem('warship', '&#9875; Build warship here'); }
-  else if (o === meId) { head = 'Your land'; for (const b of ['city', 'port', 'defense', 'silo', 'sam']) buildItem(b, 'Build ' + BUILD[b].name); }
+  else if (o === meId) { head = 'Your land'; for (const b of ['city', 'port', 'factory', 'defense', 'silo', 'sam']) buildItem(b, 'Build ' + BUILD[b].name); }
   else {
     const q = o ? G.players[o] : null, ally = o && G.allied(meId, o);
     head = q ? esc(q.name) + ' · ' + relation(o) : 'Unclaimed land';
@@ -1016,6 +1033,11 @@ $('pauseBtn').onclick = togglePause;
 $('speedBtn').onclick = () => { speed = speed === 1 ? 2 : speed === 2 ? 4 : 1; $('speedBtn').innerHTML = speed + '&times;'; };
 $('homeBtn').onclick = centerOnMe;
 $('ratio').oninput = updateHUD;
+// Troops vs civilians: tell the game, at most every 150 ms while dragging
+let shareT = null;
+function sendShare() { clearTimeout(shareT); shareT = null; if (G) sendAct({ a: 'share', v: +$('share').value / 100 }); }
+$('share').oninput = () => { updateHUD(); if (!shareT) shareT = setTimeout(sendShare, 150); };
+$('share').onchange = sendShare;
 $('boardHd').onclick = () => { $('board').classList.toggle('collapsed'); $('boardTog').innerHTML = $('board').classList.contains('collapsed') ? '&#9656;' : '&#9662;'; };
 
 // ════════════════ Menu ════════════════

@@ -65,26 +65,34 @@ const NUKE = { atom: { inner: 7, outer: 12 }, hydrogen: { inner: 16, outer: 26 }
 const TERR = [null, { mag: 80, cost: 16.5, name: 'Plains' }, { mag: 100, cost: 20, name: 'Highland' }, { mag: 120, cost: 25, name: 'Mountains' }];
 const MAP_SIZES = { small: [320, 200], medium: [440, 272], large: [560, 344] };
 
+// AI nations. Hard plays like the old Easy; Impossible like the old Medium plus nukes and factories.
 const DIFF = {
-  easy:       { start: 12500, grow: 0.9,  thr: 0.65, ratio: 0.2,  acc: 0.75, defense: false, nukes: false, every: 14, aggr: 0.55 },
-  medium:     { start: 18750, grow: 0.95, thr: 0.55, ratio: 0.25, acc: 0.55, defense: true,  nukes: false, every: 10, aggr: 0.8 },
-  hard:       { start: 25000, grow: 1,    thr: 0.45, ratio: 0.3,  acc: 0.35, defense: true,  nukes: true,  every: 8,  aggr: 1.0 },
-  impossible: { start: 31250, grow: 1.1,  thr: 0.35, ratio: 0.35, acc: 0.2,  defense: true,  nukes: true,  every: 6,  aggr: 1.3 },
+  easy:       { start: 7500,  grow: 0.75, thr: 0.75, ratio: 0.15, acc: 0.85, defense: false, nukes: false, factories: false, every: 18, aggr: 0.4 },
+  medium:     { start: 10000, grow: 0.82, thr: 0.7,  ratio: 0.18, acc: 0.8,  defense: false, nukes: false, factories: false, every: 16, aggr: 0.48 },
+  hard:       { start: 12500, grow: 0.9,  thr: 0.65, ratio: 0.2,  acc: 0.75, defense: false, nukes: false, factories: false, every: 14, aggr: 0.55 },
+  impossible: { start: 18750, grow: 0.95, thr: 0.55, ratio: 0.25, acc: 0.55, defense: true,  nukes: true,  factories: true,  every: 10, aggr: 0.8 },
 };
+// Population is split between troops (fight and defend) and civilians (earn gold).
+const CIV_GOLD = 0.004;            // gold per civilian per tick
+const SHARE_SHIFT = 0.005;         // share of population that can switch role each tick
+const DEFAULT_SHARE = 0.8;         // humans start with 80% troops
+const FACTORY_GOLD = 250;          // gold per finished factory per tick
 
 const BUILD = {
   city:     { name: 'City',      key: '1', time: 50,  tip: '+250K troop cap' },
   port:     { name: 'Port',      key: '2', time: 50,  tip: 'Trade ships earn gold. Must be on the coast.' },
-  defense:  { name: 'Defense',   key: '3', time: 40,  tip: 'Land within 10 tiles is 5× harder to take' },
-  silo:     { name: 'Silo',      key: '4', time: 100, tip: 'Launches nukes' },
-  sam:      { name: 'SAM',       key: '5', time: 80,  tip: 'Shoots down nukes aimed within 24 tiles' },
-  warship:  { name: 'Warship',   key: '6', time: 0,   tip: 'Click water near your port. Sinks enemy boats.' },
-  atom:     { name: 'Atom Bomb', key: '7', time: 0,   tip: 'Small blast. Needs a ready silo.' },
-  hydrogen: { name: 'H-Bomb',    key: '8', time: 0,   tip: 'Huge blast. Needs a ready silo.' },
+  factory:  { name: 'Factory',   key: '3', time: 60,  tip: '+2.5K gold per second' },
+  defense:  { name: 'Defense',   key: '4', time: 40,  tip: 'Land within 10 tiles is 5× harder to take' },
+  silo:     { name: 'Silo',      key: '5', time: 100, tip: 'Launches nukes' },
+  sam:      { name: 'SAM',       key: '6', time: 80,  tip: 'Shoots down nukes aimed within 24 tiles' },
+  warship:  { name: 'Warship',   key: '7', time: 0,   tip: 'Click water near your port. Sinks enemy boats.' },
+  atom:     { name: 'Atom Bomb', key: '8', time: 0,   tip: 'Small blast. Needs a ready silo.' },
+  hydrogen: { name: 'H-Bomb',    key: '9', time: 0,   tip: 'Huge blast. Needs a ready silo.' },
 };
-const BUILD_ORDER = ['city', 'port', 'defense', 'silo', 'sam', 'warship', 'atom', 'hydrogen'];
+const BUILD_ORDER = ['city', 'port', 'factory', 'defense', 'silo', 'sam', 'warship', 'atom', 'hydrogen'];
 const SHIP_KINDS = ['transport', 'trade', 'warship'];
-const STRUCT_TYPES = ['city', 'port', 'defense', 'silo', 'sam'];
+// Index order is sent over the network, so new types go at the end
+const STRUCT_TYPES = ['city', 'port', 'defense', 'silo', 'sam', 'factory'];
 
 const NATION_NAMES = ['Aurelia', 'Borovia', 'Caldora', 'Drakmar', 'Elyria', 'Fenmark', 'Galdor', 'Halvard', 'Istria', 'Jorvik', 'Kaldera',
   'Lumina', 'Morvath', 'Norland', 'Ostara', 'Pyrrha', 'Quorin', 'Rhovan', 'Sylvara', 'Tarsis', 'Umbra', 'Valtor', 'Westmark', 'Xandria',
@@ -308,6 +316,7 @@ function createGame(opt) {
       id: id || players.length, name, type, color,
       troops: type === 'bot' ? 10000 : type === 'nation' ? D.start : 25000,
       gold: 0, tiles: 0, border: new Set(), alive: true, spawned: false,
+      civs: 0, share: type === 'human' ? DEFAULT_SHARE : 1, factories: 0,
       allies: new Map(), traitorUntil: 0, hate: new Map(), cityLevels: 0,
       lx: 0, ly: 0, lfs: 0, best: 0, bestT: -1, minX: W, maxX: 0, minY: H, maxY: 0,
       aiPhase: (rand() * 20) | 0, lastHitBy: 0,
@@ -325,15 +334,31 @@ function createGame(opt) {
     if (p.type === 'bot') m /= 3;
     return m;
   }
-  function troopRate(p) {
+  // Growth of the whole population (troops + civilians), capped by maxTroops()
+  function popRate(p) {
     // troopIncreaseRate() in OpenFront
-    const max = maxTroops(p);
-    let add = (10 + Math.pow(Math.max(0, p.troops), 0.73) / 4) * (1 - p.troops / max);
+    const max = maxTroops(p), pop = p.troops + (p.civs || 0);
+    let add = (10 + Math.pow(Math.max(0, pop), 0.73) / 4) * (1 - pop / max);
     if (p.type === 'bot') add *= 0.5;
     if (p.type === 'nation') add *= D.grow;
     return add;
   }
-  function goldRate(p) { return (p.type === 'bot' ? 50 : 100) + 5 * Math.sqrt(p.tiles); }
+  function troopRate(p) { return popRate(p) * (p.share == null ? 1 : p.share); }
+  function goldRate(p) {
+    return (p.type === 'bot' ? 50 : 100) + 5 * Math.sqrt(p.tiles) + (p.civs || 0) * CIV_GOLD + (p.factories || 0) * FACTORY_GOLD;
+  }
+  function growPopulation(p) {
+    const add = popRate(p);
+    p.troops = Math.max(0, p.troops + add * p.share);
+    p.civs = Math.max(0, p.civs + add * (1 - p.share));
+    // People switch between troops and civilians gradually towards the chosen split
+    const pop = p.troops + p.civs;
+    if (pop > 0) {
+      const d = pop * p.share - p.troops, step = Math.sign(d) * Math.min(Math.abs(d), pop * SHARE_SHIFT);
+      p.troops = Math.max(0, p.troops + step);
+      p.civs = Math.max(0, p.civs - step);
+    }
+  }
   function allied(a, b) { return a !== b && a > 0 && b > 0 && !!players[a] && players[a].allies.has(b); }
   function addHate(p, towards, v) { if (p && p.type !== 'human') p.hate.set(towards, (p.hate.get(towards) || 0) + v); }
   const isHuman = p => p && p.type === 'human';
@@ -613,6 +638,7 @@ function createGame(opt) {
     const n = countUnits(p, type);
     switch (type) {
       case 'city': case 'port': return Math.min(1e6, 2 ** n * 125000);
+      case 'factory': return Math.min(2e6, 2 ** n * 200000);
       case 'defense': return Math.min(250000, (n + 1) * 50000);
       case 'sam': return Math.min(3e6, (n + 1) * 1.5e6);
       case 'silo': return 1e6;
@@ -873,6 +899,9 @@ function createGame(opt) {
     if (g >= costOf(p, 'city') && countUnits(p, 'city') < 2 + p.tiles / 700) {
       if (ok('city', findTile(p, t => distT[t] >= 3 && !placeError(p, 'city', t)))) return;
     }
+    if (D.factories && g >= costOf(p, 'factory') && countUnits(p, 'factory') < 1 + p.tiles / 1200) {
+      if (ok('factory', findTile(p, t => distT[t] >= 3 && !placeError(p, 'factory', t)))) return;
+    }
     if (info.coastal && g >= costOf(p, 'port') && countUnits(p, 'port') < 1 + p.tiles / 1600) {
       const opts = [];
       for (const t of p.border) if (coastal[t] && !placeError(p, 'port', t)) { opts.push(t); if (opts.length > 30) break; }
@@ -1010,7 +1039,7 @@ function createGame(opt) {
     }
     for (const p of players) {
       if (!p || !p.alive) continue;
-      p.troops = Math.max(0, p.troops + troopRate(p));
+      growPopulation(p);
       p.gold += goldRate(p);
     }
     for (const a of attacks.slice()) if (attacks.includes(a)) stepAttack(a);
@@ -1044,10 +1073,11 @@ function createGame(opt) {
       }
     }
 
-    for (const p of players) if (p) p.cityLevels = 0;
+    for (const p of players) if (p) { p.cityLevels = 0; p.factories = 0; }
     for (const s of structs) {
       if (!s.alive) continue;
       if (s.type === 'city' && s.doneAt <= tick) players[s.owner].cityLevels += s.level;
+      if (s.type === 'factory' && s.doneAt <= tick) players[s.owner].factories++;
       if (s.type === 'port' && s.doneAt <= tick && tick >= s.nextTrade && s.dock >= 0) {
         s.nextTrade = tick + 100 + (rand() * 60 | 0);
         if (ships.length < 140) spawnTrade(s);
@@ -1107,7 +1137,7 @@ function createGame(opt) {
       for (const [id] of p.allies) breakAlliance(p.id, id, false);
       const killer = players[p.lastHitBy];
       if (killer && killer.alive) killer.gold += p.gold;
-      p.gold = 0;
+      p.gold = 0; p.civs = 0;
       if (killer) killer.kills = (killer.kills || 0) + 1;
       const msg = `<b>${esc(p.name)}</b> was eliminated${killer ? ' by <b>' + esc(killer.name) + '</b>' : ''}`;
       if (p.type !== 'bot') ev(0, msg, isHuman(p) ? 'bad' : 'warn');
@@ -1142,6 +1172,7 @@ function createGame(opt) {
       return spawnHuman(p, t) ? null : "You can't spawn there. Pick open land away from other nations.";
     }
     if (i.a === 'startNow') { if (state === 'spawn' && opt.allowStartNow && p.spawned) spawnLeft = 1; return null; }
+    if (i.a === 'share') { if (p.type === 'human') p.share = within(+i.v || DEFAULT_SHARE, 0.1, 1); return null; }
     if (state !== 'play' || !p.alive || ended && winner) return null;
     const r = within(+i.r || 0.2, 0.01, 1);
     const q = players[target];
@@ -1173,7 +1204,8 @@ function createGame(opt) {
   function snapshotCommon(force) {
     const m = {
       k: tick, st: state, sl: spawnLeft, im: immunityUntil,
-      p: players.map(p => p ? [Math.floor(p.troops), Math.floor(p.gold), p.tiles, p.alive ? 1 : 0, p.traitorUntil, p.cityLevels, p.spawned ? 1 : 0] : null),
+      p: players.map(p => p ? [Math.floor(p.troops), Math.floor(p.gold), p.tiles, p.alive ? 1 : 0, p.traitorUntil, p.cityLevels, p.spawned ? 1 : 0,
+        Math.floor(p.civs), Math.round(p.share * 100), p.factories] : null),
       sh: ships.map(s => [s.id, SHIP_KINDS.indexOf(s.kind), s.owner, r1(s.x), r1(s.y), r1(s.ang), Math.floor(s.troops || 0)]),
       n: nukes.map(n => [n.owner, n.type === 'atom' ? 0 : 1, n.x0, n.y0, n.tx, n.ty, n.t, n.start, n.dur, n.intercept]),
       a: attacks.map(a => [a.p, a.target, Math.floor(a.troops)]),
@@ -1242,6 +1274,7 @@ function createGame(opt) {
       if (!p || !d) return;
       [p.troops, p.gold, p.tiles, p.alive, p.traitorUntil, p.cityLevels, p.spawned] = d;
       p.alive = !!p.alive; p.spawned = !!p.spawned;
+      p.civs = d[7] || 0; p.share = d[8] == null ? 1 : d[8] / 100; p.factories = d[9] || 0;
     });
     if (m.al) m.al.forEach((list, id) => { if (players[id] && list) players[id].allies = new Map(list); });
     if (m.s) {
@@ -1293,13 +1326,13 @@ function createGame(opt) {
     get immunityUntil() { return immunityUntil; }, get ended() { return ended; }, get winner() { return winner; },
     cfg, D,
     step: gameTick, act, delta, full, startInfo, apply,
-    maxTroops, troopRate, goldRate, costOf, placeError, hasDefensePost, allied, nukePos,
+    maxTroops, troopRate, goldRate, costOf, placeError, hasDefensePost, allied, nukePos, civGold: p => (p.civs || 0) * CIV_GOLD,
   };
 }
 
 const api = {
   createGame, fmt, esc, within, TICK_MS, SPAWN_TICKS, IMMUNITY_TICKS, WIN_SHARE, DEFENSE_RANGE, SAM_RANGE,
-  NUKE, TERR, DIFF, BUILD, BUILD_ORDER, MAP_SIZES,
+  NUKE, TERR, DIFF, BUILD, BUILD_ORDER, MAP_SIZES, DEFAULT_SHARE,
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.FrontierCore = api;
