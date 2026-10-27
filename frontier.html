@@ -849,7 +849,7 @@ function toggleBuild(t) {
   const p = me();
   if (!G || G.state !== 'play' || !p || !p.alive) return;
   buildMode = buildMode === t ? null : t;
-  if (buildMode) addEvent(`<b>${BUILD[t].name}</b>: ${BUILD[t].tip}. Click to place, Esc to cancel.`, 'info', { ttl: 3500 });
+  if (buildMode) addEvent(`<b>${BUILD[t].name}</b>: ${BUILD[t].tip}. Click to place (hold Shift to place several), Esc to cancel.`, 'info', { ttl: 3500 });
   updateHUD();
 }
 
@@ -866,8 +866,9 @@ function updateTip() {
     if (G.hasDefensePost(t, o)) html += '<br><span style="color:#f5c518">Protected by a defense post</span>';
   }
   if (buildMode && G.state === 'play') {
-    const err = G.placeError(p, buildMode, t), c = G.costOf(p, buildMode);
+    const err = G.placeError(p, buildMode, snapTarget(t)), c = G.costOf(p, buildMode);
     html += `<br><span style="color:${err || p.gold < c ? '#e74c3c' : '#2ecc71'}">${err || (p.gold < c ? 'Need ' + fmt(c) + ' gold' : 'Click to build ' + BUILD[buildMode].name)}</span>`;
+    html += '<br><span style="color:rgba(255,255,255,.5)">Hold Shift to place several</span>';
   }
   tip.innerHTML = html;
   tip.classList.remove('hidden');
@@ -876,16 +877,64 @@ function updateTip() {
 }
 
 // ════════════════ Player actions ════════════════
-function primaryAction(t) {
+// Coasts are one tile wide, so clicks that need one snap to the nearest fitting tile within
+// a finger-sized radius (bigger for touch). Returns the tile to use, or -1.
+let lastPointer = 'mouse';
+function nearestTile(t, ok) {
+  if (t < 0) return -1;
+  if (ok(t)) return t;
+  const px = lastPointer === 'touch' ? 30 : 16, rad = Math.max(1.5, Math.min(14, px / cam.s));
+  const x0 = t % G.W, y0 = (t / G.W) | 0, R = Math.ceil(rad);
+  let best = -1, bd = rad * rad + 0.01;
+  for (let dy = -R; dy <= R; dy++) {
+    const y = y0 + dy;
+    if (y < 0 || y >= G.H) continue;
+    for (let dx = -R; dx <= R; dx++) {
+      const x = x0 + dx, d = dx * dx + dy * dy;
+      if (x < 0 || x >= G.W || d >= bd) continue;
+      const u = y * G.W + x;
+      if (ok(u)) { bd = d; best = u; }
+    }
+  }
+  return best;
+}
+// Where a click should land for the current action
+function snapTarget(t) {
+  const p = me();
+  if (t < 0 || !p) return t;
+  if (buildMode === 'port') { const u = nearestTile(t, u => !G.placeError(p, 'port', u)); return u >= 0 ? u : t; }
+  if (buildMode === 'warship') { const u = nearestTile(t, u => !G.terrain[u]); return u >= 0 ? u : t; }
+  if (buildMode) return t;
+  if (!G.terrain[t]) {
+    // Tapped the water: aim at the nearest coast that isn't ours
+    const u = nearestTile(t, u => G.coastal[u] && G.terrain[u] && G.owner[u] !== meId);
+    return u >= 0 ? u : t;
+  }
+  if (G.owner[t] !== meId && !G.coastal[t]) {
+    // Inland on someone else's land: prefer that land's coast so a boat can reach it
+    const o = G.owner[t], body = G.landBody[t];
+    const u = nearestTile(t, u => G.coastal[u] && G.owner[u] === o && G.landBody[u] === body);
+    return u >= 0 ? u : t;
+  }
+  return t;
+}
+function primaryAction(t, multi) {
   const p = me();
   if (t < 0 || !p) return;
   if (G.state === 'spawn') { sendAct({ a: 'spawn', t }); sendShare(); return; }
   if (G.state !== 'play' || !p.alive) return;
-  if (buildMode) { sendAct({ a: 'build', k: buildMode, t }); buildMode = null; updateHUD(); return; }
+  t = snapTarget(t);
+  if (buildMode) {
+    sendAct({ a: 'build', k: buildMode, t });
+    if (!multi) buildMode = null;   // hold Shift to keep placing the same building
+    updateHUD(); updateTip();
+    return;
+  }
   if (G.terrain[t] && G.owner[t] !== meId) sendAct({ a: 'click', t, r: ratio() });
 }
-function openCtx(sx, sy) {
-  const t = screenToTile(sx, sy), m = $('ctx'), p = me();
+function openCtx(sx, sy) { openCtxAt(screenToTile(sx, sy), sx, sy); }
+function openCtxAt(t, sx, sy) {
+  const m = $('ctx'), p = me();
   if (t < 0 || !p || G.state !== 'play' || !p.alive) return;
   const o = G.owner[t], r = ratio();
   const items = [];
@@ -894,13 +943,18 @@ function openCtx(sx, sy) {
     items.push([`${label || BUILD[b].name} · <span style="color:#f5c518">${fmt(c)}</span>`, () => sendAct({ a: 'build', k: b, t }), !!G.placeError(p, b, t) || p.gold < c]);
   };
   let head;
-  if (!G.terrain[t]) { head = 'Ocean'; buildItem('warship', '&#9875; Build warship here'); }
+  if (!G.terrain[t]) {
+    const c = nearestTile(t, u => G.coastal[u] && G.terrain[u] && G.owner[u] !== meId);
+    if (c >= 0) { openCtxAt(c, sx, sy); return; }   // tapped just off someone's coast
+    head = 'Ocean'; buildItem('warship', '&#9875; Build warship here');
+  }
   else if (o === meId) { head = 'Your land'; for (const b of ['city', 'port', 'factory', 'defense', 'silo', 'sam']) buildItem(b, 'Build ' + BUILD[b].name); }
   else {
     const q = o ? G.players[o] : null, ally = o && G.allied(meId, o);
     head = q ? esc(q.name) + ' · ' + relation(o) : 'Unclaimed land';
     items.push([`&#9876; Attack (${fmt(p.troops * r)})`, () => sendAct({ a: 'click', t, r }), ally]);
-    if (G.coastal[t]) items.push(['&#9973; Send boat here', () => sendAct({ a: 'boat', t, r }), ally]);
+    const bt = G.coastal[t] ? t : nearestTile(t, u => G.coastal[u] && G.owner[u] === o && G.landBody[u] === G.landBody[t]);
+    if (bt >= 0) items.push(['&#9973; Send boat here', () => sendAct({ a: 'boat', t: bt, r }), ally]);
     if (q) {
       if (ally) {
         items.push([`&#10148; Send ${fmt(p.troops * r)} troops`, () => sendAct({ a: 'donate', target: o, r }), false]);
@@ -953,6 +1007,7 @@ cv.addEventListener('pointerdown', e => {
   cv.setPointerCapture(e.pointerId);
   pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
   hideCtx();
+  lastPointer = e.pointerType || 'mouse';
   if (pts.size === 1) {
     down = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, btn: e.button };
     dragging = false;
@@ -990,7 +1045,7 @@ function endPointer(e) {
   if (pts.size === 0) {
     if (down && !dragging && e.type === 'pointerup') {
       if (down.btn === 2) openCtx(e.clientX, e.clientY);
-      else if (down.btn === 0) primaryAction(screenToTile(e.clientX, e.clientY));
+      else if (down.btn === 0) primaryAction(screenToTile(e.clientX, e.clientY), e.shiftKey);
     }
     down = null;
   }
