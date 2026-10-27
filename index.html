@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>EduArcade</title>
+  <meta name="description" content="Free educational browser games that build real skills: coordination, strategy, typing and more. No downloads, no login, no data stored.">
   <link rel="icon" href="favicon.ico">
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9603713606760464"
      crossorigin="anonymous"></script>
- <!-- Open Graph / Discord / iMessage embed -->
+  <!-- Open Graph / Discord / iMessage embed -->
   <meta property="og:type"        content="website">
   <meta property="og:url"         content="https://unblockedarcade.org/">
   <meta property="og:title"       content="EduArcade">
@@ -19,566 +20,602 @@
   <meta name="twitter:title"       content="EduArcade">
   <meta name="twitter:description" content="Free educational browser games that build real skills. No downloads, no login, no data stored. Just learn and play.">
   <meta name="twitter:image"       content="https://unblockedarcade.org/embed.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=DM+Mono:wght@400;500&display=swap">
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
+    /* Layout: a graph-paper hero, three skill "subjects", then the chatroom. One deliberate dark theme
+       that matches the game pages; each skill area owns one color. */
+    :root {
+      --bg: #0b1530;
+      --bg-2: #0f1c3c;
+      --surface: #13224a;
+      --surface-2: #192c5c;
+      --ink: #f2f5fc;
+      --muted: #aab5d2;
+      --faint: #7a88ad;
+      --line: rgba(190, 205, 255, 0.12);
+      --line-2: rgba(190, 205, 255, 0.22);
+      --yellow: #ffd23f;
+      --yellow-ink: #1d1600;
+      --motor: #ff8a65;
+      --strategy: #62b4ff;
+      --literacy: #5fd6a6;
+      --danger: #ff9a8a;
+      --ok: #7fe0a8;
+      --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, -apple-system, sans-serif;
+      --f-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, sans-serif;
+      --f-mono: "DM Mono", ui-monospace, Menlo, Consolas, monospace;
+      color-scheme: dark;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
-      min-height: 100vh;
-      font-family: 'Segoe UI', sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      overflow-x: hidden;
+      margin: 0; background: var(--bg); color: var(--ink);
+      font-family: var(--f-body); font-size: 16px; line-height: 1.55;
+      -webkit-font-smoothing: antialiased; overflow-x: hidden;
     }
+    [hidden] { display: none !important; }
+    img { max-width: 100%; }
+    a { color: inherit; }
+    :focus-visible { outline: 2.5px solid var(--yellow); outline-offset: 3px; border-radius: 6px; }
+    .shell {
+      width: 100%; max-width: 1160px; margin: 0 auto;
+      padding-left: max(20px, env(safe-area-inset-left, 0px));
+      padding-right: max(20px, env(safe-area-inset-right, 0px));
+    }
+    .eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+    h1, h2, h3 { font-family: var(--f-display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+    p { margin: 0; }
+    [data-pillar="motor"], [data-skill="motor"] { --pc: var(--motor); }
+    [data-pillar="strategy"], [data-skill="strategy"] { --pc: var(--strategy); }
+    [data-pillar="literacy"], [data-skill="literacy"] { --pc: var(--literacy); }
+    .pdot { display: inline-block; width: 12px; height: 12px; border-radius: 4px; background: var(--pc); flex: none; }
 
-    /* ── Sky ── */
-    .sky {
-      width: 100%;
-      background: linear-gradient(to bottom, #1a3a6e, #2e6fb5, #5b9fd4);
-      padding: 2rem 1rem 4rem;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      position: relative;
-      overflow: hidden;
-    }
+    /* ── Top bar ── */
+    .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 18px; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-family: var(--f-display); font-weight: 800; font-size: 22px; letter-spacing: -0.02em; }
+    .mark { width: 28px; height: 28px; }
+    .nav { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .nav a { text-decoration: none; font-weight: 700; font-size: 14px; color: var(--muted); padding: 8px 12px; border-radius: 999px; }
+    .nav a:hover { color: var(--ink); background: var(--surface); }
 
-    /* Clouds */
-    @keyframes drift {
-      from { transform: translateX(115vw); }
-      to   { transform: translateX(-300px); }
+    /* ── Hero ── */
+    .hero { position: relative; isolation: isolate; border-bottom: 1px solid var(--line); }
+    .hero::before {
+      content: ""; position: absolute; inset: 0; z-index: -1;
+      background-image:
+        linear-gradient(var(--line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--line) 1px, transparent 1px);
+      background-size: 32px 32px;
+      -webkit-mask-image: radial-gradient(120% 90% at 70% 30%, #000 30%, transparent 80%);
+              mask-image: radial-gradient(120% 90% at 70% 30%, #000 30%, transparent 80%);
+      opacity: .55;
     }
+    .hero-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 48px; align-items: center; padding-block: 40px 64px; }
+    .hero h1 { font-size: clamp(44px, 7vw, 84px); font-weight: 800; line-height: .98; margin-top: 14px; }
+    .hero h1 mark {
+      color: var(--yellow-ink); background: linear-gradient(100deg, transparent 2%, var(--yellow) 4%, var(--yellow) 94%, transparent 97%);
+      padding: 0 .12em; border-radius: .12em; -webkit-box-decoration-break: clone; box-decoration-break: clone;
+    }
+    .hero-lede { font-size: clamp(17px, 2vw, 19px); color: var(--muted); max-width: 52ch; margin-top: 20px; }
+    .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px; text-decoration: none; font-weight: 700; font-size: 16px;
+      padding: 13px 22px; border-radius: 12px; border: 2px solid transparent; transition: transform .15s ease, background .15s ease, border-color .15s ease;
+    }
+    .btn:hover { transform: translateY(-2px); }
+    .btn-primary { background: var(--yellow); color: var(--yellow-ink); }
+    .btn-ghost { border-color: var(--line-2); color: var(--ink); }
+    .btn-ghost:hover { border-color: var(--ink); }
+    .stats { display: flex; flex-wrap: wrap; gap: 10px 32px; margin: 36px 0 0; padding: 0; }
+    .stats div { display: flex; flex-direction: column; }
+    .stats dt { font-family: var(--f-display); font-weight: 800; font-size: 34px; line-height: 1; font-variant-numeric: tabular-nums; order: 0; }
+    .stats dd { margin: 6px 0 0; font-size: 14px; color: var(--muted); order: 1; }
 
-    .cloud {
-      position: absolute;
-      left: 0;
-      background: rgba(255,255,255,0.85);
-      border-radius: 50px;
-      pointer-events: none;
-      animation: drift linear infinite;
+    .mosaic { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; max-width: 380px; margin-left: auto; width: 100%; }
+    .tile {
+      aspect-ratio: 1; max-width: 100%; border-radius: 22px; display: grid; place-items: center;
+      background: linear-gradient(155deg, var(--g1), var(--g2));
+      box-shadow: inset 0 -5px 0 rgba(0,0,0,.22), 0 10px 24px -10px rgba(0,0,0,.6);
+      transition: transform .2s cubic-bezier(.2,1.4,.4,1);
     }
-    .cloud::before, .cloud::after {
-      content: '';
-      position: absolute;
-      background: rgba(255,255,255,0.85);
-      border-radius: 50%;
-    }
-    .c1 { width:120px; height:36px; top:30px;  animation-duration:38s; animation-delay:-12s; }
-    .c1::before { width:60px;  height:60px;  top:-30px; left:15px; }
-    .c1::after  { width:50px;  height:50px;  top:-22px; left:55px; }
+    .tile img { width: 44%; height: auto; filter: drop-shadow(0 3px 5px rgba(0,0,0,.3)); }
+    .tile:nth-child(odd) { transform: rotate(-4deg); }
+    .tile:nth-child(even) { transform: rotate(3deg) translateY(8px); }
+    .tile:hover { transform: rotate(0) scale(1.06); }
 
-    .c2 { width:100px; height:30px; top:55px;  animation-duration:52s; animation-delay:-36s; }
-    .c2::before { width:50px;  height:50px;  top:-26px; left:10px; }
-    .c2::after  { width:44px;  height:44px;  top:-20px; left:46px; }
+    /* ── Skill overview ── */
+    .overview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: -32px; position: relative; }
+    .ov {
+      text-decoration: none; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 10px;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px;
+      transition: border-color .15s ease, transform .15s ease;
+    }
+    .ov:hover { border-color: var(--pc); transform: translateY(-2px); }
+    .ov b { font-family: var(--f-display); font-weight: 600; font-size: 17px; }
+    .ov-n { font-family: var(--f-mono); font-size: 12px; color: var(--pc); }
+    .ov-t { grid-column: 2 / -1; font-size: 13.5px; color: var(--faint); }
 
-    .c3 { width:130px; height:38px; top:18px;  animation-duration:45s; animation-delay:-21s; }
-    .c3::before { width:64px;  height:64px;  top:-34px; left:18px; }
-    .c3::after  { width:52px;  height:52px;  top:-24px; left:64px; }
+    /* ── Filters ── */
+    .games { padding-block: 56px 24px; scroll-margin-top: 12px; }
+    .games-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 18px; }
+    .games-head h2 { font-size: clamp(30px, 4vw, 40px); font-weight: 800; }
+    .games-head p { color: var(--muted); margin-top: 6px; max-width: 60ch; }
+    .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 24px; padding: 12px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 16px; }
+    .search { flex: 1 1 220px; min-width: 0; position: relative; }
+    .search input {
+      width: 100%; font: inherit; font-size: 15px; color: var(--ink); background: var(--surface);
+      border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px 10px 38px;
+    }
+    .search input::placeholder { color: var(--faint); }
+    .search input:focus { border-color: var(--yellow); outline: none; }
+    .search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--faint); }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      font: inherit; font-size: 14px; font-weight: 700; color: var(--muted); background: transparent; cursor: pointer;
+      border: 1.5px solid var(--line-2); border-radius: 999px; padding: 7px 14px; display: inline-flex; align-items: center; gap: 8px;
+    }
+    .chip:hover { color: var(--ink); border-color: var(--ink); }
+    .chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+    .chip .pdot { width: 9px; height: 9px; border-radius: 3px; }
+    .toggle input { appearance: none; width: 30px; height: 18px; border-radius: 999px; background: var(--line-2); position: relative; margin: 0; cursor: pointer; transition: background .15s; }
+    .toggle input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--ink); transition: transform .15s; }
+    .toggle input:checked { background: var(--literacy); }
+    .toggle input:checked::after { transform: translateX(12px); background: var(--bg); }
+    .no-match { margin-top: 28px; padding: 28px; text-align: center; color: var(--muted); border: 1.5px dashed var(--line-2); border-radius: 16px; }
+    .no-match button { font: inherit; font-weight: 700; color: var(--yellow); background: none; border: none; text-decoration: underline; cursor: pointer; }
 
-    .c4 { width:90px;  height:28px; top:65px;  animation-duration:30s; animation-delay:-8s; }
-    .c4::before { width:46px;  height:46px;  top:-24px; left:8px;  }
-    .c4::after  { width:38px;  height:38px;  top:-18px; left:42px; }
+    /* ── Skill sections and cards ── */
+    .pillar { margin-top: 48px; scroll-margin-top: 16px; }
+    .pillar-head { display: flex; justify-content: space-between; align-items: end; gap: 16px; padding-bottom: 16px; margin-bottom: 20px; border-bottom: 1px solid var(--line); }
+    .pillar-head h2 { font-size: 24px; font-weight: 600; display: flex; align-items: center; gap: 12px; }
+    .pillar-head p { color: var(--muted); margin-top: 6px; max-width: 66ch; font-size: 15px; }
+    .pcount { font-family: var(--f-mono); font-size: 12px; color: var(--pc); white-space: nowrap; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 18px; }
+    .game {
+      text-decoration: none; display: flex; flex-direction: column; min-width: 0;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
+      transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+    }
+    .game:hover { transform: translateY(-4px); border-color: var(--pc); box-shadow: 0 18px 36px -18px rgba(0,0,0,.7); }
+    .art {
+      position: relative; height: 104px; display: flex; align-items: center; padding: 0 22px;
+      background:
+        radial-gradient(rgba(255,255,255,.10) 1.2px, transparent 1.4px) 0 0 / 14px 14px,
+        linear-gradient(155deg, var(--g1), var(--g2));
+    }
+    .art img { width: 56px; height: 56px; filter: drop-shadow(0 4px 6px rgba(0,0,0,.3)); transition: transform .25s cubic-bezier(.2,1.4,.4,1); }
+    .game:hover .art img { transform: rotate(-8deg) scale(1.08); }
+    .flag {
+      position: absolute; top: 12px; right: 12px; font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+      background: var(--yellow); color: var(--yellow-ink); padding: 3px 9px; border-radius: 999px; font-weight: 500;
+    }
+    .body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+    .body h3 { font-size: 21px; font-weight: 600; }
+    .skill { font-family: var(--f-mono); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--pc); }
+    .learn { color: var(--muted); font-size: 14.5px; line-height: 1.5; margin-top: 4px; }
+    .meta { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: auto 0 0; padding: 10px 0 0; }
+    .meta li { font-size: 12.5px; font-weight: 700; color: var(--ink); background: var(--surface-2); border-radius: 8px; padding: 3px 9px; }
+    .meta li.phone { color: var(--literacy); }
 
-    .c5 { width:110px; height:34px; top:42px;  animation-duration:58s; animation-delay:-45s; }
-    .c5::before { width:55px;  height:55px;  top:-28px; left:12px; }
-    .c5::after  { width:46px;  height:46px;  top:-21px; left:52px; }
+    /* ── Chatroom ── */
+    .cr { margin-top: 72px; padding-block: 64px 72px; background: var(--bg-2); border-block: 1px solid var(--line); scroll-margin-top: 0; }
+    .cr-intro { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 40px; align-items: start; margin-bottom: 28px; }
+    .cr-intro h2 { font-size: clamp(30px, 4vw, 40px); font-weight: 800; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .cr-intro > div > p { color: var(--muted); margin-top: 10px; max-width: 46ch; }
+    .cr-age { font-family: var(--f-mono); font-size: 13px; font-weight: 500; background: var(--yellow); color: var(--yellow-ink); padding: 3px 10px; border-radius: 999px; letter-spacing: .04em; }
+    .why { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 20px 22px; }
+    .why h3 { font-size: 18px; font-weight: 600; }
+    .why ul { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 22px; }
+    .why li b { display: block; font-size: 15px; }
+    .why li span { display: block; color: var(--muted); font-size: 14px; margin-top: 2px; }
+    .why li::before { content: ""; display: block; width: 22px; height: 4px; border-radius: 4px; background: var(--literacy); margin-bottom: 8px; }
 
-    /* Birds */
-    @keyframes fly {
-      from { transform: translateX(115vw); }
-      to   { transform: translateX(-80px); }
-    }
-    @keyframes wingL {
-      from { transform: rotate(-22deg); }
-      to   { transform: rotate(16deg); }
-    }
-    @keyframes wingR {
-      from { transform: rotate(22deg); }
-      to   { transform: rotate(-16deg); }
-    }
+    .cr-card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 20px 22px; }
+    .cr-hidden { display: none !important; }
+    .cr-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+    .cr-form { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+    .cr-lbl { display: block; font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 4px; }
+    .cr-in { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1.5px solid var(--line-2); background: var(--bg); color: var(--ink); font-family: inherit; font-size: 15px; outline: none; }
+    .cr-in:focus { border-color: var(--yellow); }
+    .cr-code { text-transform: uppercase; letter-spacing: 6px; font-family: var(--f-mono); font-weight: 500; }
+    .cr-hint { font-size: 13.5px; color: var(--muted); line-height: 1.5; margin-bottom: 4px; }
+    .cr-check { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 700; cursor: pointer; margin: 2px 0 6px; }
+    .cr-check input { width: 18px; height: 18px; accent-color: var(--literacy); }
+    .cr-btn { font-family: inherit; font-size: 15px; font-weight: 700; color: var(--yellow-ink); border: none; border-radius: 10px; padding: 10px 18px; cursor: pointer; background: var(--yellow); white-space: nowrap; }
+    .cr-btn:hover { filter: brightness(1.06); }
+    .cr-btn:disabled { opacity: .45; cursor: default; }
+    .cr-link { background: none; border: 1.5px solid var(--line-2); color: var(--ink); border-radius: 999px; padding: 5px 12px; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .cr-link:hover { border-color: var(--ink); }
+    .cr-rules { background: var(--bg); border-radius: 14px; padding: 14px 18px; font-size: 14px; line-height: 1.6; color: var(--muted); }
+    .cr-rules b { color: var(--ink); }
+    .cr-rules ul { padding-left: 18px; margin: 6px 0 0; }
+    .cr-err { color: var(--danger); font-size: 14px; font-weight: 700; min-height: 1.2em; margin-top: 6px; }
+    .cr-err.ok { color: var(--ok); }
+    .cr-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; font-size: 15px; }
+    .cr-pub { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 18px; }
+    .cr-room { text-align: left; background: var(--bg); border: 1.5px solid var(--line); border-radius: 12px; padding: 12px 14px; color: var(--ink); font-family: inherit; cursor: pointer; transition: border-color .12s, transform .12s; }
+    .cr-room:hover { border-color: var(--literacy); transform: translateY(-2px); }
+    .cr-room b { display: block; font-size: 15px; }
+    .cr-room span { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .cr-room i { font-style: normal; font-family: var(--f-mono); font-size: 12px; color: var(--ok); }
+    .cr-box { background: var(--bg); border-radius: 14px; padding: 14px 16px; }
+    .cr-row { display: flex; gap: 8px; align-items: center; }
+    .cr-tag { background: rgba(255,210,63,.14); border: 1px solid rgba(255,210,63,.5); color: var(--yellow); font-family: var(--f-mono); letter-spacing: 3px; padding: 1px 8px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+    .cr-count { color: var(--muted); font-size: 13px; margin-left: 4px; }
+    .cr-main { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 12px; }
+    .cr-log { height: 340px; overflow-y: auto; background: var(--bg); border-radius: 12px; padding: 10px 14px; font-size: 15px; line-height: 1.5; }
+    .cr-log .m { padding: 2px 0; overflow-wrap: anywhere; position: relative; }
+    .cr-left { font-family: var(--f-mono); font-size: 12px; color: var(--faint); min-width: 2.2rem; text-align: right; font-variant-numeric: tabular-nums; }
+    .cr-left.low { color: var(--motor); }
+    .cr-left:empty { display: none; }
+    .cr-log .m b { font-weight: 700; margin-right: 6px; }
+    .cr-log .m.me b { text-decoration: underline; text-underline-offset: 3px; }
+    .cr-log .m.ping { background: rgba(255,210,63,.10); border-left: 3px solid var(--yellow); padding-left: 8px; margin-left: -11px; border-radius: 4px; }
+    .cr-log .at { color: var(--strategy); font-weight: 700; }
+    .cr-log .at.me { color: var(--yellow); }
+    .cr-log .m b, .cr-users div { cursor: pointer; }
+    .cr-log .m time { color: var(--faint); font-family: var(--f-mono); font-size: 11px; margin-right: 6px; }
+    .cr-log .sys { color: var(--faint); font-style: italic; font-size: 13.5px; padding: 2px 0; }
+    .cr-log .acts { display: none; margin-left: 6px; }
+    .cr-log .m:hover .acts { display: inline; }
+    .cr-log .acts button { background: none; border: none; color: var(--faint); font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; padding: 0 4px; }
+    .cr-log .acts button:hover { color: var(--ink); }
+    .cr-users { background: var(--bg); border-radius: 12px; padding: 10px 12px; font-size: 14px; height: 340px; overflow-y: auto; }
+    .cr-users div { padding: 2px 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cr-send { margin-top: 12px; }
+    .cr-status { font-size: 13px; color: var(--faint); margin-top: 10px; min-height: 1.2em; }
 
-    .bird {
-      position: absolute;
-      left: 0;
-      pointer-events: none;
-      animation: fly linear infinite;
-    }
-    .bird::before, .bird::after {
-      content: '';
-      position: absolute;
-      top: 0;
-      height: 8px;
-      border-top: 3px solid rgba(25,25,45,0.72);
-      border-radius: 50% 50% 0 0 / 100% 100% 0 0;
-    }
-    .bird::before {
-      width: var(--wing, 13px);
-      left: 0;
-      transform-origin: right top;
-      animation: wingL var(--flap, 0.5s) ease-in-out infinite alternate;
-    }
-    .bird::after {
-      width: var(--wing, 13px);
-      left: var(--wing, 13px);
-      transform-origin: left top;
-      animation: wingR var(--flap, 0.5s) ease-in-out infinite alternate;
-    }
+    /* ── Footer ── */
+    footer { padding-block: 40px 48px; }
+    .foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 24px; align-items: start; }
+    .foot p { color: var(--muted); margin-top: 10px; max-width: 42ch; font-size: 14.5px; }
+    .foot nav { display: flex; flex-wrap: wrap; gap: 6px 22px; }
+    .foot nav a { text-decoration: none; font-weight: 700; color: var(--muted); font-size: 14.5px; }
+    .foot nav a:hover { color: var(--ink); }
+    .copy { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); font-family: var(--f-mono); font-size: 12px; color: var(--faint); }
 
-    .b1 { --wing:15px; --flap:0.55s; top:20px;  animation-duration:19s; animation-delay:-5s; }
-    .b2 { --wing:11px; --flap:0.42s; top:62px;  animation-duration:25s; animation-delay:-14s; }
-    .b3 { --wing:13px; --flap:0.5s;  top:10px;  animation-duration:16s; animation-delay:-9s; }
-    .b4 { --wing:9px;  --flap:0.37s; top:78px;  animation-duration:21s; animation-delay:-18s; }
-    .b5 { --wing:17px; --flap:0.62s; top:35px;  animation-duration:14s; animation-delay:-3s; }
-
-    /* Title */
-    .logo {
-      font-size: 5rem;
-      font-weight: 900;
-      letter-spacing: 6px;
-      color: #fff;
-      text-shadow: 0 4px 0 rgba(0,0,0,0.15), 0 8px 20px rgba(0,0,0,0.1);
-      margin-bottom: 0.3rem;
-      position: relative;
-      z-index: 1;
+    @media (max-width: 900px) {
+      .hero-grid { grid-template-columns: 1fr; gap: 36px; padding-block: 24px 64px; }
+      .mosaic { margin: 0 auto; max-width: 340px; }
+      .overview { grid-template-columns: 1fr; margin-top: -28px; }
+      .cr-intro { grid-template-columns: 1fr; gap: 24px; }
     }
-
-    .tagline {
-      color: rgba(255,255,255,0.75);
-      font-size: 0.95rem;
-      font-weight: 700;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      position: relative;
-      z-index: 1;
+    @media (max-width: 700px) {
+      .cr-cols { grid-template-columns: 1fr; }
+      .cr-main { grid-template-columns: 1fr; }
+      .cr-users { height: auto; max-height: 90px; }
+      .cr-log { height: 280px; }
+      .why ul { grid-template-columns: 1fr; }
+      .nav a.hide-sm { display: none; }
+      .nav { flex-wrap: nowrap; gap: 2px; }
+      .nav a { padding: 6px 8px; font-size: 13.5px; white-space: nowrap; }
+      .pillar-head { flex-direction: column; align-items: start; gap: 8px; }
     }
-
-    .mission-btn {
-      margin-top: 1.4rem;
-      padding: 0.5rem 1.5rem;
-      border-radius: 50px;
-      background: rgba(255,255,255,0.15);
-      border: 2px solid rgba(255,255,255,0.45);
-      color: #fff;
-      font-size: 0.75rem;
-      font-weight: 900;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      text-decoration: none;
-      position: relative;
-      z-index: 1;
-      transition: background 0.18s, border-color 0.18s;
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition: none !important; animation: none !important; }
     }
-    .mission-btn:hover {
-      background: rgba(255,255,255,0.28);
-      border-color: rgba(255,255,255,0.7);
-    }
-
-    /* ── Divider strip ── */
-    .grass {
-      width: 100%;
-      background: #1a3f7a;
-      height: 8px;
-      position: relative;
-      flex-shrink: 0;
-    }
-    .grass::before {
-      content: '';
-      position: absolute;
-      bottom: 100%;
-      left: 0; right: 0;
-      height: 6px;
-      background: #0f2a55;
-    }
-    .grass::after {
-      content: '';
-      position: absolute;
-      top: 100%;
-      left: 0; right: 0;
-      height: 4px;
-      background: #0a1e3d;
-    }
-
-    /* ── Ground / game area ── */
-    .ground {
-      width: 100%;
-      background: #0f1e3d;
-      flex: 1;
-      display: flex;
-      flex-direction: row;
-      align-items: flex-start;
-      justify-content: center;
-      padding: 2.5rem 1rem 3rem;
-      gap: 1.8rem;
-    }
-
-    /* Centre column */
-    .ground-main {
-      flex: 1;
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    .section-label {
-      color: rgba(255,255,255,0.5);
-      font-size: 0.75rem;
-      font-weight: 700;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      margin-bottom: 1.5rem;
-    }
-
-    /* Educational skill tag on cards */
-    .skill-tag {
-      display: inline-block;
-      margin-top: auto;
-      margin-bottom: 0.3rem;
-      padding: 0.2rem 0.7rem;
-      border-radius: 50px;
-      font-size: 0.6rem;
-      font-weight: 900;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      background: rgba(255,255,255,0.15);
-      border: 1.5px solid rgba(255,255,255,0.3);
-      color: rgba(255,255,255,0.9);
-    }
-
-    /* ── Game grid ── */
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(140px, 160px));
-      gap: 1.2rem;
-      width: 100%;
-      max-width: 900px;
-      justify-content: center;
-    }
-
-    .card {
-      position: relative;
-      padding: 2rem 1.5rem 2rem;
-      border-radius: 20px;
-      text-decoration: none;
-      color: #fff;
-      text-align: center;
-      transition: transform 0.18s, box-shadow 0.18s;
-      overflow: hidden;
-      cursor: pointer;
-      border-bottom: 5px solid rgba(0,0,0,0.2);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    .card::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      border-radius: 20px;
-      background: rgba(255,255,255,0);
-      transition: background 0.18s;
-    }
-    .card:hover::after  { background: rgba(255,255,255,0.1); }
-    .card:hover { transform: translateY(-8px); }
-
-    /* Card colours — add more as needed */
-    .card-tag    { background: linear-gradient(160deg, #e74c3c, #c0392b); box-shadow: 0 6px 20px rgba(231,76,60,0.45); }
-    .card-coming { background: linear-gradient(160deg, #7f8c8d, #5d6d7e); box-shadow: 0 6px 20px rgba(100,100,100,0.3); }
-
-    .card:hover.card-tag    { box-shadow: 0 14px 36px rgba(231,76,60,0.6); }
-
-    .icon {
-      width: 52px;
-      height: 52px;
-      display: block;
-      margin: 0 auto 0.8rem;
-      filter: drop-shadow(0 3px 6px rgba(0,0,0,0.3));
-    }
-
-    .card-title {
-      font-size: 1.5rem;
-      font-weight: 900;
-      letter-spacing: 1px;
-      margin-bottom: 0.45rem;
-    }
-
-    .card-desc {
-      font-size: 0.8rem;
-      opacity: 0.85;
-      line-height: 1.55;
-      font-weight: 600;
-    }
-
-    .skill-tag + .badge { margin-top: 0; }
-
-    .badge {
-      display: block;
-      margin-top: auto;
-      padding: 0.25rem 0.9rem;
-      border-radius: 50px;
-      font-size: 0.65rem;
-      font-weight: 900;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      background: rgba(0,0,0,0.22);
-      border: 2px solid rgba(255,255,255,0.3);
-    }
-
-    .card-soon {
-      background: rgba(0,0,0,0.15);
-      border: 2px dashed rgba(255,255,255,0.15);
-      border-radius: 20px;
-      padding: 2rem 1.5rem 1.6rem;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      color: rgba(255,255,255,0.25);
-      font-size: 0.72rem;
-      font-weight: 700;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      line-height: 1.6;
-      gap: 0.5rem;
-      cursor: default;
-    }
-    .card-soon img { display: block; margin: 0 auto 0.3rem; }
-
-    .badge-mobile {
-      position: absolute;
-      top: 8px;
-      left: 50%;
-      transform: translateX(-50%);
-      white-space: nowrap;
-      padding: 2px 8px;
-      border-radius: 20px;
-      font-size: 0.55rem;
-      font-weight: 900;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      background: rgba(255,255,255,0.2);
-      border: 1.5px solid rgba(255,255,255,0.45);
-      color: #fff;
-      z-index: 2;
-    }
-
-    .expand-btn {
-      margin-top: 1.5rem;
-      background: none;
-      border: none;
-      color: rgba(255,255,255,0.4);
-      padding: 0.5rem;
-      cursor: pointer;
-      transition: all 0.18s;
-      font-size: 1.5rem;
-      display: flex;
-      align-items: center;
-    }
-    .expand-btn:hover {
-      color: rgba(255,255,255,0.6);
-    }
-
-    .expand-arrow {
-      display: inline-block;
-      transition: transform 0.18s;
-    }
-    .expand-arrow.open {
-      transform: rotate(180deg);
-    }
-
-    .extra-games {
-      display: none;
-      width: 100%;
-      max-width: 900px;
-    }
-    .extra-games.open {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(140px, 160px));
-      gap: 1.2rem;
-      justify-content: center;
-    }
-
   </style>
 </head>
 <body>
 
-  <div class="sky">
-    <div class="cloud c1"></div>
-    <div class="cloud c2"></div>
-    <div class="cloud c3"></div>
-    <div class="cloud c4"></div>
-    <div class="cloud c5"></div>
-    <div class="bird b1"></div>
-    <div class="bird b2"></div>
-    <div class="bird b3"></div>
-    <div class="bird b4"></div>
-    <div class="bird b5"></div>
-    <div class="logo">EduArcade</div>
-    <p class="tagline">learn through play</p>
-    <a class="mission-btn" href="mission.html">Our Mission</a>
-  </div>
-
-  <div class="grass"></div>
-
-  <div class="ground">
-
-    <!-- Centre: section label + game grid -->
-    <div class="ground-main">
-
-      <!-- ── Motor Skills & Coordination ── -->
-      <p class="section-label" id="motorLabel">Motor Skills &amp; Coordination</p>
-      <div class="grid">
-
-        <a class="card card-tag" href="volley.html" style="background:linear-gradient(160deg,#1a6aaa,#0e3d72);box-shadow:0 6px 20px rgba(30,120,200,0.45),0 0 0 3px #f5c518;">
-          <span style="position:absolute;top:-1px;left:50%;transform:translateX(-50%);background:#f5c518;color:#000;font-size:12px;font-weight:900;padding:4px 12px;border-radius:0 0 10px 10px;white-space:nowrap;letter-spacing:1px;text-transform:uppercase;box-shadow:0 2px 8px rgba(245,197,24,0.6);">Recommended</span>
-          <img class="icon" src="icons/volleyball.svg" alt="Volleyball">
-          <div class="card-title">Volley</div>
-          <span class="skill-tag">Timing &amp; Positioning</span>
-          <span class="badge">2P · Online</span>
-        </a>
-
-        <a class="card card-tag" href="boxing.html" style="background:linear-gradient(160deg,#e74c3c,#8e0000);box-shadow:0 6px 20px rgba(231,76,60,0.45)">
-          <img class="icon" src="icons/boxing.svg" alt="Boxing glove">
-          <div class="card-title">Boxing</div>
-          <span class="skill-tag">Motor Skills</span>
-          <span class="badge">2 Players</span>
-        </a>
-
-        <a class="card card-tag" href="sniper.html" style="background:linear-gradient(160deg,#27ae60,#1e8449);box-shadow:0 6px 20px rgba(39,174,96,0.45)">
-          <img class="icon" src="icons/target.svg" alt="Crosshair target">
-          <div class="card-title">Laser Tag</div>
-          <span class="skill-tag">Focus &amp; Precision</span>
-          <span class="badge">2 Players</span>
-        </a>
-
-        <a class="card card-tag" href="starclicker.html" style="background:linear-gradient(160deg,#1a1a4e,#0a0820);box-shadow:0 6px 20px rgba(100,80,255,0.45)">
-          <img class="icon" src="icons/star.svg" alt="Star">
-          <div class="card-title">Star Clicker</div>
-          <span class="skill-tag">Motor Skills</span>
-          <span class="badge">1 Player</span>
-        </a>
-
-        <a class="card card-tag" href="tag.html">
-          <img class="icon" src="icons/runner.svg" alt="Running figure">
-          <div class="card-title">Tag</div>
-          <span class="skill-tag">Agility &amp; Awareness</span>
-          <span class="badge">2 Players</span>
-        </a>
-
+  <header class="hero">
+    <div class="shell">
+      <div class="top">
+        <a class="brand" href="index.html"><svg class="mark" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="12" height="12" rx="3.5" fill="var(--motor)"/><rect x="15" y="1" width="12" height="12" rx="3.5" fill="var(--strategy)"/><rect x="1" y="15" width="12" height="12" rx="3.5" fill="var(--literacy)"/><rect x="15" y="15" width="12" height="12" rx="6" fill="var(--yellow)"/></svg>EduArcade</a>
+        <nav class="nav" aria-label="Main">
+          <a href="#games" class="hide-sm">Games</a>
+          <a href="#chatroom">Chatroom</a>
+          <a href="mission.html">Our mission</a>
+        </nav>
       </div>
-
-      <button class="expand-btn" onclick="toggleMotorSkills()">
-        <span class="expand-arrow" id="motorArrow">▼</span>
-      </button>
-
-      <div class="extra-games" id="motorExtra">
-        <a class="card card-tag" href="voxel-sandbox.html" style="background:linear-gradient(160deg,#16a085,#0d5f4f);box-shadow:0 6px 20px rgba(22,160,133,0.45)">
-          <img class="icon" src="icons/block.svg" alt="Building blocks">
-          <div class="card-title">Voxel Sandbox</div>
-          <span class="skill-tag">Spatial Reasoning</span>
-          <span class="badge">1 Player</span>
-        </a>
-
-        <a class="card card-tag" href="pong.html" style="background:linear-gradient(160deg,#2c3e50,#1a252f);box-shadow:0 6px 20px rgba(44,62,80,0.45)">
-          <img class="icon" src="icons/pong.svg" alt="Pong paddle">
-          <div class="card-title">Pong</div>
-          <span class="skill-tag">Timing &amp; Reflexes</span>
-          <span class="badge">2 Players</span>
-        </a>
-      </div>
-
-      <!-- ── Strategy & Critical Thinking ── -->
-      <p class="section-label" style="margin-top:2.5rem;">Strategy &amp; Critical Thinking</p>
-      <div class="grid">
-
-        <a class="card card-tag" href="battle.html" style="background:linear-gradient(160deg,#e67e22,#ca6f1e);box-shadow:0 6px 20px rgba(230,126,34,0.45)">
-          <span class="badge-mobile">📱 Mobile</span>
-          <img class="icon" src="icons/swords.svg" alt="Crossed swords">
-          <div class="card-title">Battle</div>
-          <span class="skill-tag">Strategic Thinking</span>
-          <span class="badge">2 Players</span>
-        </a>
-
-        <a class="card card-tag" href="chess.html" style="background:linear-gradient(160deg,#5d4037,#3e2723);box-shadow:0 6px 20px rgba(93,64,55,0.55)">
-          <span class="badge-mobile">📱 Mobile</span>
-          <img class="icon" src="icons/pawn.svg" alt="Chess pawn">
-          <div class="card-title">Chess</div>
-          <span class="skill-tag">Logic &amp; Planning</span>
-          <span class="badge">2 Players</span>
-        </a>
-
-        <a class="card card-tag" href="survive.html" style="background:linear-gradient(160deg,#27ae60,#145a32);box-shadow:0 6px 20px rgba(39,174,96,0.45)">
-          <img class="icon" src="icons/zombie.svg" alt="Zombie">
-          <div class="card-title">Survive</div>
-          <span class="skill-tag">Problem Solving</span>
-          <span class="badge">1 Player</span>
-        </a>
-
-        <a class="card card-tag" href="nightwatch.html" style="background:linear-gradient(160deg,#1a0a2e,#0a0518);box-shadow:0 6px 20px rgba(120,60,220,0.45)">
-          <img class="icon" src="icons/camera.svg" alt="Security camera">
-          <div class="card-title">Night Watch</div>
-          <span class="skill-tag">Resource Management</span>
-          <span class="badge">1 Player</span>
-        </a>
-
-        <a class="card card-tag" href="trenchwars.html" style="background:linear-gradient(160deg,#4a6741,#2a3d20);box-shadow:0 6px 20px rgba(74,103,65,0.55)">
-          <img class="icon" src="icons/swords.svg" alt="Crossed swords">
-          <div class="card-title">Trench Wars</div>
-          <span class="skill-tag">Strategy &amp; Planning</span>
-          <span class="badge">2 Players</span>
-        </a>
-
-        <a class="card card-tag" href="frontier.html" style="background:linear-gradient(160deg,#1f6fb2,#123a6b);box-shadow:0 6px 20px rgba(31,111,178,0.5)">
-          <span class="badge-mobile">New</span>
-          <img class="icon" src="icons/globe.svg" alt="Globe">
-          <div class="card-title">Frontier</div>
-          <span class="skill-tag">Strategy &amp; Economics</span>
-          <span class="badge">1 Player</span>
-        </a>
-
-        <a class="card card-tag" href="imposter.html" style="background:linear-gradient(160deg,#1f6a73,#0f3a40);box-shadow:0 6px 20px rgba(31,106,115,0.5)">
-          <span class="badge-mobile">New</span>
-          <img class="icon" src="icons/mask.svg" alt="Disguise mask">
-          <div class="card-title">Imposter</div>
-          <span class="skill-tag">Deduction &amp; Bluffing</span>
-          <span class="badge">3–20 Players</span>
-        </a>
-
-      </div>
-
-      <!-- ── Literacy & Technology ── -->
-      <p class="section-label" style="margin-top:2.5rem;">Literacy &amp; Technology</p>
-      <div class="grid">
-
-        <a class="card card-tag" href="typing.html" style="background:linear-gradient(160deg,#6a1ab5,#2d0060);box-shadow:0 6px 20px rgba(106,26,181,0.45)">
-          <img class="icon" src="icons/keyboard.svg" alt="Keyboard">
-          <div class="card-title">Type Quest</div>
-          <span class="skill-tag">Literacy &amp; Tech</span>
-          <span class="badge">1 Player</span>
-        </a>
-
-        <div class="card-soon"><img src="icons/pencil.svg" width="28" height="28" alt="" style="opacity:0.3;margin-bottom:0.3rem;">More games<br>coming soon</div>
-        <div class="card-soon"><img src="icons/pencil.svg" width="28" height="28" alt="" style="opacity:0.3;margin-bottom:0.3rem;">More games<br>coming soon</div>
-        <div class="card-soon"><img src="icons/pencil.svg" width="28" height="28" alt="" style="opacity:0.3;margin-bottom:0.3rem;">More games<br>coming soon</div>
-        <div class="card-soon"><img src="icons/pencil.svg" width="28" height="28" alt="" style="opacity:0.3;margin-bottom:0.3rem;">More games<br>coming soon</div>
-
+      <div class="hero-grid">
+        <div>
+          <p class="eyebrow">Free educational games · No login · No downloads</p>
+          <h1>Learn through <mark>play</mark>.</h1>
+          <p class="hero-lede">Browser games built so the skill is the game. Train your coordination, plan like a strategist and type faster, on any device, at school or at home.</p>
+          <div class="cta">
+            <a class="btn btn-primary" href="#games">Browse the games</a>
+            <a class="btn btn-ghost" href="mission.html">Why we made EduArcade</a>
+          </div>
+          <dl class="stats">
+            <div><dt>15</dt><dd>free games</dd></div>
+            <div><dt>3</dt><dd>skill areas</dd></div>
+            <div><dt>0</dt><dd>accounts needed</dd></div>
+          </dl>
+        </div>
+        <div class="mosaic" aria-label="Featured games">
+          <a class="tile t0" href="volley.html" style="--g1:#1a6aaa;--g2:#0e3d72" title="Volley"><img src="icons/volleyball.svg" alt="Volley" width="44" height="44"></a><a class="tile t1" href="chess.html" style="--g1:#6d4c41;--g2:#3e2723" title="Chess"><img src="icons/pawn.svg" alt="Chess" width="44" height="44"></a><a class="tile t2" href="typing.html" style="--g1:#6a1ab5;--g2:#2d0060" title="Type Quest"><img src="icons/keyboard.svg" alt="Type Quest" width="44" height="44"></a><a class="tile t3" href="frontier.html" style="--g1:#1f6fb2;--g2:#123a6b" title="Frontier"><img src="icons/globe.svg" alt="Frontier" width="44" height="44"></a><a class="tile t4" href="imposter.html" style="--g1:#1f6a73;--g2:#0f3a40" title="Imposter"><img src="icons/mask.svg" alt="Imposter" width="44" height="44"></a><a class="tile t5" href="boxing.html" style="--g1:#e74c3c;--g2:#8e0000" title="Boxing"><img src="icons/boxing.svg" alt="Boxing" width="44" height="44"></a><a class="tile t6" href="survive.html" style="--g1:#27ae60;--g2:#145a32" title="Survive"><img src="icons/zombie.svg" alt="Survive" width="44" height="44"></a><a class="tile t7" href="starclicker.html" style="--g1:#2a2a6e;--g2:#0a0820" title="Star Clicker"><img src="icons/star.svg" alt="Star Clicker" width="44" height="44"></a><a class="tile t8" href="voxel-sandbox.html" style="--g1:#16a085;--g2:#0d5f4f" title="Voxel Sandbox"><img src="icons/block.svg" alt="Voxel Sandbox" width="44" height="44"></a>
+        </div>
       </div>
     </div>
+  </header>
 
+  <main>
+    <div class="shell">
+      <nav class="overview" aria-label="What our games teach">
+        <a class="ov" href="#motor" data-pillar="motor">
+          <span class="pdot" aria-hidden="true"></span>
+          <b>Motor Skills &amp; Coordination</b>
+          <span class="ov-n">6 games</span>
+          <span class="ov-t">Volley, Boxing, Laser Tag, Tag, Pong, Star Clicker</span>
+        </a>
+        <a class="ov" href="#strategy" data-pillar="strategy">
+          <span class="pdot" aria-hidden="true"></span>
+          <b>Strategy &amp; Critical Thinking</b>
+          <span class="ov-n">7 games</span>
+          <span class="ov-t">Battle, Chess, Frontier, Survive, Night Watch, Trench Wars, Voxel Sandbox</span>
+        </a>
+        <a class="ov" href="#literacy" data-pillar="literacy">
+          <span class="pdot" aria-hidden="true"></span>
+          <b>Literacy &amp; Technology</b>
+          <span class="ov-n">2 games</span>
+          <span class="ov-t">Type Quest, Imposter</span>
+        </a>
+      </nav>
 
-  </div>
+      <section class="games" id="games" aria-labelledby="games-title">
+        <div class="games-head">
+          <div>
+            <h2 id="games-title">Pick a skill, then play</h2>
+            <p>Every game lists what it teaches. Most two-player games share one keyboard, so grab a friend.</p>
+          </div>
+        </div>
 
-<!-- ── EduArcade Chatroom ── -->
-<section class="cr" id="chatroom">
-  <div class="cr-wrap">
-    <div class="cr-head">
-      <div>
-        <h2>EduArcade Chatroom</h2>
-        <p>Talk games, strategies and homework with other players.</p>
+        <div class="filters" role="search">
+          <label class="search">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5" stroke-linecap="round"/></svg>
+            <input id="q" type="search" placeholder="Search games or skills, e.g. typing" autocomplete="off" aria-label="Search games or skills">
+          </label>
+          <div class="chips" role="group" aria-label="Skill area">
+            <button class="chip" data-filter="all" aria-pressed="true">All</button>
+            <button class="chip" data-filter="motor" data-pillar="motor" aria-pressed="false"><span class="pdot" aria-hidden="true"></span>Motor</button>
+            <button class="chip" data-filter="strategy" data-pillar="strategy" aria-pressed="false"><span class="pdot" aria-hidden="true"></span>Strategy</button>
+            <button class="chip" data-filter="literacy" data-pillar="literacy" aria-pressed="false"><span class="pdot" aria-hidden="true"></span>Literacy</button>
+            <label class="chip toggle"><input type="checkbox" id="phoneOnly"> Phone friendly</label>
+          </div>
+        </div>
+
+        
+    <section class="pillar" id="motor" data-pillar="motor">
+      <header class="pillar-head">
+        <div>
+          <h2><span class="pdot" aria-hidden="true"></span>Motor Skills &amp; Coordination</h2>
+          <p>Fast, physical games that train hand-eye coordination, timing and reaction speed. Most are two players on one keyboard, so they’re social too.</p>
+        </div>
+        <span class="pcount">6 games</span>
+      </header>
+      <div class="grid">
+        <a class="game" href="volley.html" data-skill="motor" data-phone="0" data-search="volley timing &amp; positioning builds timing, spatial positioning and anticipation: read the ball’s arc, guess your opponent’s next move and decide quickly under pressure. 1–2 players · online">
+          <div class="art" style="--g1:#1a6aaa;--g2:#0e3d72">
+            <img src="icons/volleyball.svg" alt="Volleyball" width="56" height="56">
+            <span class="flag">Recommended</span>
+          </div>
+          <div class="body">
+            <h3>Volley</h3>
+            <p class="skill">Timing &amp; Positioning</p>
+            <p class="learn">Builds timing, spatial positioning and anticipation: read the ball’s arc, guess your opponent’s next move and decide quickly under pressure.</p>
+            <ul class="meta"><li>1–2 players · Online</li></ul>
+          </div>
+        </a>
+        <a class="game" href="boxing.html" data-skill="motor" data-phone="0" data-search="boxing motor skills trains motor skills, hand-eye coordination and reaction speed through split-second key combos. 2 players">
+          <div class="art" style="--g1:#e74c3c;--g2:#8e0000">
+            <img src="icons/boxing.svg" alt="Boxing glove" width="56" height="56">
+            
+          </div>
+          <div class="body">
+            <h3>Boxing</h3>
+            <p class="skill">Motor Skills</p>
+            <p class="learn">Trains motor skills, hand-eye coordination and reaction speed through split-second key combos.</p>
+            <ul class="meta"><li>2 players</li></ul>
+          </div>
+        </a>
+        <a class="game" href="sniper.html" data-skill="motor" data-phone="0" data-search="laser tag focus &amp; precision sharpens precision, patience and hand-eye coordination. pick your moment, aim true and outthink your opponent. 2 players">
+          <div class="art" style="--g1:#27ae60;--g2:#1e8449">
+            <img src="icons/target.svg" alt="Crosshair target" width="56" height="56">
+            
+          </div>
+          <div class="body">
+            <h3>Laser Tag</h3>
+            <p class="skill">Focus &amp; Precision</p>
+            <p class="learn">Sharpens precision, patience and hand-eye coordination. Pick your moment, aim true and outthink your opponent.</p>
+            <ul class="meta"><li>2 players</li></ul>
+          </div>
+        </a>
+        <a class="game" href="tag.html" data-skill="motor" data-phone="0" data-search="tag agility &amp; awareness builds spatial awareness, agility and quick tactical decisions while chasing or evading an opponent. 2 players">
+          <div class="art" style="--g1:#e74c3c;--g2:#c0392b">
+            <img src="icons/runner.svg" alt="Running figure" width="56" height="56">
+            
+          </div>
+          <div class="body">
+            <h3>Tag</h3>
+            <p class="skill">Agility &amp; Awareness</p>
+            <p class="learn">Builds spatial awareness, agility and quick tactical decisions while chasing or evading an opponent.</p>
+            <ul class="meta"><li>2 players</li></ul>
+          </div>
+        </a>
+        <a class="game" href="pong.html" data-skill="motor" data-phone="0" data-search="pong timing &amp; reflexes builds timing, reaction speed and prediction. read the ball’s angle and move to where it will be, not where it is. 2 players">
+          <div class="art" style="--g1:#34495e;--g2:#1a252f">
+            <img src="icons/pong.svg" alt="Pong paddle" width="56" height="56">
+            
+          </div>
+          <div class="body">
+            <h3>Pong</h3>
+            <p class="skill">Timing &amp; Reflexes</p>
+            <p class="learn">Builds timing, reaction speed and prediction. Read the ball’s angle and move to where it will be, not where it is.</p>
+            <ul class="meta"><li>2 players</li></ul>
+          </div>
+        </a>
+        <a class="game" href="starclicker.html" data-skill="motor" data-phone="1" data-search="star clicker motor skills &amp; number sense builds fine motor control and number sense. click fast and accurately, then compare upgrade costs to grow your stars exponentially. 1 player">
+          <div class="art" style="--g1:#2a2a6e;--g2:#0a0820">
+            <img src="icons/star.svg" alt="Star" width="56" height="56">
+            
+          </div>
+          <div class="body">
+            <h3>Star Clicker</h3>
+            <p class="skill">Motor Skills &amp; Number Sense</p>
+            <p class="learn">Builds fine motor control and number sense. Click fast and accurately, then compare upgrade costs to grow your stars exponentially.</p>
+            <ul class="meta"><li>1 player</li><li class="phone">Phone friendly</li></ul>
+          </div>
+        </a>
       </div>
-      <span class="cr-age" title="For people aged 13 and older">13+</span>
+    </section>
+    <section class="pillar" id="strategy" data-pillar="strategy">
+      <header class="pillar-head">
+        <div>
+          <h2><span class="pdot" aria-hidden="true"></span>Strategy &amp; Critical Thinking</h2>
+          <p>Plan ahead, manage limited resources and adapt when your plan meets an opponent. The habits these games build carry straight into schoolwork and everyday routines.</p>
+        </div>
+        <span class="pcount">7 games</span>
+      </header>
+      <div class="grid">
+        <a class="game" href="battle.html" data-skill="strategy" data-phone="1" data-search="battle strategic thinking develops strategic thinking, resource management and the ability to read and counter your opponent’s tactics. 2 players">
+          <div class="art" style="--g1:#e67e22;--g2:#a85513">
+            <img src="icons/swords.svg" alt="Crossed swords" width="56" height="56">
+            
+          </div>
+          <div class="body">
+            <h3>Battle</h3>
+            <p class="skill">Strategic Thinking</p>
+            <p class="learn">Develops strategic thinking, resource management and the ability to read and counter your opponent’s tactics.</p>
+            <ul class="meta"><li>2 players</li><li class="phone">Phone friendly</li></ul>
+          </div>
+        </a>
+        <a class="game" href="chess.html" data-skill="strategy" data-phone="1" data-search="chess logic &amp; planning develops critical thinking, forward planning and logical reasoning. every move has consequences several steps ahead. 2 players">
+          <div class="art" style="--g1:#6d4c41;--g2:#3e2723">
+            <img src="icons/pawn.svg" alt="Chess pawn" width="56" height="56">
+            
+          </div>
+          <div class="body">
+            <h3>Chess</h3>
+            <p class="skill">Logic &amp; Planning</p>
+            <p class="learn">Develops critical thinking, forward planning and logical reasoning. Every move has consequences several steps ahead.</p>
+            <ul class="meta"><li>2 players</li><li class="phone">Phone friendly</li></ul>
+          </div>
+        </a>
+        <a class="game" href="frontier.html" data-skill="strategy" data-phone="1" data-search="frontier strategy &amp; economics builds strategic planning, economic thinking and diplomacy. balance troop growth against expansion, invest gold wisely and choose allies carefully. solo or online">
+          <div class="art" style="--g1:#1f6fb2;--g2:#123a6b">
+            <img src="icons/globe.svg" alt="Globe" width="56" height="56">
+            <span class="flag">New</span>
+          </div>
+          <div class="body">
+            <h3>Frontier</h3>
+            <p class="skill">Strategy &amp; Economics</p>
+            <p class="learn">Builds strategic planning, economic thinking and diplomacy. Balance troop growth against expansion, invest gold wisely and choose allies carefully.</p>
+            <ul class="meta"><li>Solo or online</li><li class="phone">Phone friendly</li></ul>
+          </div>
+        </a>
+        <a class="game" href="survive.html" data-skill="strategy" data-phone="0" data-search="survive problem solving builds problem-solving, resource management and decision-making under pressure as each wave grows harder. 1 player">
+          <div class="art" style="--g1:#27ae60;--g2:#145a32">
+            <img src="icons/zombie.svg" alt="Zombie" width="56" height="56">
+            
+          </div>
+          <div class="body">
+            <h3>Survive</h3>
+            <p class="skill">Problem Solving</p>
+            <p class="learn">Builds problem-solving, resource management and decision-making under pressure as each wave grows harder.</p>
+            <ul class="meta"><li>1 player</li></ul>
+          </div>
+        </a>
+        <a class="game" href="nightwatch.html" data-skill="strategy" data-phone="0" data-search="night watch resource management builds resource management, multitasking and strategic decision-making as you balance limited power against several threats at once. 1 player">
+          <div class="art" style="--g1:#2e1452;--g2:#0a0518">
+            <img src="icons/camera.svg" alt="Security camera" width="56" height="56">
+            
+          </div>
+          <div class="body">
+            <h3>Night Watch</h3>
+            <p class="skill">Resource Management</p>
+            <p class="learn">Builds resource management, multitasking and strategic decision-making as you balance limited power against several threats at once.</p>
+            <ul class="meta"><li>1 player</li></ul>
+          </div>
+        </a>
+        <a class="game" href="trenchwars.html" data-skill="strategy" data-phone="0" data-search="trench wars strategy &amp; planning builds tactical thinking, resource management and spatial reasoning. weigh when to advance, when to fortify and how to run the gold economy. 2 players">
+          <div class="art" style="--g1:#4a6741;--g2:#2a3d20">
+            <img src="icons/swords.svg" alt="Crossed swords" width="56" height="56">
+            
+          </div>
+          <div class="body">
+            <h3>Trench Wars</h3>
+            <p class="skill">Strategy &amp; Planning</p>
+            <p class="learn">Builds tactical thinking, resource management and spatial reasoning. Weigh when to advance, when to fortify and how to run the gold economy.</p>
+            <ul class="meta"><li>2 players</li></ul>
+          </div>
+        </a>
+        <a class="game" href="voxel-sandbox.html" data-skill="strategy" data-phone="0" data-search="voxel sandbox spatial reasoning builds spatial reasoning, planning and creativity. think in three dimensions, craft materials step by step and design your own structures. 1 player">
+          <div class="art" style="--g1:#16a085;--g2:#0d5f4f">
+            <img src="icons/block.svg" alt="Building blocks" width="56" height="56">
+            
+          </div>
+          <div class="body">
+            <h3>Voxel Sandbox</h3>
+            <p class="skill">Spatial Reasoning</p>
+            <p class="learn">Builds spatial reasoning, planning and creativity. Think in three dimensions, craft materials step by step and design your own structures.</p>
+            <ul class="meta"><li>1 player</li></ul>
+          </div>
+        </a>
+      </div>
+    </section>
+    <section class="pillar" id="literacy" data-pillar="literacy">
+      <header class="pillar-head">
+        <div>
+          <h2><span class="pdot" aria-hidden="true"></span>Literacy &amp; Technology</h2>
+          <p>Typing fluency and word skills for a world that runs on keyboards and conversation.</p>
+        </div>
+        <span class="pcount">2 games</span>
+      </header>
+      <div class="grid">
+        <a class="game" href="typing.html" data-skill="literacy" data-phone="0" data-search="type quest literacy &amp; tech builds typing speed, accuracy and keyboard fluency. each level introduces a new technique, from home-row basics to full-keyboard mastery. 1 player">
+          <div class="art" style="--g1:#6a1ab5;--g2:#2d0060">
+            <img src="icons/keyboard.svg" alt="Keyboard" width="56" height="56">
+            
+          </div>
+          <div class="body">
+            <h3>Type Quest</h3>
+            <p class="skill">Literacy &amp; Tech</p>
+            <p class="learn">Builds typing speed, accuracy and keyboard fluency. Each level introduces a new technique, from home-row basics to full-keyboard mastery.</p>
+            <ul class="meta"><li>1 player</li></ul>
+          </div>
+        </a>
+        <a class="game" href="imposter.html" data-skill="literacy" data-phone="1" data-search="imposter vocabulary &amp; reasoning builds vocabulary, verbal reasoning and reading people. pick precise words that don’t give too much away, spot clues that don’t fit and argue your case. 3–20 players">
+          <div class="art" style="--g1:#1f6a73;--g2:#0f3a40">
+            <img src="icons/mask.svg" alt="Disguise mask" width="56" height="56">
+            <span class="flag">New</span>
+          </div>
+          <div class="body">
+            <h3>Imposter</h3>
+            <p class="skill">Vocabulary &amp; Reasoning</p>
+            <p class="learn">Builds vocabulary, verbal reasoning and reading people. Pick precise words that don’t give too much away, spot clues that don’t fit and argue your case.</p>
+            <ul class="meta"><li>3–20 players</li><li class="phone">Phone friendly</li></ul>
+          </div>
+        </a>
+      </div>
+    </section>
+
+        <div class="no-match" id="noMatch" hidden>No games match that search. <button id="clearFilters">Show all games</button></div>
+      </section>
     </div>
+
+    <!-- ── EduArcade Chatroom ── -->
+    <section class="cr" id="chatroom">
+      <div class="shell cr-wrap">
+        <div class="cr-intro">
+          <div>
+            <h2>EduArcade Chatroom <span class="cr-age" title="For people aged 13 and older">13+</span></h2>
+            <p>Talk games, strategies and homework with other players in public rooms, or make a private room for your friends.</p>
+          </div>
+          <div class="why">
+            <h3>Why the chatroom is educational</h3>
+            <ul>
+              <li><b>Digital citizenship</b><span>Practise the online habits school teaches: be kind, disagree respectfully and think before you post.</span></li>
+              <li><b>Staying safe online</b><span>Use a nickname, keep personal details private, and learn when to mute, report and tell a trusted adult.</span></li>
+              <li><b>Clear, concise writing</b><span>The 200-character limit rewards getting your point across in a few well-chosen words.</span></li>
+              <li><b>Teamwork and explaining</b><span>Swap tactics, explain your thinking and help other players with games and homework.</span></li>
+            </ul>
+          </div>
+        </div>
 
     <!-- Step 1: name + age -->
     <div class="cr-card" id="crJoin">
@@ -651,76 +688,64 @@
     </div>
 
     <div class="cr-status" id="crStatus"></div>
-  </div>
-</section>
+      </div>
+    </section>
+  </main>
 
-<style>
-  .cr { width: 100%; background: #0b1730; border-top: 1px solid rgba(255,255,255,0.06); padding: 2.5rem 1rem 3rem; display: flex; justify-content: center; font-family: 'Segoe UI', sans-serif; color: #fff; }
-  .cr-wrap { width: 100%; max-width: 900px; }
-  .cr-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
-  .cr-head h2 { font-size: 1.3rem; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; }
-  .cr-head p { font-size: 0.8rem; color: rgba(255,255,255,0.55); margin-top: 0.2rem; }
-  .cr-age { background: #f5c518; color: #000; font-weight: 900; font-size: 0.75rem; letter-spacing: 1px; padding: 0.25rem 0.7rem; border-radius: 20px; }
-  .cr-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 1.1rem 1.2rem; }
-  .cr-hidden { display: none !important; }
-  .cr-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
-  .cr-form { display: flex; flex-direction: column; align-items: flex-start; gap: 0.45rem; }
-  .cr-lbl { display: block; font-size: 0.62rem; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.5); margin-bottom: 0.35rem; }
-  .cr-in { width: 100%; padding: 0.55rem 0.8rem; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.25); color: #fff; font-family: inherit; font-size: 0.9rem; font-weight: 600; outline: none; }
-  .cr-in:focus { border-color: #5dade2; }
-  .cr-code { text-transform: uppercase; letter-spacing: 6px; font-weight: 900; }
-  .cr-hint { font-size: 0.74rem; color: rgba(255,255,255,0.5); line-height: 1.5; margin-bottom: 0.4rem; }
-  .cr-check { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 700; cursor: pointer; margin: 0.2rem 0 0.4rem; }
-  .cr-check input { width: 17px; height: 17px; accent-color: #27ae60; }
-  .cr-btn { font-family: inherit; font-size: 0.8rem; font-weight: 900; letter-spacing: 1px; color: #fff; border: none; border-radius: 20px; padding: 0.5rem 1.2rem; cursor: pointer; background: #27ae60; white-space: nowrap; }
-  .cr-btn:hover { filter: brightness(1.1); }
-  .cr-btn:disabled { opacity: 0.45; cursor: default; }
-  .cr-link { background: none; border: 1px solid rgba(255,255,255,0.25); color: #fff; border-radius: 20px; padding: 0.25rem 0.8rem; font-family: inherit; font-size: 0.75rem; font-weight: 700; cursor: pointer; }
-  .cr-link:hover { background: rgba(255,255,255,0.1); }
-  .cr-rules { background: rgba(0,0,0,0.2); border-radius: 12px; padding: 0.8rem 1rem; font-size: 0.78rem; line-height: 1.6; color: rgba(255,255,255,0.75); }
-  .cr-rules ul { padding-left: 1.1rem; margin-top: 0.3rem; }
-  .cr-err { color: #ff9a8a; font-size: 0.78rem; font-weight: 700; min-height: 1.1rem; margin-top: 0.4rem; }
-  .cr-err.ok { color: #7fe0a8; }
-  .cr-bar { display: flex; justify-content: space-between; align-items: center; gap: 0.8rem; margin-bottom: 0.9rem; font-size: 0.85rem; }
-  .cr-pub { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.6rem; margin-bottom: 1rem; }
-  .cr-room { text-align: left; background: rgba(0,0,0,0.25); border: 1.5px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 0.7rem 0.9rem; color: #fff; font-family: inherit; cursor: pointer; transition: border-color 0.12s, transform 0.12s; }
-  .cr-room:hover { border-color: #27ae60; transform: translateY(-2px); }
-  .cr-room b { display: block; font-size: 0.9rem; }
-  .cr-room span { display: block; font-size: 0.72rem; color: rgba(255,255,255,0.55); margin-top: 0.15rem; }
-  .cr-room i { font-style: normal; font-size: 0.7rem; color: #7fe0a8; font-weight: 800; }
-  .cr-box { background: rgba(0,0,0,0.2); border-radius: 12px; padding: 0.8rem 0.9rem; }
-  .cr-row { display: flex; gap: 0.5rem; align-items: center; }
-  .cr-tag { background: rgba(245,197,24,0.18); border: 1px solid rgba(245,197,24,0.5); color: #f5c518; font-weight: 900; letter-spacing: 3px; padding: 0.1rem 0.5rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer; }
-  .cr-count { color: rgba(255,255,255,0.5); font-size: 0.75rem; margin-left: 0.3rem; }
-  .cr-main { display: grid; grid-template-columns: 1fr 170px; gap: 0.8rem; }
-  .cr-log { height: 320px; overflow-y: auto; background: rgba(0,0,0,0.25); border-radius: 12px; padding: 0.6rem 0.8rem; font-size: 0.85rem; line-height: 1.5; }
-  .cr-log .m { padding: 0.15rem 0; overflow-wrap: anywhere; position: relative; }
-  .cr-left { font-size: 0.72rem; font-weight: 800; color: rgba(255,255,255,0.4); min-width: 2.2rem; text-align: right; font-variant-numeric: tabular-nums; }
-  .cr-left.low { color: #ffb08a; }
-  .cr-left:empty { display: none; }
-  .cr-log .m b { font-weight: 800; margin-right: 0.35rem; }
-  .cr-log .m.me b { text-decoration: underline; text-underline-offset: 3px; }
-  .cr-log .m.ping { background: rgba(245,197,24,0.12); border-left: 3px solid #f5c518; padding-left: 0.4rem; margin-left: -0.55rem; border-radius: 4px; }
-  .cr-log .at { color: #8fc3ff; font-weight: 700; }
-  .cr-log .at.me { color: #f5c518; }
-  .cr-log .m b, .cr-users div { cursor: pointer; }
-  .cr-log .m time { color: rgba(255,255,255,0.3); font-size: 0.68rem; margin-right: 0.4rem; }
-  .cr-log .sys { color: rgba(255,255,255,0.45); font-style: italic; font-size: 0.78rem; padding: 0.1rem 0; }
-  .cr-log .acts { display: none; margin-left: 0.4rem; }
-  .cr-log .m:hover .acts { display: inline; }
-  .cr-log .acts button { background: none; border: none; color: rgba(255,255,255,0.5); font-family: inherit; font-size: 0.68rem; font-weight: 700; cursor: pointer; padding: 0 0.25rem; }
-  .cr-log .acts button:hover { color: #fff; }
-  .cr-users { background: rgba(0,0,0,0.2); border-radius: 12px; padding: 0.6rem 0.7rem; font-size: 0.78rem; height: 320px; overflow-y: auto; }
-  .cr-users div { padding: 0.15rem 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cr-send { margin-top: 0.7rem; }
-  .cr-status { font-size: 0.72rem; color: rgba(255,255,255,0.4); margin-top: 0.6rem; min-height: 1rem; }
-  @media (max-width: 700px) {
-    .cr-cols { grid-template-columns: 1fr; }
-    .cr-main { grid-template-columns: 1fr; }
-    .cr-users { height: auto; max-height: 90px; }
-    .cr-log { height: 260px; }
+  <footer>
+    <div class="shell">
+      <div class="foot">
+        <div>
+          <a class="brand" href="index.html"><svg class="mark" viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="12" height="12" rx="3.5" fill="var(--motor)"/><rect x="15" y="1" width="12" height="12" rx="3.5" fill="var(--strategy)"/><rect x="1" y="15" width="12" height="12" rx="3.5" fill="var(--literacy)"/><rect x="15" y="15" width="12" height="12" rx="6" fill="var(--yellow)"/></svg>EduArcade</a>
+          <p>EduArcade is free, and always will be. No subscription, no paywall, no sign-up.</p>
+        </div>
+        <nav aria-label="Footer">
+          <a href="mission.html">Our mission</a>
+          <a href="privacy.html">Privacy Policy</a>
+          <a href="contact.html">Contact</a>
+          <a href="secret.html">Secret</a>
+        </nav>
+      </div>
+      <p class="copy">© 2026 EduArcade · All rights reserved</p>
+    </div>
+  </footer>
+
+<script>
+// Game filters: skill area, phone friendly and a text search over titles and skills.
+(() => {
+  const q = document.getElementById('q');
+  const phone = document.getElementById('phoneOnly');
+  const chips = [...document.querySelectorAll('[data-filter]')];
+  let skill = 'all';
+  function apply() {
+    const term = q.value.trim().toLowerCase();
+    let total = 0;
+    for (const sec of document.querySelectorAll('.pillar')) {
+      let n = 0;
+      for (const g of sec.querySelectorAll('.game')) {
+        const ok = (skill === 'all' || g.dataset.skill === skill)
+          && (!phone.checked || g.dataset.phone === '1')
+          && (!term || g.dataset.search.includes(term));
+        g.hidden = !ok;
+        if (ok) n++;
+      }
+      sec.hidden = n === 0;
+      total += n;
+    }
+    document.getElementById('noMatch').hidden = total > 0;
   }
-</style>
+  for (const c of chips) c.addEventListener('click', () => {
+    skill = c.dataset.filter;
+    for (const x of chips) x.setAttribute('aria-pressed', String(x === c));
+    apply();
+  });
+  q.addEventListener('input', apply);
+  phone.addEventListener('change', apply);
+  document.getElementById('clearFilters').addEventListener('click', () => {
+    q.value = ''; phone.checked = false; chips[0].click();
+  });
+})();
+</script>
 
 <script src="chat-alerts.js"></script>
 <script>
@@ -921,34 +946,6 @@
 </script>
 
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "f19965aca353444c9351b9a951d995e7"}'></script><!-- End Cloudflare Web Analytics -->
-
-<script>
-  function toggleMotorSkills() {
-    const extraGames = document.getElementById('motorExtra');
-    const arrow = document.getElementById('motorArrow');
-    extraGames.classList.toggle('open');
-    arrow.classList.toggle('open');
-  }
-</script>
-
-<footer style="
-  background: rgba(0,0,0,0.55);
-  width: 100%;
-  text-align: center;
-  padding: 1.4rem 1rem;
-  font-family: 'Segoe UI', sans-serif;
-  font-size: 0.75rem;
-  color: rgba(255,255,255,0.35);
-  letter-spacing: 1px;
-  line-height: 2;
-">
-  <div style="margin-bottom:0.4rem;">
-    <a href="privacy.html" style="color:rgba(255,255,255,0.5);text-decoration:none;margin:0 0.8rem;font-weight:700;">Privacy Policy</a>
-    <a href="contact.html" style="color:rgba(255,255,255,0.5);text-decoration:none;margin:0 0.8rem;font-weight:700;">Contact</a>
-    <a href="secret.html" style="color:rgba(255,255,255,0.5);text-decoration:none;margin:0 0.8rem;font-weight:700;">Secret</a>
-  </div>
-  © 2026 EduArcade · All rights reserved
-</footer>
 
 </body>
 </html>
