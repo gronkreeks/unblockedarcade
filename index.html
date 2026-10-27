@@ -227,12 +227,11 @@
     .ground { width: 100%; background: var(--navy); padding: 2.6rem 1rem 3rem; display: flex; justify-content: center; }
     .ground-main { width: 100%; max-width: 1120px; }
 
-    .section + .section { margin-top: 2.8rem; }
-    .section-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; margin-bottom: 1.2rem; padding-bottom: 0.9rem; border-bottom: 1px solid var(--line); }
-    .section-label { color: #fff; font-size: 0.85rem; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; }
-    .section-desc { color: var(--muted); font-size: 0.88rem; font-weight: 600; margin-top: 0.3rem; max-width: 62ch; line-height: 1.5; }
+    .section { display: flex; flex-direction: column; align-items: center; }
+    .section + .section { margin-top: 2.6rem; }
+    .section-label { color: rgba(255,255,255,0.6); font-size: 0.78rem; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; text-align: center; margin-bottom: 1.3rem; }
     .more {
-      display: inline-flex; align-items: center; gap: 0.4rem; flex: none;
+      display: inline-flex; align-items: center; gap: 0.4rem; flex: none; margin-top: 1.2rem;
       background: rgba(255,255,255,0.08); border: 1.5px solid rgba(255,255,255,0.2); color: #fff;
       border-radius: 50px; padding: 0.45rem 1rem; font-family: inherit; font-size: 0.72rem; font-weight: 900;
       letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; transition: background 0.15s, border-color 0.15s;
@@ -242,12 +241,12 @@
     .more[aria-expanded="true"] .chev { transform: rotate(180deg); }
 
     /* ── Game grid ── */
-    .grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1.1rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, 150px); gap: 0.85rem; justify-content: center; width: 100%; max-width: 1000px; }
 
     .card {
       position: relative;
       display: flex; flex-direction: column; align-items: center; text-align: center;
-      padding: 2.4rem 1rem 1.1rem;
+      padding: 3.1rem 0.6rem 1rem;
       border-radius: 20px;
       text-decoration: none; color: #fff;
       background: linear-gradient(160deg, var(--c1), var(--c2));
@@ -269,39 +268,53 @@
     }
     .ribbon.new { background: #fff; color: #0f1e3d; box-shadow: 0 2px 8px rgba(0,0,0,0.25); }
     .genre {
-      position: absolute; top: 10px; left: 10px; z-index: 2;
+      position: absolute; top: 24px; left: 50%; transform: translateX(-50%); z-index: 2; white-space: nowrap;
       display: inline-flex; align-items: center; gap: 4px;
       font-size: 0.6rem; font-weight: 900; letter-spacing: 0.8px; text-transform: uppercase;
       background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.22); color: rgba(255,255,255,0.95);
       padding: 2px 8px 2px 6px; border-radius: 20px;
     }
     .genre .ic { width: 11px; height: 11px; }
-    .card.flagged .genre { top: 26px; }
-    .card.flagged { padding-top: 3rem; }
+
 
     .badge-icon {
-      width: 78px; height: 78px; border-radius: 50%; display: grid; place-items: center; margin-bottom: 0.8rem;
+      width: 68px; height: 68px; border-radius: 50%; display: grid; place-items: center; margin-bottom: 0.8rem;
       background: radial-gradient(circle at 35% 30%, #ffffff, #e9eef8);
       box-shadow: 0 6px 14px rgba(0,0,0,0.3), inset 0 -3px 0 rgba(0,0,0,0.08);
       transition: transform 0.25s cubic-bezier(.2,1.5,.4,1);
     }
-    .badge-icon img { width: 54px; height: 54px; }
+    .badge-icon img { width: 46px; height: 46px; }
     .card:hover .badge-icon { transform: scale(1.08) rotate(-6deg); }
 
-    .card-title { font-size: 1.3rem; font-weight: 900; letter-spacing: 0.5px; line-height: 1.15; margin-bottom: 0.45rem; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
-    .skill-tag {
-      display: inline-block; padding: 0.2rem 0.7rem; border-radius: 50px;
-      font-size: 0.6rem; font-weight: 900; letter-spacing: 1px; text-transform: uppercase;
-      background: rgba(255,255,255,0.15); border: 1.5px solid rgba(255,255,255,0.3); color: rgba(255,255,255,0.95);
-    }
-    .card-desc { font-size: 0.78rem; font-weight: 700; line-height: 1.45; color: rgba(255,255,255,0.85); margin: 0.65rem 0 0.9rem; }
-    .card-foot { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.35rem; margin-top: auto; }
+    .card-title { font-size: 1.1rem; font-weight: 900; letter-spacing: 0.5px; line-height: 1.15; margin-bottom: 0.7rem; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    .card .badge { margin-top: auto; white-space: nowrap; }
     .badge {
       display: inline-flex; align-items: center; gap: 4px;
       padding: 0.22rem 0.8rem; border-radius: 50px; font-size: 0.62rem; font-weight: 900; letter-spacing: 1px; text-transform: uppercase;
       background: rgba(0,0,0,0.22); border: 2px solid rgba(255,255,255,0.28);
     }
     .badge .ic { width: 11px; height: 11px; }
+
+    /* ── Game popup ── */
+    .gd { border: none; padding: 0; margin: auto; border-radius: 22px; width: min(420px, calc(100% - 32px)); background: var(--navy-3); color: #fff; box-shadow: 0 30px 80px rgba(0,0,0,0.6); overflow: hidden; font-family: inherit; }
+    .gd::backdrop { background: rgba(5,12,30,0.72); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+    .gd[open] { animation: pop 0.22s cubic-bezier(.2,1.3,.4,1); }
+    @keyframes pop { from { transform: scale(0.92); opacity: 0; } }
+    .gd-top { position: relative; display: flex; flex-direction: column; align-items: center; gap: 0.55rem; padding: 2rem 1.2rem 1.4rem; text-align: center; background: linear-gradient(160deg, var(--c1), var(--c2)); border-bottom: 5px solid rgba(0,0,0,0.22); }
+    .gd-top .badge-icon { width: 96px; height: 96px; margin: 0 0 0.2rem; }
+    .gd-top .badge-icon img { width: 66px; height: 66px; }
+    .gd-top h2 { font-size: 1.8rem; font-weight: 900; letter-spacing: 0.5px; line-height: 1.1; text-shadow: 0 2px 4px rgba(0,0,0,0.25); }
+    .gd-top .genre { position: static; transform: none; font-size: 0.66rem; }
+    .gd-top .genre .ic { display: inline; }
+    .gd-x { position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; border-radius: 50%; border: none; background: rgba(0,0,0,0.3); color: #fff; font-size: 1.3rem; line-height: 1; cursor: pointer; }
+    .gd-x:hover { background: rgba(0,0,0,0.5); }
+    .gd-body { display: flex; flex-direction: column; gap: 0.9rem; padding: 1.3rem 1.4rem 1.4rem; }
+    .gd-lbl { font-size: 0.64rem; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: var(--faint); }
+    .gd-learn { font-size: 0.98rem; font-weight: 700; line-height: 1.55; color: rgba(255,255,255,0.9); margin-top: -0.5rem; }
+    .gd-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .gd-chips span { display: inline-flex; align-items: center; gap: 4px; padding: 0.25rem 0.8rem; border-radius: 50px; font-size: 0.66rem; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; background: rgba(255,255,255,0.08); border: 1.5px solid rgba(255,255,255,0.2); }
+    .gd-chips .ic { width: 11px; height: 11px; }
+    .gd-play { justify-content: center; width: 100%; font-size: 0.95rem; padding: 0.9rem 1rem; margin-top: 0.2rem; }
 
     /* ── EduArcade Chatroom ── */
     .cr { width: 100%; background: var(--navy-2); border-top: 1px solid rgba(255,255,255,0.06); padding: 2.8rem 1rem 3.2rem; display: flex; justify-content: center; }
@@ -312,14 +325,15 @@
     .cr-badges { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     .cr-age { background: var(--gold); color: #000; font-weight: 900; font-size: 0.75rem; letter-spacing: 1px; padding: 0.3rem 0.8rem; border-radius: 20px; }
     .cr-e2e { display: inline-flex; align-items: center; gap: 0.35rem; background: rgba(39,174,96,0.15); border: 1.5px solid rgba(127,224,168,0.5); color: var(--mint); font-weight: 900; font-size: 0.72rem; letter-spacing: 1px; text-transform: uppercase; padding: 0.28rem 0.8rem; border-radius: 20px; }
-    .cr-info { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
-    .cr-panel { background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 16px; padding: 1rem 1.2rem; }
-    .cr-panel h3 { font-size: 0.72rem; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.7); margin-bottom: 0.7rem; }
-    .cr-panel ul { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem 1rem; }
-    .cr-panel li b { display: block; font-size: 0.86rem; font-weight: 900; }
-    .cr-panel li span { display: block; font-size: 0.78rem; font-weight: 600; color: var(--muted); line-height: 1.45; margin-top: 0.1rem; }
-    .cr-panel.why li b { color: #b9f6ca; }
-    .cr-panel.how li b { color: #9fd3ff; }
+    .cr-more-row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: flex-start; margin-bottom: 1rem; }
+    .cr-more { flex: 1 1 300px; background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 14px; }
+    .cr-more summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; gap: 1rem; padding: 0.7rem 1rem; font-size: 0.82rem; font-weight: 900; }
+    .cr-more summary::-webkit-details-marker { display: none; }
+    .cr-more summary::after { content: "+"; color: var(--muted); }
+    .cr-more[open] summary::after { content: "−"; }
+    .cr-more ul { list-style: none; padding: 0 1rem 0.9rem; display: flex; flex-direction: column; gap: 0.45rem; }
+    .cr-more li { font-size: 0.8rem; font-weight: 600; color: var(--muted); line-height: 1.5; }
+    .cr-more li b { color: #fff; }
 
     .cr-card { background: rgba(255,255,255,0.05); border: 1px solid var(--line); border-radius: 16px; padding: 1.1rem 1.2rem; }
     .cr-hidden { display: none !important; }
@@ -385,21 +399,19 @@
     footer a { color: rgba(255,255,255,0.55); text-decoration: none; margin: 0 0.8rem; font-weight: 800; }
     footer a:hover { color: #fff; }
 
-    @media (max-width: 1100px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
     @media (max-width: 880px) {
-      .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-      .cr-info { grid-template-columns: 1fr; }
     }
     @media (max-width: 640px) {
-      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; }
-      .card { padding: 2.3rem 0.7rem 0.9rem; }
-      .card.flagged { padding-top: 2.9rem; }
-      .card-desc { display: none; }
-      .card-title { font-size: 1.1rem; }
-      .badge-icon { width: 64px; height: 64px; }
-      .badge-icon img { width: 44px; height: 44px; }
-      .section-head { flex-direction: column; align-items: flex-start; }
-      .cr-cols, .cr-main, .cr-panel ul { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 0.6rem; }
+      .card { padding: 2.9rem 0.5rem 0.9rem; }
+      .genre { top: 22px; }
+      .badge-icon { width: 56px; height: 56px; margin-bottom: 0.6rem; }
+      .badge-icon img { width: 38px; height: 38px; }
+      .card-title { font-size: 0.95rem; }
+      .card .badge { font-size: 0.55rem; padding: 0.2rem 0.6rem; }
+      .genre { font-size: 0.52rem; padding: 2px 6px 2px 5px; }
+      .genre .ic { display: none; }
+      .cr-cols, .cr-main { grid-template-columns: 1fr; }
       .cr-users { height: auto; max-height: 90px; }
       .cr-log { height: 270px; }
     }
@@ -438,223 +450,133 @@
     <div class="ground-main">
       
       <section class="section" id="motor" aria-labelledby="h-motor">
-        <div class="section-head">
-          <div>
-            <h2 class="section-label" id="h-motor">Motor Skills &amp; Coordination</h2>
-            <p class="section-desc">Fast, physical games that train hand-eye coordination, timing and reaction speed. Most are two players on one keyboard.</p>
-          </div>
-          <button class="more" type="button" aria-expanded="false" aria-controls="grid-motor">
-            <span class="more-label">Show all 6</span><svg class="ic chev" aria-hidden="true"><use href="#i-chev"/></svg>
-          </button>
-        </div>
+        <h2 class="section-label" id="h-motor">Motor Skills &amp; Coordination</h2>
         <div class="grid" id="grid-motor">
-          <a class="card flagged rec" href="volley.html" style="--c1:#1a6aaa;--c2:#0e3d72">
+          <a class="card flagged rec" href="volley.html" style="--c1:#1a6aaa;--c2:#0e3d72" data-skill="Timing &amp; Positioning" data-learn="Read the ball’s arc, guess your opponent’s next move and decide quickly under pressure." data-players="1–2 Players" data-phone="0">
             <span class="ribbon">Recommended</span>
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-sports"/></svg>Sports</span>
             <span class="badge-icon"><img src="icons/color/volley.svg" alt="" width="58" height="58" loading="lazy"></span>
             <span class="card-title">Volley</span>
-            <span class="skill-tag">Timing &amp; Positioning</span>
-            <span class="card-desc">Read the ball’s arc, guess your opponent’s next move and decide quickly under pressure.</span>
-            <span class="card-foot">
-              <span class="badge">1–2 Players</span>
-              
-            </span>
+            <span class="badge">1–2 Players</span>
           </a>
-          <a class="card" href="boxing.html" style="--c1:#e74c3c;--c2:#8e0000">
+          <a class="card" href="boxing.html" style="--c1:#e74c3c;--c2:#8e0000" data-skill="Motor Skills" data-learn="Trains hand-eye coordination and reaction speed through split-second key combos." data-players="2 Players" data-phone="0">
             
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-fight"/></svg>Fighting</span>
             <span class="badge-icon"><img src="icons/color/boxing.svg" alt="" width="58" height="58" loading="lazy"></span>
             <span class="card-title">Boxing</span>
-            <span class="skill-tag">Motor Skills</span>
-            <span class="card-desc">Trains hand-eye coordination and reaction speed through split-second key combos.</span>
-            <span class="card-foot">
-              <span class="badge">2 Players</span>
-              
-            </span>
+            <span class="badge">2 Players</span>
           </a>
-          <a class="card" href="sniper.html" style="--c1:#27ae60;--c2:#1e8449">
+          <a class="card" href="sniper.html" style="--c1:#27ae60;--c2:#1e8449" data-skill="Focus &amp; Precision" data-learn="Sharpens precision and patience. Pick your moment, aim true and outthink your opponent." data-players="2 Players" data-phone="0">
             
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-shooter"/></svg>Shooter</span>
             <span class="badge-icon"><img src="icons/color/target.svg" alt="" width="58" height="58" loading="lazy"></span>
             <span class="card-title">Laser Tag</span>
-            <span class="skill-tag">Focus &amp; Precision</span>
-            <span class="card-desc">Sharpens precision and patience. Pick your moment, aim true and outthink your opponent.</span>
-            <span class="card-foot">
-              <span class="badge">2 Players</span>
-              
-            </span>
+            <span class="badge">2 Players</span>
           </a>
-          <a class="card" href="tag.html" style="--c1:#f57c00;--c2:#b34700">
+          <a class="card" href="tag.html" style="--c1:#f57c00;--c2:#b34700" data-skill="Agility &amp; Awareness" data-learn="Builds spatial awareness and quick tactical decisions while chasing or escaping." data-players="2 Players" data-phone="0">
             
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-platform"/></svg>Platformer</span>
             <span class="badge-icon"><img src="icons/color/runner.svg" alt="" width="58" height="58" loading="lazy"></span>
             <span class="card-title">Tag</span>
-            <span class="skill-tag">Agility &amp; Awareness</span>
-            <span class="card-desc">Builds spatial awareness and quick tactical decisions while chasing or escaping.</span>
-            <span class="card-foot">
-              <span class="badge">2 Players</span>
-              
-            </span>
+            <span class="badge">2 Players</span>
           </a>
-          <a class="card" href="pong.html" style="--c1:#2c3e50;--c2:#1a252f">
+          <a class="card" href="pong.html" style="--c1:#2c3e50;--c2:#1a252f" data-skill="Timing &amp; Reflexes" data-learn="Builds timing and prediction. Move to where the ball will be, not where it is." data-players="2 Players" data-phone="0">
             
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-arcade"/></svg>Arcade</span>
             <span class="badge-icon"><img src="icons/color/pong.svg" alt="" width="58" height="58" loading="lazy"></span>
             <span class="card-title">Pong</span>
-            <span class="skill-tag">Timing &amp; Reflexes</span>
-            <span class="card-desc">Builds timing and prediction. Move to where the ball will be, not where it is.</span>
-            <span class="card-foot">
-              <span class="badge">2 Players</span>
-              
-            </span>
+            <span class="badge">2 Players</span>
           </a>
-          <a class="card" href="starclicker.html" style="--c1:#1a1a4e;--c2:#0a0820">
+          <a class="card" href="starclicker.html" style="--c1:#1a1a4e;--c2:#0a0820" data-skill="Motor Skills" data-learn="Fine motor control and number sense: compare upgrade costs and grow your stars." data-players="1 Player" data-phone="1">
             
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-idle"/></svg>Idle clicker</span>
             <span class="badge-icon"><img src="icons/color/star.svg" alt="" width="58" height="58" loading="lazy"></span>
             <span class="card-title">Star Clicker</span>
-            <span class="skill-tag">Motor Skills</span>
-            <span class="card-desc">Fine motor control and number sense: compare upgrade costs and grow your stars.</span>
-            <span class="card-foot">
-              <span class="badge">1 Player</span>
-              <span class="badge phone" title="Works on phones and tablets"><svg class="ic" aria-hidden="true"><use href="#i-phone"/></svg>Mobile</span>
-            </span>
+            <span class="badge">1 Player</span>
           </a>
         </div>
+        <button class="more" type="button" aria-expanded="false" aria-controls="grid-motor">
+          <span class="more-label">Show all 6</span><svg class="ic chev" aria-hidden="true"><use href="#i-chev"/></svg>
+        </button>
       </section>
       <section class="section" id="strategy" aria-labelledby="h-strategy">
-        <div class="section-head">
-          <div>
-            <h2 class="section-label" id="h-strategy">Strategy &amp; Critical Thinking</h2>
-            <p class="section-desc">Plan ahead, manage limited resources and adapt when your plan meets an opponent.</p>
-          </div>
-          <button class="more" type="button" aria-expanded="false" aria-controls="grid-strategy">
-            <span class="more-label">Show all 7</span><svg class="ic chev" aria-hidden="true"><use href="#i-chev"/></svg>
-          </button>
-        </div>
+        <h2 class="section-label" id="h-strategy">Strategy &amp; Critical Thinking</h2>
         <div class="grid" id="grid-strategy">
-          <a class="card flagged" href="frontier.html" style="--c1:#1f6fb2;--c2:#123a6b">
+          <a class="card flagged" href="frontier.html" style="--c1:#1f6fb2;--c2:#123a6b" data-skill="Strategy &amp; Economics" data-learn="Balance troop growth against expansion, invest gold wisely and choose allies carefully." data-players="Solo · Online" data-phone="1">
             <span class="ribbon new">New</span>
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-grand"/></svg>Grand strategy</span>
             <span class="badge-icon"><img src="icons/color/globe.svg" alt="" width="58" height="58" loading="lazy"></span>
             <span class="card-title">Frontier</span>
-            <span class="skill-tag">Strategy &amp; Economics</span>
-            <span class="card-desc">Balance troop growth against expansion, invest gold wisely and choose allies carefully.</span>
-            <span class="card-foot">
-              <span class="badge">Solo · Online</span>
-              <span class="badge phone" title="Works on phones and tablets"><svg class="ic" aria-hidden="true"><use href="#i-phone"/></svg>Mobile</span>
-            </span>
+            <span class="badge">Solo · Online</span>
           </a>
-          <a class="card" href="chess.html" style="--c1:#5d4037;--c2:#3e2723">
+          <a class="card" href="chess.html" style="--c1:#5d4037;--c2:#3e2723" data-skill="Logic &amp; Planning" data-learn="Critical thinking and forward planning. Every move has consequences several steps ahead." data-players="2 Players" data-phone="1">
             
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-board"/></svg>Board game</span>
             <span class="badge-icon"><img src="icons/color/pawn.svg" alt="" width="58" height="58" loading="lazy"></span>
             <span class="card-title">Chess</span>
-            <span class="skill-tag">Logic &amp; Planning</span>
-            <span class="card-desc">Critical thinking and forward planning. Every move has consequences several steps ahead.</span>
-            <span class="card-foot">
-              <span class="badge">2 Players</span>
-              <span class="badge phone" title="Works on phones and tablets"><svg class="ic" aria-hidden="true"><use href="#i-phone"/></svg>Mobile</span>
-            </span>
+            <span class="badge">2 Players</span>
           </a>
-          <a class="card" href="battle.html" style="--c1:#e67e22;--c2:#a8530f">
+          <a class="card" href="battle.html" style="--c1:#e67e22;--c2:#a8530f" data-skill="Strategic Thinking" data-learn="Manage your gold, read your opponent’s tactics and counter them with the right units." data-players="2 Players" data-phone="1">
             
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-lane"/></svg>Lane strategy</span>
             <span class="badge-icon"><img src="icons/color/swords.svg" alt="" width="58" height="58" loading="lazy"></span>
             <span class="card-title">Battle</span>
-            <span class="skill-tag">Strategic Thinking</span>
-            <span class="card-desc">Manage your gold, read your opponent’s tactics and counter them with the right units.</span>
-            <span class="card-foot">
-              <span class="badge">2 Players</span>
-              <span class="badge phone" title="Works on phones and tablets"><svg class="ic" aria-hidden="true"><use href="#i-phone"/></svg>Mobile</span>
-            </span>
+            <span class="badge">2 Players</span>
           </a>
-          <a class="card" href="survive.html" style="--c1:#2e7d32;--c2:#123d16">
+          <a class="card" href="survive.html" style="--c1:#2e7d32;--c2:#123d16" data-skill="Problem Solving" data-learn="Gather, build and defend. Make good decisions under pressure as each wave grows harder." data-players="1 Player" data-phone="0">
             
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-survival"/></svg>Survival</span>
             <span class="badge-icon"><img src="icons/color/zombie.svg" alt="" width="58" height="58" loading="lazy"></span>
             <span class="card-title">Survive</span>
-            <span class="skill-tag">Problem Solving</span>
-            <span class="card-desc">Gather, build and defend. Make good decisions under pressure as each wave grows harder.</span>
-            <span class="card-foot">
-              <span class="badge">1 Player</span>
-              
-            </span>
+            <span class="badge">1 Player</span>
           </a>
-          <a class="card" href="nightwatch.html" style="--c1:#2a1050;--c2:#0a0518">
+          <a class="card" href="nightwatch.html" style="--c1:#2a1050;--c2:#0a0518" data-skill="Resource Management" data-learn="Multitask and balance limited power against several threats at once until 6 AM." data-players="1 Player" data-phone="0">
             
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-suspense"/></svg>Suspense</span>
             <span class="badge-icon"><img src="icons/color/camera.svg" alt="" width="58" height="58" loading="lazy"></span>
             <span class="card-title">Night Watch</span>
-            <span class="skill-tag">Resource Management</span>
-            <span class="card-desc">Multitask and balance limited power against several threats at once until 6 AM.</span>
-            <span class="card-foot">
-              <span class="badge">1 Player</span>
-              
-            </span>
+            <span class="badge">1 Player</span>
           </a>
-          <a class="card" href="trenchwars.html" style="--c1:#4a6741;--c2:#2a3d20">
+          <a class="card" href="trenchwars.html" style="--c1:#4a6741;--c2:#2a3d20" data-skill="Strategy &amp; Planning" data-learn="Decide when to advance, when to fortify and how to run your gold economy." data-players="2 Players" data-phone="0">
             
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-tactics"/></svg>Tactics</span>
             <span class="badge-icon"><img src="icons/color/helmet.svg" alt="" width="58" height="58" loading="lazy"></span>
             <span class="card-title">Trench Wars</span>
-            <span class="skill-tag">Strategy &amp; Planning</span>
-            <span class="card-desc">Decide when to advance, when to fortify and how to run your gold economy.</span>
-            <span class="card-foot">
-              <span class="badge">2 Players</span>
-              
-            </span>
+            <span class="badge">2 Players</span>
           </a>
-          <a class="card" href="voxel-sandbox.html" style="--c1:#16a085;--c2:#0d5f4f">
+          <a class="card" href="voxel-sandbox.html" style="--c1:#16a085;--c2:#0d5f4f" data-skill="Spatial Reasoning" data-learn="Think in three dimensions, craft materials step by step and design your own builds." data-players="1 Player" data-phone="0">
             
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-sandbox"/></svg>Sandbox</span>
             <span class="badge-icon"><img src="icons/color/block.svg" alt="" width="58" height="58" loading="lazy"></span>
             <span class="card-title">Voxel Sandbox</span>
-            <span class="skill-tag">Spatial Reasoning</span>
-            <span class="card-desc">Think in three dimensions, craft materials step by step and design your own builds.</span>
-            <span class="card-foot">
-              <span class="badge">1 Player</span>
-              
-            </span>
+            <span class="badge">1 Player</span>
           </a>
         </div>
+        <button class="more" type="button" aria-expanded="false" aria-controls="grid-strategy">
+          <span class="more-label">Show all 7</span><svg class="ic chev" aria-hidden="true"><use href="#i-chev"/></svg>
+        </button>
       </section>
       <section class="section" id="literacy" aria-labelledby="h-literacy">
-        <div class="section-head">
-          <div>
-            <h2 class="section-label" id="h-literacy">Literacy &amp; Technology</h2>
-            <p class="section-desc">Typing fluency and word skills for a world that runs on keyboards and conversation.</p>
-          </div>
-          <button class="more" type="button" aria-expanded="false" aria-controls="grid-literacy">
-            <span class="more-label">Show all 2</span><svg class="ic chev" aria-hidden="true"><use href="#i-chev"/></svg>
-          </button>
-        </div>
+        <h2 class="section-label" id="h-literacy">Literacy &amp; Technology</h2>
         <div class="grid" id="grid-literacy">
-          <a class="card" href="typing.html" style="--c1:#6a1ab5;--c2:#2d0060">
+          <a class="card" href="typing.html" style="--c1:#6a1ab5;--c2:#2d0060" data-skill="Literacy &amp; Tech" data-learn="Typing speed, accuracy and keyboard fluency, one new technique per level." data-players="1 Player" data-phone="0">
             
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-typing"/></svg>Typing</span>
             <span class="badge-icon"><img src="icons/color/keyboard.svg" alt="" width="58" height="58" loading="lazy"></span>
             <span class="card-title">Type Quest</span>
-            <span class="skill-tag">Literacy &amp; Tech</span>
-            <span class="card-desc">Typing speed, accuracy and keyboard fluency, one new technique per level.</span>
-            <span class="card-foot">
-              <span class="badge">1 Player</span>
-              
-            </span>
+            <span class="badge">1 Player</span>
           </a>
-          <a class="card flagged" href="imposter.html" style="--c1:#1f6a73;--c2:#0f3a40">
+          <a class="card flagged" href="imposter.html" style="--c1:#1f6a73;--c2:#0f3a40" data-skill="Vocabulary &amp; Reasoning" data-learn="Choose precise words, spot clues that don’t fit and argue your case." data-players="3–20 Players" data-phone="1">
             <span class="ribbon new">New</span>
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-party"/></svg>Party game</span>
             <span class="badge-icon"><img src="icons/color/mask.svg" alt="" width="58" height="58" loading="lazy"></span>
             <span class="card-title">Imposter</span>
-            <span class="skill-tag">Vocabulary &amp; Reasoning</span>
-            <span class="card-desc">Choose precise words, spot clues that don’t fit and argue your case.</span>
-            <span class="card-foot">
-              <span class="badge">3–20 Players</span>
-              <span class="badge phone" title="Works on phones and tablets"><svg class="ic" aria-hidden="true"><use href="#i-phone"/></svg>Mobile</span>
-            </span>
+            <span class="badge">3–20 Players</span>
           </a>
         </div>
+        <button class="more" type="button" aria-expanded="false" aria-controls="grid-literacy">
+          <span class="more-label">Show all 2</span><svg class="ic chev" aria-hidden="true"><use href="#i-chev"/></svg>
+        </button>
       </section>
     </div>
   </main>
@@ -673,25 +595,24 @@
       </div>
     </div>
 
-    <div class="cr-info">
-      <div class="cr-panel why">
-        <h3>Why the chatroom is educational</h3>
+    <div class="cr-more-row">
+      <details class="cr-more">
+        <summary>Why is the chatroom educational?</summary>
         <ul>
-          <li><b>Digital citizenship</b><span>Practise being kind, disagreeing respectfully and thinking before you post.</span></li>
-          <li><b>Staying safe online</b><span>Use a nickname, keep personal details private, and know when to mute, report and tell an adult.</span></li>
-          <li><b>Clear writing</b><span>The 200-character limit rewards getting your point across in a few good words.</span></li>
-          <li><b>Teamwork</b><span>Swap tactics, explain your thinking and help others with games and homework.</span></li>
+          <li><b>Digital citizenship.</b> Practise being kind, disagreeing respectfully and thinking before you post.</li>
+          <li><b>Staying safe online.</b> Use a nickname, keep personal details private, and know when to mute, report and tell an adult.</li>
+          <li><b>Clear writing.</b> The 200-character limit rewards getting your point across in a few good words.</li>
+          <li><b>Teamwork.</b> Swap tactics, explain your thinking and help others with games and homework.</li>
         </ul>
-      </div>
-      <div class="cr-panel how">
-        <h3>How your messages are protected</h3>
+      </details>
+      <details class="cr-more">
+        <summary>How are messages protected?</summary>
         <ul>
-          <li><b>Encrypted</b><span>Each message is locked with a key only the people in the room have. The server can’t read it.</span></li>
-          <li><b>Filtered</b><span>The safety filter runs on every screen, so personal details and slurs stay hidden.</span></li>
-          <li><b>Not saved</b><span>Messages disappear when a room empties.</span></li>
-          <li><b>Reports</b><span>Reporting shares only that one message so it can be checked.</span></li>
+          <li><b>Encrypted.</b> Each message is locked with a key only the people in the room have. The server can’t read it.</li>
+          <li><b>Filtered.</b> The safety filter runs on every screen, so personal details and slurs stay hidden.</li>
+          <li><b>Not saved.</b> Messages disappear when a room empties. Reporting shares only that one message so it can be checked.</li>
         </ul>
-      </div>
+      </details>
     </div>
 
     <!-- Step 1: name + age -->
@@ -768,6 +689,21 @@
   </div>
 </section>
 
+<dialog class="gd" id="gameDialog" aria-labelledby="gdTitle">
+  <div class="gd-top" id="gdTop">
+    <button class="gd-x" type="button" id="gdClose" aria-label="Close">×</button>
+    <span class="badge-icon"><img id="gdIcon" src="" alt="" width="66" height="66"></span>
+    <h2 id="gdTitle"></h2>
+    <span class="genre" id="gdGenre"></span>
+  </div>
+  <div class="gd-body">
+    <p class="gd-lbl">What you’ll learn</p>
+    <p class="gd-learn" id="gdLearn"></p>
+    <div class="gd-chips" id="gdChips"></div>
+    <a class="btn btn-gold gd-play" id="gdPlay" href="#"></a>
+  </div>
+</dialog>
+
 <footer>
   <nav>
     <a href="privacy.html">Privacy Policy</a>
@@ -803,6 +739,35 @@
   }
   let t; addEventListener('resize', () => { clearTimeout(t); t = setTimeout(layout, 100); });
   layout();
+})();
+</script>
+
+<script>
+// Clicking a game opens its details. Ctrl/Cmd-click (or a browser without <dialog>) opens the game directly.
+(() => {
+  const d = document.getElementById('gameDialog');
+  if (!d.showModal) return;
+  const $ = id => document.getElementById(id);
+  const chip = (text, html) => { const s = document.createElement('span'); if (html) s.innerHTML = html; s.append(text); return s; };
+  for (const c of document.querySelectorAll('.card')) c.addEventListener('click', ev => {
+    if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey || ev.button !== 0) return;
+    ev.preventDefault();
+    const title = c.querySelector('.card-title').textContent;
+    $('gdTop').style.cssText = c.getAttribute('style');
+    $('gdIcon').src = c.querySelector('.badge-icon img').src;
+    $('gdTitle').textContent = title;
+    $('gdGenre').innerHTML = c.querySelector('.genre').innerHTML;
+    $('gdLearn').textContent = c.dataset.learn;
+    $('gdChips').replaceChildren(chip(c.dataset.skill), chip(c.dataset.players),
+      ...(c.dataset.phone === '1' ? [chip('Works on mobile', '<svg class="ic" aria-hidden="true"><use href="#i-phone"/></svg>')] : []));
+    $('gdPlay').href = c.getAttribute('href');
+    $('gdPlay').innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-play"/></svg>';
+    $('gdPlay').append('Play ' + title);
+    d.showModal();
+    $('gdPlay').focus();
+  });
+  $('gdClose').onclick = () => d.close();
+  d.addEventListener('click', ev => { if (ev.target === d) d.close(); });
 })();
 </script>
 
