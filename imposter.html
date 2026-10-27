@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9603713606760464"
+     crossorigin="anonymous"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="favicon.ico">
+  <title>Imposter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Figtree:wght@400;500;600;700&family=Martian+Mono:wght@400;600&display=swap">
+  <style>
+    /* A card table under a paper slip: teal-grey felt, off-white paper, rubber-stamp red. */
+    :root {
+      --bg: #d9e2de; --bg-2: #c9d5d0; --paper: #fffdf6; --paper-edge: #e7e1d1;
+      --ink: #1b2a2d; --muted: #5a6c70; --line: #b8c6c1;
+      --accent: #1f6a73; --accent-ink: #ffffff; --stamp: #c4283a; --good: #2f7d4f;
+      --shadow: 0 1px 0 rgba(27,42,45,.08), 0 10px 30px -12px rgba(27,42,45,.35);
+      --f-display: "Dela Gothic One", "Arial Black", Impact, sans-serif;
+      --f-body: "Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+      --f-mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1a1c; --bg-2: #0a1214; --paper: #1d2b2e; --paper-edge: #2a3b3f;
+        --ink: #e8efec; --muted: #93a7aa; --line: #2f4347; --accent: #5cc3cb; --accent-ink: #0b1618;
+        --stamp: #ff5d6c; --good: #6bd394;
+        --shadow: 0 1px 0 rgba(0,0,0,.3), 0 14px 34px -12px rgba(0,0,0,.7);
+        color-scheme: dark;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      background: radial-gradient(120% 80% at 50% 0%, var(--bg) 40%, var(--bg-2) 100%) fixed, var(--bg);
+      color: var(--ink); font-family: var(--f-body); font-size: 16px; line-height: 1.5;
+      padding: 16px max(16px, env(safe-area-inset-right)) 40px max(16px, env(safe-area-inset-left));
+      -webkit-tap-highlight-color: transparent;
+    }
+    .wrap { max-width: 460px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+    [hidden] { display: none !important; }
+
+    header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; }
+    .back {
+      color: var(--ink); text-decoration: none; font-size: 0.8rem; font-weight: 700;
+      padding: 0.25rem 0.7rem; border-radius: 20px; border: 1.5px solid var(--line);
+    }
+    .back:hover { border-color: var(--accent); }
+    .brand {
+      font-family: var(--f-display); font-size: 18px; letter-spacing: .04em; color: var(--stamp);
+      border: 2.5px solid currentColor; padding: 2px 10px 0; transform: rotate(-3deg); display: inline-block; border-radius: 3px;
+    }
+    .meta { font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: right; }
+    .linkbtn { background: none; border: none; color: var(--muted); font: 600 13px var(--f-body); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 6px 2px; }
+    .linkbtn:hover { color: var(--ink); }
+
+    h1, h2 { font-family: var(--f-display); font-weight: 400; margin: 0; text-wrap: balance; line-height: 1.1; }
+    h1 { font-size: clamp(26px, 7.5vw, 34px); }
+    h2 { font-size: 20px; }
+    p { margin: 0; }
+    .lede { color: var(--muted); }
+    .label { font-family: var(--f-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+    .hint { font-size: 14px; color: var(--muted); }
+    .center { text-align: center; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+
+    .panel { background: var(--paper); border-radius: 14px; box-shadow: var(--shadow); padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+    .panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+
+    .players { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+    .players li { display: flex; align-items: center; gap: 8px; }
+    .seat { font-family: var(--f-mono); font-size: 11px; color: var(--muted); width: 22px; text-align: right; font-variant-numeric: tabular-nums; flex: none; }
+    input[type="text"], textarea {
+      font: 500 16px var(--f-body); color: var(--ink); background: transparent;
+      border: 1.5px solid var(--line); border-radius: 9px; padding: 9px 12px; width: 100%; min-width: 0;
+    }
+    textarea { resize: vertical; min-height: 110px; line-height: 1.4; }
+    input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible { outline: 2.5px solid var(--accent); outline-offset: 2px; }
+    .x { flex: none; width: 36px; height: 36px; border-radius: 9px; border: 1.5px solid var(--line); background: transparent; color: var(--muted); font-size: 18px; cursor: pointer; line-height: 1; }
+    .x:hover:not(:disabled) { color: var(--stamp); border-color: var(--stamp); }
+    .x:disabled { opacity: .35; cursor: not-allowed; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip { font: 600 14px var(--f-body); color: var(--ink); background: transparent; border: 1.5px solid var(--line); border-radius: 999px; padding: 7px 14px; cursor: pointer; }
+    .chip:hover:not(:disabled) { border-color: var(--accent); }
+    .chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+    .chip:disabled { opacity: .35; cursor: not-allowed; }
+
+    .btn {
+      font: 700 16px var(--f-body); border-radius: 12px; padding: 14px 18px; cursor: pointer; width: 100%;
+      border: 2px solid var(--accent); background: var(--accent); color: var(--accent-ink);
+      transition: transform .08s ease, filter .15s ease;
+    }
+    .btn:hover:not(:disabled) { filter: brightness(1.08); }
+    .btn:active:not(:disabled) { transform: translateY(1px) scale(.995); }
+    .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+    .btn.ghost:hover { border-color: var(--accent); filter: none; }
+    .btn-row { display: flex; gap: 10px; }
+    .btn-row > * { flex: 1; }
+    .error { color: var(--stamp); font-weight: 600; font-size: 14px; }
+
+    .slip {
+      position: relative; background: var(--paper); border-radius: 4px; box-shadow: var(--shadow);
+      padding: 40px 22px 30px; min-height: 300px; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 14px; text-align: center; transform: rotate(-1.2deg);
+      border: none; width: 100%; color: var(--ink); font: inherit;
+    }
+    .slip.tilt-r { transform: rotate(1deg); }
+    .slip::before {
+      content: ""; position: absolute; left: 0; right: 0; top: 0; height: 10px;
+      background: radial-gradient(circle at 6px -2px, var(--bg) 5px, transparent 5.5px) 0 0 / 12px 10px repeat-x;
+    }
+    .slip::after { content: ""; position: absolute; left: 14px; right: 14px; top: 18px; border-top: 1.5px dashed var(--paper-edge); }
+    button.slip { cursor: pointer; }
+    button.slip:hover { transform: rotate(-1.2deg) translateY(-2px); }
+    .fold { width: 64px; height: 64px; border-radius: 50%; border: 2px dashed var(--line); display: grid; place-items: center; font-family: var(--f-display); font-size: 26px; color: var(--muted); }
+    .word { font-family: var(--f-display); font-size: clamp(32px, 10vw, 48px); line-height: 1.05; overflow-wrap: anywhere; animation: rise .35s ease-out; }
+    .hintword { border: 1.5px dashed var(--paper-edge); border-radius: 10px; padding: 12px 20px; display: flex; flex-direction: column; gap: 4px; }
+    .hintword .word { font-size: clamp(26px, 8vw, 32px); }
+    .stamp {
+      font-family: var(--f-display); font-size: clamp(30px, 10vw, 44px); color: var(--stamp);
+      border: 5px double currentColor; padding: 8px 16px 4px; border-radius: 6px; letter-spacing: .06em;
+      transform: rotate(-9deg); animation: stamp .32s cubic-bezier(.2,1.6,.4,1) both; margin-block: 6px;
+    }
+    .stamp.good { color: var(--good); }
+    .stamp.muted { color: var(--muted); }
+    @keyframes stamp { from { transform: rotate(-9deg) scale(1.8); opacity: 0; } to { transform: rotate(-9deg) scale(1); opacity: 1; } }
+    @keyframes rise { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+    .cat-tag { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+    .cat-tag b { color: var(--ink); font-weight: 600; }
+    .pass-name { font-family: var(--f-display); font-size: clamp(36px, 11vw, 52px); line-height: 1; color: var(--accent); overflow-wrap: anywhere; }
+    .narrow { max-width: 32ch; }
+
+    .progress { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+    .dot.done { background: var(--accent); }
+    .dot.now { background: var(--stamp); }
+
+    .order { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+    .order li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+    .order li:last-child { border-bottom: 0; }
+    .order .n { font-family: var(--f-mono); font-size: 12px; color: var(--muted); width: 24px; font-variant-numeric: tabular-nums; }
+    .order .nm { font-weight: 600; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .pill { font-family: var(--f-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); }
+    .tips { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+
+    .count { font-family: var(--f-display); font-size: clamp(90px, 34vw, 150px); text-align: center; line-height: 1; color: var(--stamp); animation: stamp .3s cubic-bezier(.2,1.6,.4,1) both; }
+    .count.go { font-size: clamp(54px, 18vw, 76px); }
+    .suspects { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .suspect { font: 600 16px var(--f-body); color: var(--ink); background: transparent; border: 1.5px solid var(--line); border-radius: 10px; padding: 12px 10px; cursor: pointer; overflow-wrap: anywhere; }
+    .suspect:hover { border-color: var(--stamp); color: var(--stamp); }
+    .suspect.wide { grid-column: 1 / -1; color: var(--muted); border-style: dashed; }
+
+    .verdict { text-align: center; align-items: center; }
+    .verdict .who { font-family: var(--f-display); font-size: clamp(32px, 10vw, 44px); line-height: 1.05; }
+    .verdict .who.civ { color: var(--good); }
+    .verdict .who.imp { color: var(--stamp); }
+    .facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; align-items: baseline; margin: 0; }
+    .facts dt { font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+    .facts dd { margin: 0; font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+    .scores { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+    .scores li { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+    .scores li:last-child { border-bottom: 0; }
+    .scores .pts { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-weight: 600; }
+    .scores .plus { color: var(--good); font-family: var(--f-mono); font-size: 12px; margin-left: 6px; }
+
+    details.rules summary { cursor: pointer; font-weight: 700; list-style: none; display: flex; justify-content: space-between; }
+    details.rules summary::-webkit-details-marker { display: none; }
+    details.rules summary::after { content: "+"; font-family: var(--f-mono); color: var(--muted); }
+    details.rules[open] summary::after { content: "−"; }
+    details.rules ol { margin: 10px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+    details.rules li span { color: var(--muted); }
+
+    .confirm { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--paper); border: 1.5px solid var(--stamp); border-radius: 12px; padding: 10px 14px; }
+    .confirm p { flex: 1; font-weight: 600; min-width: 140px; }
+    .confirm .btn { width: auto; font-size: 14px; padding: 9px 12px; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap" id="app" aria-live="polite"></div>
+
+<script>
+// Each entry is "Word:Hint". The hint goes only to the Imposter: related enough to pass as a clue,
+// vague enough not to give the word away.
+const CATS = [
+  ["food", "Food", "Pizza:Slice,Sushi:Rice,Tacos:Crunchy,Pancakes:Syrup,Spaghetti:Twirl,Burger:Grill,Ice cream:Cold,Popcorn:Movie,Croissant:Flaky,Curry:Spicy,Dumplings:Steamed,Avocado:Green,Chocolate:Sweet,Cheese:Aged,Pretzel:Twisted,Omelette:Eggs,Watermelon:Seeds,Donut:Glazed,Lasagna:Layers,Soup:Bowl,Waffles:Grid,Ramen:Broth,Hot dog:Mustard,Salad:Fresh"],
+  ["animals", "Animals", "Penguin:Tuxedo,Giraffe:Tall,Octopus:Ink,Kangaroo:Pouch,Owl:Night,Shark:Fin,Elephant:Trunk,Squirrel:Nuts,Flamingo:Pink,Turtle:Shell,Bat:Cave,Camel:Hump,Dolphin:Clever,Hedgehog:Spiky,Lion:Mane,Spider:Web,Parrot:Talks,Cow:Field,Jellyfish:Sting,Panda:Bamboo,Snail:Slow,Wolf:Howl,Crab:Sideways,Bee:Buzz"],
+  ["places", "Places", "Airport:Gates,Beach:Sand,Library:Quiet,Hospital:Beds,Casino:Luck,Museum:Exhibits,Gym:Sweat,Zoo:Cages,Cinema:Screen,Prison:Bars,Farm:Barn,Castle:Towers,Subway:Underground,Desert:Dry,Bakery:Ovens,Church:Bells,Stadium:Crowd,Hotel:Keycard,Volcano:Lava,Supermarket:Aisles,School:Bell,Spa:Relax,Campsite:Tent,Bowling alley:Lanes"],
+  ["jobs", "Jobs", "Firefighter:Hose,Dentist:Drill,Pilot:Cockpit,Chef:Kitchen,Teacher:Homework,Astronaut:Orbit,Plumber:Pipes,Lawyer:Court,Farmer:Crops,Magician:Tricks,Nurse:Shifts,Barber:Clippers,Detective:Clues,Lifeguard:Whistle,Mail carrier:Route,DJ:Mix,Architect:Blueprints,Clown:Nose,Librarian:Shelves,Mechanic:Engine,Judge:Gavel,Photographer:Lens,Baker:Dough,Zookeeper:Feeding"],
+  ["home", "Around the house", "Toaster:Crumbs,Pillow:Soft,Mirror:Reflection,Toothbrush:Bristles,Fridge:Chilly,Candle:Wax,Umbrella:Rain,Vacuum:Noisy,Remote:Buttons,Bathtub:Bubbles,Doorbell:Ring,Blender:Smoothie,Lamp:Shade,Sofa:Cushions,Clock:Ticking,Scissors:Sharp,Kettle:Boil,Ladder:Rungs,Broom:Sweep,Curtains:Window,Microwave:Beep,Hanger:Closet,Plant pot:Soil,Doormat:Welcome"],
+  ["sports", "Sports & games", "Tennis:Racket,Chess:Strategy,Surfing:Waves,Bowling:Strike,Golf:Hole,Boxing:Gloves,Skiing:Slopes,Basketball:Hoop,Karate:Belt,Darts:Bullseye,Poker:Bluff,Fishing:Patience,Hockey:Ice,Yoga:Stretch,Cycling:Pedals,Archery:Target,Volleyball:Net,Wrestling:Mat,Sailing:Wind,Climbing:Grip,Baseball:Diamond,Fencing:Sword,Skateboarding:Tricks,Marathon:Long"],
+  ["travel", "Getting around", "Bicycle:Pedal,Helicopter:Blades,Submarine:Deep,Train:Tracks,Taxi:Meter,Canoe:Paddle,Hot air balloon:Basket,Scooter:Zippy,Ferry:Crossing,Rocket:Launch,Tractor:Field,Ambulance:Siren,Skateboard:Wheels,Cable car:Mountain,Limousine:Fancy,Tram:City,Motorcycle:Helmet,Sled:Snow,Yacht:Luxury,Bus:Stops,Jet ski:Splash,Horse:Saddle,Elevator:Floors,Rickshaw:Pull"],
+  ["nature", "Weather & nature", "Rainbow:Colors,Tornado:Spin,Snowflake:Unique,Waterfall:Drop,Lightning:Flash,Fog:Grey,Glacier:Slow,Island:Surrounded,Moon:Phases,Cactus:Prickly,Thunder:Loud,Sunset:Evening,Cave:Dark,Earthquake:Shaking,Mushroom:Damp,Puddle:Splash,Forest:Trees,Hurricane:Eye,Comet:Tail,Coral reef:Colorful,Hail:Ice,Mountain:Peak,Swamp:Muddy,Wildfire:Smoke"],
+].map(([key, label, raw]) => ({ key, label, words: raw.split(",").map(p => p.split(":")) }));
+
+const MAX_IMPOSTER_OPTION = 4;
+const STORE = "imposter-setup-v2";
+
+let state, countTimer = null, audio = null;
+
+function defaults() {
+  return {
+    screen: "setup",
+    players: ["", "", ""],
+    category: "random",
+    customName: "",
+    customWords: "",
+    hintOn: true,
+    imposterCount: 1,
+    voteRounds: 1,
+    scores: {},
+    used: {},
+    round: null,
+    roundNo: 0,
+    confirmQuit: false,
+    error: "",
+  };
+}
+
+function load() {
+  const s = defaults();
+  try {
+    const d = JSON.parse(localStorage.getItem(STORE) || "{}");
+    if (Array.isArray(d.players) && d.players.length >= 3) s.players = d.players.slice(0, 20).map(String);
+    if (d.category === "random" || d.category === "custom" || CATS.some(c => c.key === d.category)) s.category = d.category;
+    if (typeof d.customName === "string") s.customName = d.customName;
+    if (typeof d.customWords === "string") s.customWords = d.customWords;
+    if (typeof d.hintOn === "boolean") s.hintOn = d.hintOn;
+    if (d.imposterCount >= 1 && d.imposterCount <= MAX_IMPOSTER_OPTION) s.imposterCount = d.imposterCount;
+    if (d.voteRounds >= 1 && d.voteRounds <= MAX_IMPOSTER_OPTION + 2) s.voteRounds = Math.max(d.voteRounds, s.imposterCount);
+  } catch (e) {}
+  return s;
+}
+
+function save() {
+  try {
+    localStorage.setItem(STORE, JSON.stringify({
+      players: state.players, category: state.category, customName: state.customName, customWords: state.customWords,
+      hintOn: state.hintOn, imposterCount: state.imposterCount, voteRounds: state.voteRounds,
+    }));
+  } catch (e) {}
+}
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const rand = n => Math.floor(Math.random() * n);
+const plural = (n, w) => n === 1 ? `${n} ${w}` : `${n} ${w}s`;
+const names = () => state.players.map(p => p.trim());
+const nm = i => state.players[i] ?? "";
+function nameList(idx) {
+  const n = idx.map(nm);
+  return n.length <= 1 ? (n[0] || "") : n.slice(0, -1).join(", ") + " and " + n[n.length - 1];
+}
+// Civilians must always outnumber the Imposters at the start.
+const maxImposters = () => Math.max(1, Math.floor((state.players.length - 1) / 2));
+const isImp = (r, i) => r.imposters.includes(i);
+const impLeft = r => r.imposters.filter(i => !r.out.includes(i));
+const alive = r => state.players.map((_, i) => i).filter(i => !r.out.includes(i));
+
+// Custom words, one per line or comma-separated, with an optional hint after "=" or ":".
+function customList() {
+  const seen = new Set(), out = [];
+  for (const raw of state.customWords.split(/[\n,]/)) {
+    const m = raw.split(/[=:]/);
+    const w = (m[0] || "").trim(), h = m.slice(1).join(":").trim();
+    if (!w || seen.has(w.toLowerCase())) continue;
+    seen.add(w.toLowerCase());
+    out.push([w, h]);
+  }
+  return out;
+}
+
+function setupProblem() {
+  const n = names();
+  if (n.length < 3) return "You need at least 3 players.";
+  const blank = n.findIndex(x => !x);
+  if (blank >= 0) return `Player ${blank + 1} needs a name.`;
+  const seen = new Set();
+  for (const x of n) {
+    if (seen.has(x.toLowerCase())) return `Two players are called “${x}”. Give each player a different name.`;
+    seen.add(x.toLowerCase());
+  }
+  if (state.imposterCount > maxImposters())
+    return `With ${n.length} players you can have at most ${plural(maxImposters(), "Imposter")}. Add players or choose fewer Imposters.`;
+  if (state.category === "custom" && customList().length < 2) return "Add at least 2 words to your custom category.";
+  return "";
+}
+
+function pickWord(key, list) {
+  let used = state.used[key] || [];
+  let pool = list.filter(([w]) => !used.includes(w));
+  if (!pool.length) { pool = list; used = []; }
+  const pick = pool[rand(pool.length)];
+  state.used[key] = [...used, pick[0]];
+  return pick;
+}
+
+function beep(freq = 600, dur = 0.14) {
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.type = "triangle"; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.18, audio.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + dur);
+    o.connect(g).connect(audio.destination);
+    o.start(); o.stop(audio.currentTime + dur);
+  } catch (e) {}
+}
+
+/* ---------- Round flow ---------- */
+
+function go(screen) {
+  clearInterval(countTimer); countTimer = null;
+  state.screen = screen;
+  render();
+  window.scrollTo(0, 0);
+}
+
+function startRound() {
+  const problem = setupProblem();
+  if (problem) { state.error = problem; render(); return; }
+  state.players = names();
+  state.error = "";
+  save();
+  let key, label, list;
+  if (state.category === "custom") {
+    key = "custom"; label = state.customName.trim() || "Custom"; list = customList();
+  } else {
+    const c = state.category === "random" ? CATS[rand(CATS.length)] : CATS.find(c => c.key === state.category);
+    key = c.key; label = c.label; list = c.words;
+  }
+  const [word, hint] = pickWord(key, list);
+  const n = state.players.length;
+  const seats = state.players.map((_, i) => i).sort(() => Math.random() - 0.5);
+  state.roundNo++;
+  state.round = {
+    category: label, word, hint,
+    imposters: seats.slice(0, state.imposterCount).sort((a, b) => a - b),
+    starter: rand(n),
+    revealIdx: 0, revealed: false, clueRound: 1, voteNo: 1,
+    out: [], count: null, accused: null, outcome: null, reason: "", gained: {},
+  };
+  state.confirmQuit = false;
+  go("pass");
+}
+
+function nextAlive(r, i) {
+  const n = state.players.length;
+  for (let k = 1; k <= n; k++) if (!r.out.includes((i + k) % n)) return (i + k) % n;
+  return i;
+}
+
+function countdown() {
+  const r = state.round;
+  clearInterval(countTimer);
+  r.count = 3; beep(); render();
+  countTimer = setInterval(() => {
+    r.count--;
+    if (r.count <= 0) { r.count = 0; clearInterval(countTimer); countTimer = null; beep(880, 0.35); }
+    else beep();
+    render();
+  }, 900);
+}
+
+function accuse(i) {
+  const r = state.round;
+  r.accused = i;
+  r.count = null;
+  if (i >= 0 && isImp(r, i)) { go("guess"); return; }
+  if (i >= 0) r.out.push(i);
+  afterVote();
+}
+
+function imposterGuessed(correct) {
+  const r = state.round, i = r.accused;
+  r.out.push(i);
+  if (correct) {
+    finish("imposter", `${nm(i)} was caught but guessed the word, which steals the win${r.imposters.length > 1 ? " for the Imposters" : ""}.`);
+    return;
+  }
+  afterVote();
+}
+
+// Decide what happens once a vote is settled: someone innocent is out, an Imposter was caught
+// and missed the word, or the vote tied.
+function afterVote() {
+  const r = state.round, a = r.accused;
+  const left = impLeft(r);
+  const civLeft = alive(r).filter(i => !isImp(r, i));
+  const multi = r.imposters.length > 1;
+
+  if (!left.length) {
+    finish("civilians", multi ? "You caught every Imposter, and none of them guessed the word."
+                              : `You caught ${nm(a)}, and they couldn’t guess the word.`);
+    return;
+  }
+  const what = a < 0 ? "The vote was tied." : isImp(r, a) ? `${nm(a)} was caught.` : `${nm(a)} was innocent.`;
+  if (left.length >= civLeft.length) {
+    finish("imposter", left.length === 1 && civLeft.length === 1
+      ? `${what} With only two players left, ${nm(left[0])} wins.`
+      : `${what} The Imposters now match the civilians in number, so they can’t be outvoted.`);
+    return;
+  }
+  if (r.voteNo < state.voteRounds) {
+    r.voteNo++;
+    r.clueRound++;
+    r.starter = nextAlive(r, r.starter);
+    go("elim");
+    return;
+  }
+  const hiders = nameList(left);
+  if (a < 0) finish("imposter", `The last vote was tied, so ${hiders} slipped away unnoticed.`);
+  else if (isImp(r, a)) finish("imposter", `${nm(a)} was caught, but ${hiders} stayed hidden through the last vote.`);
+  else finish("imposter", `${nm(a)} was innocent. ${multi ? "The Imposters" : "The real Imposter"}, ${hiders}, got away with it.`);
+}
+
+function finish(outcome, reason) {
+  const r = state.round;
+  r.outcome = outcome;
+  r.reason = reason;
+  r.gained = {};
+  state.players.forEach((p, i) => {
+    const g = outcome === "civilians" ? (isImp(r, i) ? 0 : 1) : (isImp(r, i) ? 2 : 0);
+    if (g) { r.gained[p] = g; state.scores[p] = (state.scores[p] || 0) + g; }
+  });
+  go("result");
+}
+
+/* ---------- Rendering ---------- */
+
+function header() {
+  const r = state.round;
+  const inGame = state.screen !== "setup" && r;
+  return `
+  <header class="top">
+    ${inGame ? `<span class="brand">IMPOSTER</span>` : `<a class="back" href="index.html">← Back</a>`}
+    ${inGame ? `<div class="meta">Round ${state.roundNo} · ${esc(r.category)}<br>
+      ${state.screen !== "result" ? `<button class="linkbtn" data-a="quit">End round</button>` : ""}</div>` : `<span class="brand">IMPOSTER</span>`}
+  </header>
+  ${state.confirmQuit ? `<div class="confirm"><p>End this round and go back to setup? No points are awarded.</p>
+    <button class="btn" data-a="quit-yes">End round</button>
+    <button class="btn ghost" data-a="quit-no">Keep playing</button></div>` : ""}`;
+}
+
+function scoreList(gained = {}) {
+  const rows = names().map(p => [p, state.scores[p] || 0]).sort((a, b) => b[1] - a[1]);
+  return `<ul class="scores">${rows.map(([p, s]) =>
+    `<li><span>${esc(p)}${gained[p] ? `<span class="plus">+${gained[p]}</span>` : ""}</span><span class="pts">${s}</span></li>`).join("")}</ul>`;
+}
+
+function viewSetup() {
+  const n = state.players.length, maxI = maxImposters();
+  const cats = [["random", "Random"], ...CATS.map(c => [c.key, c.label]), ["custom", "Your own words"]];
+  const voteOpts = [0, 1, 2].map(k => state.imposterCount + k);
+  const scored = Object.values(state.scores).some(v => v > 0);
+  const voteHint = state.voteRounds === 1 ? "One vote decides the round."
+    : `Whoever is voted out leaves the game. If Imposters remain, play another clue round and vote again, up to ${state.voteRounds} times. `
+      + (state.imposterCount > 1 ? "Civilians must catch every Imposter. " : "")
+      + "Imposters win if they survive the last vote or match the civilians in number.";
+  return `
+  <section class="center" style="gap:10px;padding-block:6px">
+    <h1>Who doesn’t know the word?</h1>
+    <p class="lede">Everyone gets the same secret word except the Imposter. Give one-word clues, argue, then vote. Play on one phone or computer, passed around the group.</p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Players</h2><span class="label">${n} of 3–20</span></div>
+    <p class="hint">Add everyone in seating order, going clockwise. Press Enter to move to the next name.</p>
+    <ul class="players">
+      ${state.players.map((p, i) => `
+        <li><span class="seat">${i + 1}</span>
+          <input type="text" id="player-${i}" data-i="${i}" value="${esc(p)}" placeholder="Name" maxlength="20" autocomplete="off" aria-label="Player ${i + 1} name">
+          <button class="x" data-a="del" data-i="${i}" aria-label="Remove player ${i + 1}" ${n <= 3 ? "disabled" : ""}>×</button></li>`).join("")}
+    </ul>
+    <button class="btn ghost" data-a="add" ${n >= 20 ? "disabled" : ""}>Add player</button>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Category</h2><span class="label">Everyone hears it</span></div>
+    <div class="chips" role="group" aria-label="Category">
+      ${cats.map(([k, l]) => `<button class="chip" data-a="cat" data-k="${k}" aria-pressed="${state.category === k}">${esc(l)}</button>`).join("")}
+    </div>
+    ${state.category === "custom" ? `
+      <label class="label" for="custom-name">Category name</label>
+      <input type="text" id="custom-name" value="${esc(state.customName)}" placeholder="e.g. Our class" maxlength="30">
+      <label class="label" for="custom-words">Words, one per line</label>
+      <textarea id="custom-words" placeholder="Printer = Paper&#10;Whiteboard = Markers&#10;Lunch break = Food">${esc(state.customWords)}</textarea>
+      <p class="hint" id="custom-count">Add the Imposter’s hint after an equals sign, for example “Printer = Paper”. ${customList().length} words so far.</p>` : ""}
+  </section>
+
+  <section class="panel">
+    <h2>Imposters</h2>
+    <span class="label">Number of Imposters</span>
+    <div class="chips" role="group" aria-label="Number of Imposters">
+      ${[1, 2, 3, 4].map(k => `<button class="chip" data-a="imps" data-n="${k}" aria-pressed="${state.imposterCount === k}" ${k > maxI ? "disabled" : ""}>${k}</button>`).join("")}
+    </div>
+    <p class="hint">${maxI < MAX_IMPOSTER_OPTION
+      ? `With ${n} players you can have up to ${plural(maxI, "Imposter")}. Add players to allow more.`
+      : "Imposters don’t know who the others are. Everyone is told how many there are."}</p>
+    <span class="label" style="margin-top:4px">Hint word</span>
+    <div class="chips" role="group" aria-label="Hint word">
+      <button class="chip" data-a="hint" data-v="1" aria-pressed="${state.hintOn}">On</button>
+      <button class="chip" data-a="hint" data-v="0" aria-pressed="${!state.hintOn}">Off</button>
+    </div>
+    <p class="hint">${state.hintOn
+      ? "The Imposter’s card shows a related word to say as their clue on the first go-around, so they can blend in."
+      : "The Imposter only knows the category."}</p>
+    <span class="label" style="margin-top:4px">Votes per game</span>
+    <div class="chips" role="group" aria-label="Votes per game">
+      ${voteOpts.map(v => `<button class="chip" data-a="votes" data-n="${v}" aria-pressed="${state.voteRounds === v}">${v === 1 ? "1 vote" : `Up to ${v} votes`}</button>`).join("")}
+    </div>
+    <p class="hint">${voteHint}</p>
+  </section>
+
+  ${scored ? `<section class="panel">
+    <div class="panel-head"><h2>Scores</h2><button class="linkbtn" data-a="reset-scores">Reset</button></div>
+    ${scoreList()}
+  </section>` : ""}
+
+  ${state.error ? `<p class="error" role="alert">${esc(state.error)}</p>` : ""}
+  <button class="btn" data-a="start">Deal the cards</button>
+
+  <details class="rules panel">
+    <summary>How to play</summary>
+    <ol>
+      <li><b>Look at your card.</b> <span>Pass the device around. Each player taps to see their secret word, then hides it. Imposters see IMPOSTER instead, plus a hint word if hints are on.</span></li>
+      <li><b>Give clues.</b> <span>Going clockwise, each player says one word about the secret. Prove you know it without making it obvious. Imposters listen and bluff.</span></li>
+      <li><b>Discuss.</b> <span>Debate whose clue sounded off, hesitant or too generic. End the discussion when you’re ready to vote.</span></li>
+      <li><b>Vote.</b> <span>On the count of three, everyone points at their suspect.</span></li>
+      <li><b>Win.</b> <span>Civilians win if they catch every Imposter. An Imposter who is caught can still steal the win by guessing the word.</span></li>
+    </ol>
+    <p class="hint" style="margin-top:10px">Scoring: each civilian gets 1 point when the civilians win. Each Imposter gets 2 points when the Imposters win.</p>
+  </details>`;
+}
+
+function dots() {
+  const r = state.round;
+  return `<div class="progress" aria-label="${r.revealIdx} of ${state.players.length} players have seen their card">
+    ${state.players.map((_, i) => `<span class="dot ${i < r.revealIdx ? "done" : i === r.revealIdx ? "now" : ""}"></span>`).join("")}</div>`;
+}
+
+function viewPass() {
+  const p = nm(state.round.revealIdx);
+  return `
+  <section class="slip tilt-r">
+    <span class="label">Hand the device to</span>
+    <div class="pass-name">${esc(p)}</div>
+    <p class="hint">Everyone else, look away from the screen.</p>
+  </section>
+  ${dots()}
+  <button class="btn" data-a="ready">I’m ${esc(p)}, show my card</button>`;
+}
+
+function viewCard() {
+  const r = state.round, i = r.revealIdx, p = nm(i);
+  const last = i === state.players.length - 1;
+  const multi = r.imposters.length > 1;
+  if (!r.revealed) {
+    return `
+    <button class="slip" data-a="reveal" aria-label="Reveal ${esc(p)}’s card">
+      <span class="label">${esc(p)}’s card</span>
+      <div class="fold" aria-hidden="true">?</div>
+      <p style="font-weight:700">Tap to unfold</p>
+    </button>
+    ${dots()}`;
+  }
+  let body;
+  if (isImp(r, i)) {
+    body = `<div class="stamp">IMPOSTER</div>
+      <p class="cat-tag">Category <b>${esc(r.category)}</b></p>
+      ${state.hintOn && r.hint ? `
+        <div class="hintword"><span class="label">Your hint word</span><div class="word">${esc(r.hint)}</div></div>
+        <p class="hint narrow">Say this as your clue on the first go-around to blend in. After that, you’re on your own.</p>`
+      : state.hintOn ? `<p class="hint narrow">No hint word for this one. Listen closely to the clues and bluff.</p>`
+      : `<p class="hint narrow">You don’t know the word. Listen to the clues, blend in, and work out what it is.</p>`}
+      ${multi ? `<p class="hint narrow"><b>There are ${r.imposters.length} Imposters this round. You don’t know who the others are.</b></p>` : ""}`;
+  } else {
+    body = `<span class="label">The secret word is</span>
+      <div class="word">${esc(r.word)}</div>
+      <p class="cat-tag">Category <b>${esc(r.category)}</b></p>
+      <p class="hint narrow">Give a clue that proves you know it, without giving it away.</p>
+      ${multi ? `<p class="hint"><b>There are ${r.imposters.length} Imposters this round.</b></p>` : ""}`;
+  }
+  return `
+  <section class="slip">${body}</section>
+  ${dots()}
+  <button class="btn" data-a="hide">${last ? "Hide card, everyone’s seen theirs" : `Hide card and pass to ${esc(nm(i + 1))}`}</button>`;
+}
+
+function viewClues() {
+  const r = state.round, n = state.players.length;
+  const order = Array.from({ length: n }, (_, k) => (r.starter + k) % n).filter(i => !r.out.includes(i));
+  const multi = r.imposters.length > 1;
+  return `
+  <section class="center">
+    <span class="label">Clue round ${r.clueRound}${state.voteRounds > 1 ? ` · Vote ${r.voteNo} of ${state.voteRounds} next` : ""}</span>
+    <h1>${esc(nm(r.starter))} goes first</h1>
+    <p class="lede">One word each, clockwise. The category is <b style="color:var(--ink)">${esc(r.category)}</b>.${multi ? ` ${impLeft(r).length} of ${r.imposters.length} Imposters are still in play.` : ""}</p>
+  </section>
+  <section class="panel">
+    <ol class="order">
+      ${order.map((i, k) => `<li><span class="n">${k + 1}</span><span class="nm">${esc(nm(i))}</span>${k === 0 ? `<span class="pill">Starts</span>` : ""}</li>`).join("")}
+    </ol>
+    ${r.out.length ? `<p class="hint">Voted out: ${esc(nameList(r.out))}</p>` : ""}
+  </section>
+  <button class="btn" data-a="discuss">Everyone’s given a clue, start discussion</button>
+  <button class="btn ghost" data-a="another">Go around again (round ${r.clueRound + 1})</button>`;
+}
+
+function viewDiscuss() {
+  const r = state.round;
+  return `
+  <section class="center">
+    <span class="label">Discussion</span>
+    <h1>Who sounded off?</h1>
+    <p class="hint">Talk it through. Take as long as you need.</p>
+  </section>
+  <section class="panel">
+    <span class="label">Things to argue about</span>
+    <ul class="tips">
+      <li>Whose clue was oddly vague or generic?</li>
+      <li>Who hesitated, or echoed someone else’s idea?</li>
+      <li>Did any clue fit the category but not the word?</li>
+    </ul>
+  </section>
+  <button class="btn" data-a="vote">${state.voteRounds > 1 ? `End discussion, go to vote ${r.voteNo} of ${state.voteRounds}` : "End discussion and vote"}</button>`;
+}
+
+function viewVote() {
+  const r = state.round;
+  if (r.count === null) {
+    return `
+    <section class="center" style="padding-block:20px">
+      <span class="label">${state.voteRounds > 1 ? `Vote ${r.voteNo} of ${state.voteRounds}` : "The vote"}</span>
+      <h1>On three, everyone points at their suspect</h1>
+      <p class="hint">Put the device where everyone can see it, then start the count.</p>
+    </section>
+    <button class="btn" data-a="count">Count down</button>`;
+  }
+  if (r.count > 0) return `<section class="center" style="padding-block:30px"><div class="count" id="c${r.count}">${r.count}</div></section>`;
+  return `
+  <section class="center"><div class="count go">POINT!</div></section>
+  <section class="panel">
+    <h2>Who got the most fingers?</h2>
+    <div class="suspects">
+      ${alive(r).map(i => `<button class="suspect" data-a="accuse" data-i="${i}">${esc(nm(i))}</button>`).join("")}
+      <button class="suspect wide" data-a="accuse" data-i="-1">It’s a tie, nobody is voted out</button>
+    </div>
+  </section>
+  <button class="btn ghost" data-a="count">Count down again</button>`;
+}
+
+function viewElim() {
+  const r = state.round, a = r.accused;
+  const left = state.players.length - r.out.length, hiding = impLeft(r).length;
+  const top = a < 0
+    ? `<div class="stamp muted">TIE</div><p style="font-weight:700;font-size:20px">Nobody is voted out</p>`
+    : isImp(r, a)
+    ? `<div class="stamp">CAUGHT</div><p style="font-weight:700;font-size:20px">${esc(nm(a))} was an Imposter</p><p class="hint">…and couldn’t guess the word.</p>`
+    : `<div class="stamp good">INNOCENT</div><p style="font-weight:700;font-size:20px">${esc(nm(a))} is out</p><p class="hint">…and was not an Imposter.</p>`;
+  return `
+  <section class="slip">
+    ${top}
+    <p class="hint narrow">${hiding === 1 ? "1 Imposter is" : `${hiding} Imposters are`} still among you. ${left} players remain. Next up is vote ${r.voteNo} of ${state.voteRounds}.</p>
+  </section>
+  <button class="btn" data-a="to-clues">Start clue round ${r.clueRound}</button>`;
+}
+
+function viewGuess() {
+  const r = state.round, imp = nm(r.accused);
+  return `
+  <section class="slip">
+    <div class="stamp">CAUGHT</div>
+    <p style="font-weight:700;font-size:20px">${esc(imp)} was ${r.imposters.length > 1 ? "an" : "the"} Imposter</p>
+    <p class="hint narrow">One last chance. ${esc(imp)}, say your guess for the secret word out loud.</p>
+    <p class="hint narrow"><b>Civilians, decide whether the guess is right, but don’t say the word.</b></p>
+  </section>
+  <p class="center" style="font-weight:700">Did ${esc(imp)} guess it?</p>
+  <div class="btn-row">
+    <button class="btn" data-a="guess-yes">Yes, guessed it</button>
+    <button class="btn ghost" data-a="guess-no">No, wrong</button>
+  </div>`;
+}
+
+function viewResult() {
+  const r = state.round, civ = r.outcome === "civilians", multi = r.imposters.length > 1;
+  return `
+  <section class="panel verdict">
+    <span class="label">Round ${state.roundNo} result</span>
+    <div class="who ${civ ? "civ" : "imp"}">${civ ? "Civilians win" : multi ? "Imposters win" : "Imposter wins"}</div>
+    <p class="lede">${esc(r.reason)}</p>
+  </section>
+  <section class="panel">
+    <dl class="facts">
+      <dt>${multi ? "Imposters" : "Imposter"}</dt><dd>${esc(nameList(r.imposters))}</dd>
+      <dt>Word</dt><dd>${esc(r.word)}</dd>
+      ${state.hintOn && r.hint ? `<dt>Hint word</dt><dd>${esc(r.hint)}</dd>` : ""}
+      <dt>Category</dt><dd>${esc(r.category)}</dd>
+      <dt>Voted out</dt><dd>${r.out.length ? esc(nameList(r.out)) : "Nobody"}</dd>
+    </dl>
+  </section>
+  <section class="panel">
+    <h2>Scores</h2>
+    ${scoreList(r.gained)}
+  </section>
+  <button class="btn" data-a="start">Next round, new word</button>
+  <button class="btn ghost" data-a="setup">Change players or settings</button>`;
+}
+
+const VIEWS = { setup: viewSetup, pass: viewPass, card: viewCard, clues: viewClues, discuss: viewDiscuss, vote: viewVote, elim: viewElim, guess: viewGuess, result: viewResult };
+
+function render() {
+  const app = document.getElementById("app");
+  const active = document.activeElement;
+  const focusId = active && active.id && app.contains(active) ? active.id : null;
+  const sel = focusId && "selectionStart" in active ? [active.selectionStart, active.selectionEnd] : null;
+  app.innerHTML = header() + VIEWS[state.screen]();
+  if (focusId) {
+    const el = document.getElementById(focusId);
+    if (el) { el.focus(); if (sel) try { el.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
+  }
+}
+
+/* ---------- Events ---------- */
+
+function focusPlayer(i) { document.getElementById(`player-${i}`)?.focus(); }
+
+function addPlayer() {
+  if (state.players.length >= 20) return;
+  state.players.push(""); state.error = ""; save(); render();
+  focusPlayer(state.players.length - 1);
+}
+
+document.getElementById("app").addEventListener("click", e => {
+  const b = e.target.closest("[data-a]");
+  if (!b || b.disabled) return;
+  const r = state.round;
+  switch (b.dataset.a) {
+    case "add": addPlayer(); break;
+    case "del":
+      state.players.splice(+b.dataset.i, 1); state.error = ""; save(); render(); break;
+    case "cat": state.category = b.dataset.k; state.error = ""; save(); render(); break;
+    case "imps":
+      state.imposterCount = +b.dataset.n;
+      if (state.voteRounds < state.imposterCount) state.voteRounds = state.imposterCount;
+      state.error = ""; save(); render(); break;
+    case "hint": state.hintOn = b.dataset.v === "1"; save(); render(); break;
+    case "votes": state.voteRounds = +b.dataset.n; save(); render(); break;
+    case "reset-scores": state.scores = {}; render(); break;
+    case "start": startRound(); break;
+    case "setup": state.round = null; go("setup"); break;
+    case "quit": state.confirmQuit = true; render(); break;
+    case "quit-no": state.confirmQuit = false; render(); break;
+    case "quit-yes": state.confirmQuit = false; state.round = null; state.roundNo = Math.max(0, state.roundNo - 1); go("setup"); break;
+    case "ready": r.revealed = false; go("card"); break;
+    case "reveal": r.revealed = true; render(); break;
+    case "hide":
+      r.revealed = false; r.revealIdx++;
+      go(r.revealIdx >= state.players.length ? "clues" : "pass"); break;
+    case "another": r.clueRound++; r.starter = nextAlive(r, r.starter); render(); window.scrollTo(0, 0); break;
+    case "discuss": go("discuss"); break;
+    case "vote": r.count = null; go("vote"); break;
+    case "count": countdown(); break;
+    case "accuse": accuse(+b.dataset.i); break;
+    case "to-clues": go("clues"); break;
+    case "guess-yes": imposterGuessed(true); break;
+    case "guess-no": imposterGuessed(false); break;
+  }
+});
+
+document.getElementById("app").addEventListener("input", e => {
+  const t = e.target;
+  if (t.id.startsWith("player-")) { state.players[+t.dataset.i] = t.value; state.error = ""; save(); }
+  else if (t.id === "custom-name") { state.customName = t.value; save(); }
+  else if (t.id === "custom-words") {
+    state.customWords = t.value; save();
+    const c = document.getElementById("custom-count");
+    if (c) c.textContent = `Add the Imposter’s hint after an equals sign, for example “Printer = Paper”. ${customList().length} words so far.`;
+  }
+});
+
+document.getElementById("app").addEventListener("keydown", e => {
+  if (e.key !== "Enter" || !e.target.id.startsWith("player-")) return;
+  e.preventDefault();
+  const i = +e.target.dataset.i;
+  if (i + 1 < state.players.length) focusPlayer(i + 1); else addPlayer();
+});
+
+state = load();
+render();
+const firstEmpty = state.players.findIndex(p => !p.trim());
+if (firstEmpty >= 0 && window.matchMedia("(hover: hover)").matches) focusPlayer(firstEmpty);
+</script>
+</body>
+</html>

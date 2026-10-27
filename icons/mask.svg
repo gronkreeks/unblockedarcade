@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- disguise mask with eye holes -->
+  <path fill="white" fill-rule="evenodd" d="M6 26 C6 18 14 16 22 18 L32 21 L42 18 C50 16 58 18 58 26 C58 36 52 44 44 44 C38 44 35 40 32 36 C29 40 26 44 20 44 C12 44 6 36 6 26 Z
+    M15 30 a6 4.5 0 1 0 12 0 a6 4.5 0 1 0 -12 0 Z
+    M37 30 a6 4.5 0 1 0 12 0 a6 4.5 0 1 0 -12 0 Z"/>
+  <!-- ties -->
+  <path d="M6 24 L1 20 M58 24 L63 20" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <!-- subtle lower shade -->
+  <path d="M32 36 C29 40 26 44 20 44 C26 42 29 38 32 33 C35 38 38 42 44 44 C38 44 35 40 32 36 Z" fill="rgba(0,0,0,0.08)"/>
+</svg>
