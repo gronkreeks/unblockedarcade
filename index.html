@@ -231,13 +231,15 @@
     .section + .section { margin-top: 2.6rem; }
     .section-label { color: rgba(255,255,255,0.6); font-size: 0.78rem; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; text-align: center; margin-bottom: 1.3rem; }
     .more {
-      display: inline-flex; align-items: center; gap: 0.4rem; flex: none; margin-top: 1.2rem;
-      background: rgba(255,255,255,0.08); border: 1.5px solid rgba(255,255,255,0.2); color: #fff;
-      border-radius: 50px; padding: 0.45rem 1rem; font-family: inherit; font-size: 0.72rem; font-weight: 900;
-      letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; transition: background 0.15s, border-color 0.15s;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.35rem;
+      border-radius: 20px; border: 2px dashed rgba(255,255,255,0.22); background: rgba(255,255,255,0.04);
+      color: #fff; font-family: inherit; cursor: pointer; min-height: 100%; padding: 1rem 0.5rem;
+      transition: background 0.15s, border-color 0.15s, transform 0.18s;
     }
-    .more:hover { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.45); }
-    .more .chev { transition: transform 0.2s; }
+    .more:hover { background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.45); transform: translateY(-6px); }
+    .more-n { font-size: 2rem; font-weight: 900; line-height: 1; }
+    .more-label { font-size: 0.66rem; font-weight: 900; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+    .more .chev { width: 16px; height: 16px; color: var(--muted); transition: transform 0.2s; }
     .more[aria-expanded="true"] .chev { transform: rotate(180deg); }
 
     /* ── Game grid ── */
@@ -494,10 +496,10 @@
             <span class="card-title">Star Clicker</span>
             <span class="badge">1 Player</span>
           </a>
+          <button class="more" type="button" aria-expanded="false" aria-controls="grid-motor">
+            <span class="more-n"></span><span class="more-label">More games</span><svg class="ic chev" aria-hidden="true"><use href="#i-chev"/></svg>
+          </button>
         </div>
-        <button class="more" type="button" aria-expanded="false" aria-controls="grid-motor">
-          <span class="more-label">Show all 6</span><svg class="ic chev" aria-hidden="true"><use href="#i-chev"/></svg>
-        </button>
       </section>
       <section class="section" id="strategy" aria-labelledby="h-strategy">
         <h2 class="section-label" id="h-strategy">Strategy &amp; Critical Thinking</h2>
@@ -551,10 +553,10 @@
             <span class="card-title">Voxel Sandbox</span>
             <span class="badge">1 Player</span>
           </a>
+          <button class="more" type="button" aria-expanded="false" aria-controls="grid-strategy">
+            <span class="more-n"></span><span class="more-label">More games</span><svg class="ic chev" aria-hidden="true"><use href="#i-chev"/></svg>
+          </button>
         </div>
-        <button class="more" type="button" aria-expanded="false" aria-controls="grid-strategy">
-          <span class="more-label">Show all 7</span><svg class="ic chev" aria-hidden="true"><use href="#i-chev"/></svg>
-        </button>
       </section>
       <section class="section" id="literacy" aria-labelledby="h-literacy">
         <h2 class="section-label" id="h-literacy">Literacy &amp; Technology</h2>
@@ -573,10 +575,10 @@
             <span class="card-title">Imposter</span>
             <span class="badge">3–20 Players</span>
           </a>
+          <button class="more" type="button" aria-expanded="false" aria-controls="grid-literacy">
+            <span class="more-n"></span><span class="more-label">More games</span><svg class="ic chev" aria-hidden="true"><use href="#i-chev"/></svg>
+          </button>
         </div>
-        <button class="more" type="button" aria-expanded="false" aria-controls="grid-literacy">
-          <span class="more-label">Show all 2</span><svg class="ic chev" aria-hidden="true"><use href="#i-chev"/></svg>
-        </button>
       </section>
     </div>
   </main>
@@ -714,27 +716,28 @@
 </footer>
 
 <script>
-// Each skill area shows one row of games; "Show all" opens the rest.
+// Each skill area shows one shelf of games. If they don't fit, the last spot becomes a "+N more" tile.
 (() => {
   const rows = [...document.querySelectorAll('.section')];
   const columns = grid => getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length;
   function layout() {
     for (const row of rows) {
       const grid = row.querySelector('.grid'), btn = row.querySelector('.more');
-      const cards = [...grid.children], cols = columns(grid);
+      const cards = [...grid.querySelectorAll('.card')], cols = columns(grid);
+      const fits = cards.length <= cols;
       const open = btn.getAttribute('aria-expanded') === 'true';
-      cards.forEach((c, i) => { c.hidden = !open && i >= cols; });
-      btn.hidden = cards.length <= cols;
+      const shown = fits || open ? cards.length : cols - 1;
+      cards.forEach((c, i) => { c.hidden = i >= shown; });
+      btn.hidden = fits;
+      btn.querySelector('.more-n').textContent = open ? '' : `+${cards.length - shown}`;
+      btn.querySelector('.more-label').textContent = open ? 'Show less' : 'More games';
     }
   }
   for (const row of rows) {
-    const btn = row.querySelector('.more'), n = row.querySelectorAll('.card').length;
+    const btn = row.querySelector('.more');
     btn.addEventListener('click', () => {
-      const open = btn.getAttribute('aria-expanded') !== 'true';
-      btn.setAttribute('aria-expanded', String(open));
-      btn.querySelector('.more-label').textContent = open ? 'Show less' : `Show all ${n}`;
+      btn.setAttribute('aria-expanded', String(btn.getAttribute('aria-expanded') !== 'true'));
       layout();
-      if (!open) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
   }
   let t; addEventListener('resize', () => { clearTimeout(t); t = setTimeout(layout, 100); });
