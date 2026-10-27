@@ -286,7 +286,7 @@ function originAllowed(origin) {
   return ALLOWED_ORIGINS.includes(origin);
 }
 const wss = new WebSocketServer({
-  server, maxPayload: 4096,
+  server, maxPayload: 16384,
   perMessageDeflate: { threshold: 512 },
   verifyClient: ({ origin }) => originAllowed(origin) && clients.size < MAX_CLIENTS,
 });

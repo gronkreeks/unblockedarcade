@@ -1,6 +1,9 @@
 // Chat for EduArcade: the site-wide chatroom (index.html) and in-game chat for Frontier.
 // Nothing is written to disk. Rooms and their last few messages live in memory only and are
-// cleared when a room empties. Every message goes through the same safety filter.
+// cleared when a room empties.
+// The chatroom is end-to-end encrypted (c_emsg): the server relays ciphertext it can't read, and the
+// safety filter runs in every sender's and recipient's browser (chat-safety.js). Plain c_msg from
+// older pages and Frontier chat still go through the filter here.
 'use strict';
 const crypto = require('crypto');
 
@@ -106,6 +109,22 @@ const PUBLIC_ROOMS = [
 const MAX_PUBLIC = 60, MAX_PRIVATE = 16, MAX_PRIVATE_ROOMS = 80, HISTORY = 30;
 const REPORTS_TO_REMOVE = 3, REPORT_WINDOW_MS = 10 * 60000, TIMEOUT_MS = 15 * 60000;
 
+// Base64 fields of an encrypted message. A P-256 public key is 65 bytes (88 chars), an AES-KW
+// wrapped key 40 bytes (56), the IV 12 bytes (16). Ciphertext covers 200 characters of UTF-8 plus the tag.
+const b64 = (s, min, max) => typeof s === 'string' && s.length >= min && s.length <= max && /^[A-Za-z0-9+/]+={0,2}$/.test(s) ? s : null;
+// A report hands over that message's key, so the server can check the reported text is real.
+function openReported(msg, roomId, keyB64) {
+  try {
+    const key = Buffer.from(b64(keyB64, 40, 48) || '', 'base64');
+    if (key.length !== 32) return null;
+    const buf = Buffer.from(msg.ct, 'base64');
+    const d = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(msg.iv, 'base64'));
+    d.setAAD(Buffer.from(`${roomId}|${msg.uid}`));
+    d.setAuthTag(buf.subarray(buf.length - 16));
+    return Buffer.concat([d.update(buf.subarray(0, buf.length - 16)), d.final()]).toString('utf8');
+  } catch { return null; }
+}
+
 function createChat({ send, now, log }) {
   const rooms = new Map();        // id -> { id, name, desc, code, isPublic, members: Set, history: [] }
   const timeouts = new Map();     // ipKey -> until
@@ -125,12 +144,16 @@ function createChat({ send, now, log }) {
   const roomList = () => [...rooms.values()].filter(r => r.isPublic)
     .map(r => ({ id: r.id, name: r.name, desc: r.desc, users: r.members.size, max: MAX_PUBLIC }));
   const roomInfo = r => ({ t: 'c_room', id: r.id, name: r.name, code: r.code, isPublic: r.isPublic,
-    users: [...r.members].map(u => u.name), max: r.isPublic ? MAX_PUBLIC : MAX_PRIVATE });
+    users: [...r.members].map(u => u.name), members: [...r.members].map(u => ({ uid: u.id, name: u.name, pub: u.pub })),
+    max: r.isPublic ? MAX_PUBLIC : MAX_PRIVATE });
   function broadcast(r, msg) { const s = JSON.stringify(msg); for (const u of r.members) send(u.ws, s); }
+  // An encrypted message goes to each person with only their own wrapped key
+  const forUser = (msg, u) => msg.t !== 'c_emsg' ? msg : (msg.keys[u.id] ? { ...msg, keys: undefined, key: msg.keys[u.id] } : null);
   function post(r, msg) {
     r.history.push(msg);
     if (r.history.length > HISTORY) r.history.shift();
-    broadcast(r, msg);
+    if (msg.t !== 'c_emsg') return broadcast(r, msg);
+    for (const u of r.members) { const m = forUser(msg, u); if (m) send(u.ws, JSON.stringify(m)); }
   }
   const sys = (r, text) => post(r, { t: 'c_msg', id: ++msgSeq, sys: true, text, at: now() });
   function uniqueName(r, name) {
@@ -144,7 +167,7 @@ function createChat({ send, now, log }) {
     u.name = uniqueName(r, u.baseName);
     r.members.add(u); u.room = r;
     send(u.ws, { t: 'c_you', name: u.name, uid: u.id });
-    send(u.ws, { t: 'c_history', list: r.history });
+    send(u.ws, { t: 'c_history', list: r.history.map(x => forUser(x, u)).filter(Boolean) });
     sys(r, `${u.name} joined`);
     broadcast(r, roomInfo(r));
   }
@@ -178,9 +201,10 @@ function createChat({ send, now, log }) {
       const nm = checkName(m.name);
       if (!nm.ok) return send(ws, { t: 'c_denied', msg: nm.reason, name: true });
       if (ws.chat) leave(ws.chat);
-      const u = { id: crypto.randomBytes(8).toString('hex'), ws, ipKey: ws.ipKey, baseName: nm.name, name: nm.name, room: null, rate: newRate() };
+      const u = { id: crypto.randomBytes(8).toString('hex'), ws, ipKey: ws.ipKey, baseName: nm.name, name: nm.name, room: null, rate: newRate(),
+        pub: b64(m.pub, 88, 88) };
       ws.chat = u; users.add(u);
-      send(ws, { t: 'c_welcome', name: u.name, rooms: roomList() });
+      send(ws, { t: 'c_welcome', name: u.name, rooms: roomList(), e2ee: 1 });
       return;
     }
     const u = ws.chat;
@@ -215,13 +239,26 @@ function createChat({ send, now, log }) {
         post(u.room, { t: 'c_msg', id: ++msgSeq, from: u.name, uid: u.id, text: f.text, at: t });
         break;
       }
+      case 'c_emsg': {
+        if (!u.room || !u.pub) return;
+        const iv = b64(m.iv, 16, 16), ct = b64(m.ct, 24, 1200);
+        if (!iv || !ct || !m.keys || typeof m.keys !== 'object') return send(ws, { t: 'c_err', msg: "That message couldn't be sent" });
+        const keys = {};
+        for (const x of u.room.members) { const k = b64(m.keys[x.id], 56, 56); if (k) keys[x.id] = k; }
+        const lim = rateCheck(u.rate, null, t);
+        if (lim) return send(ws, { t: 'c_err', msg: lim });
+        post(u.room, { t: 'c_emsg', id: ++msgSeq, from: u.name, uid: u.id, iv, ct, keys, at: t });
+        break;
+      }
       case 'c_report': {
         const r = u.room;
         if (!r) return;
         const msg = r.history.find(x => x.id === m.id && x.uid);
         if (!msg || msg.uid === u.id) return;
+        const text = msg.t === 'c_emsg' ? openReported(msg, r.id, m.key) : msg.text;
+        if (text == null) return send(ws, { t: 'c_err', msg: "That message couldn't be reported" });
         const author = [...r.members].find(x => x.id === msg.uid);
-        log(`chat report in ${r.isPublic ? r.name : 'private ' + r.code}: "${msg.from}: ${msg.text}" reported by ${u.name}`);
+        log(`chat report in ${r.isPublic ? r.name : 'private ' + r.code}: "${msg.from}: ${text}" reported by ${u.name}`);
         send(ws, { t: 'c_err', msg: 'Thanks, the message was reported.', ok: true });
         if (!author) return;
         const list = (reports.get(author.ipKey) || []).filter(x => t - x.at < REPORT_WINDOW_MS && x.by !== u.ipKey);
