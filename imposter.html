@@ -95,6 +95,7 @@
     .btn:active:not(:disabled) { transform: translateY(1px) scale(.995); }
     .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
     .btn.ghost:hover { border-color: var(--accent); filter: none; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
     .btn-row { display: flex; gap: 10px; }
     .btn-row > * { flex: 1; }
     .error { color: var(--stamp); font-weight: 600; font-size: 14px; }
@@ -150,6 +151,7 @@
     .suspect { font: 600 16px var(--f-body); color: var(--ink); background: transparent; border: 1.5px solid var(--line); border-radius: 10px; padding: 12px 10px; cursor: pointer; overflow-wrap: anywhere; }
     .suspect:hover { border-color: var(--stamp); color: var(--stamp); }
     .suspect.wide { grid-column: 1 / -1; color: var(--muted); border-style: dashed; }
+    .suspect[aria-pressed="true"], .suspect[aria-pressed="true"]:hover { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
     .verdict { text-align: center; align-items: center; }
     .verdict .who { font-family: var(--f-display); font-size: clamp(32px, 10vw, 44px); line-height: 1.05; }
@@ -163,6 +165,7 @@
     .scores li:last-child { border-bottom: 0; }
     .scores .pts { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-weight: 600; }
     .scores .plus { color: var(--good); font-family: var(--f-mono); font-size: 12px; margin-left: 6px; }
+    .facts dd .linkbtn { margin-left: 8px; padding-block: 0; }
 
     details.rules summary { cursor: pointer; font-weight: 700; list-style: none; display: flex; justify-content: space-between; }
     details.rules summary::-webkit-details-marker { display: none; }
@@ -199,6 +202,7 @@ const CATS = [
 
 const MAX_IMPOSTER_OPTION = 4;
 const STORE = "imposter-setup-v2";
+const HINT_STORE = "imposter-hints-v1";
 
 let state, countTimer = null, audio = null;
 
@@ -212,6 +216,9 @@ function defaults() {
     hintOn: true,
     imposterCount: 1,
     voteRounds: 1,
+    secretVote: false,
+    hintOverrides: {},
+    editHint: false,
     scores: {},
     used: {},
     round: null,
@@ -232,6 +239,11 @@ function load() {
     if (typeof d.hintOn === "boolean") s.hintOn = d.hintOn;
     if (d.imposterCount >= 1 && d.imposterCount <= MAX_IMPOSTER_OPTION) s.imposterCount = d.imposterCount;
     if (d.voteRounds >= 1 && d.voteRounds <= MAX_IMPOSTER_OPTION + 2) s.voteRounds = Math.max(d.voteRounds, s.imposterCount);
+    if (typeof d.secretVote === "boolean") s.secretVote = d.secretVote;
+  } catch (e) {}
+  try {
+    const h = JSON.parse(localStorage.getItem(HINT_STORE) || "{}");
+    if (h && typeof h === "object") for (const k in h) if (typeof h[k] === "string") s.hintOverrides[k] = h[k];
   } catch (e) {}
   return s;
 }
@@ -240,9 +252,35 @@ function save() {
   try {
     localStorage.setItem(STORE, JSON.stringify({
       players: state.players, category: state.category, customName: state.customName, customWords: state.customWords,
-      hintOn: state.hintOn, imposterCount: state.imposterCount, voteRounds: state.voteRounds,
+      hintOn: state.hintOn, imposterCount: state.imposterCount, voteRounds: state.voteRounds, secretVote: state.secretVote,
     }));
   } catch (e) {}
+}
+
+function saveHints() {
+  try { localStorage.setItem(HINT_STORE, JSON.stringify(state.hintOverrides)); } catch (e) {}
+}
+
+// Hint words the group has changed after a round. Built-in words are overridden by "category|word";
+// custom words keep their hint in the custom word list itself, so that entry is rewritten instead.
+const hintKey = (cat, word) => `${cat}|${word.toLowerCase()}`;
+
+function setHint(r, hint) {
+  if (r.catKey === "custom") {
+    const parts = state.customWords.split(/([\n,])/);
+    for (let k = 0; k < parts.length; k += 2) {
+      const w = parts[k].split(/[=:]/)[0].trim();
+      const lead = parts[k].match(/^\s*/)[0];
+      if (w.toLowerCase() === r.word.toLowerCase()) { parts[k] = lead + (hint ? `${w} = ${hint}` : w); break; }
+    }
+    state.customWords = parts.join("");
+    save();
+  } else {
+    if (hint && hint !== r.origHint) state.hintOverrides[hintKey(r.catKey, r.word)] = hint;
+    else delete state.hintOverrides[hintKey(r.catKey, r.word)];
+    saveHints();
+  }
+  r.hint = hint || (r.catKey === "custom" ? "" : r.origHint);
 }
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -332,18 +370,20 @@ function startRound() {
     const c = state.category === "random" ? CATS[rand(CATS.length)] : CATS.find(c => c.key === state.category);
     key = c.key; label = c.label; list = c.words;
   }
-  const [word, hint] = pickWord(key, list);
+  const [word, origHint] = pickWord(key, list);
+  const hint = key === "custom" ? origHint : (state.hintOverrides[hintKey(key, word)] ?? origHint);
   const n = state.players.length;
   const seats = state.players.map((_, i) => i).sort(() => Math.random() - 0.5);
   state.roundNo++;
   state.round = {
-    category: label, word, hint,
+    category: label, catKey: key, word, hint, origHint,
     imposters: seats.slice(0, state.imposterCount).sort((a, b) => a - b),
     starter: rand(n),
     revealIdx: 0, revealed: false, clueRound: 1, voteNo: 1,
-    out: [], count: null, accused: null, outcome: null, reason: "", gained: {},
+    out: [], count: null, ballot: null, accused: null, outcome: null, reason: "", gained: {},
   };
   state.confirmQuit = false;
+  state.editHint = false;
   go("pass");
 }
 
@@ -351,6 +391,33 @@ function nextAlive(r, i) {
   const n = state.players.length;
   for (let k = 1; k <= n; k++) if (!r.out.includes((i + k) % n)) return (i + k) % n;
   return i;
+}
+
+const clueOrder = r => {
+  const n = state.players.length;
+  return Array.from({ length: n }, (_, k) => (r.starter + k) % n).filter(i => !r.out.includes(i));
+};
+
+// Secret ballot: the device goes round the table and each player still in picks a suspect in private.
+function startBallot() {
+  state.round.ballot = { voters: clueOrder(state.round), idx: 0, open: false, pick: null, votes: {} };
+  go("ballot");
+}
+
+function castVote() {
+  const b = state.round.ballot;
+  b.votes[b.voters[b.idx]] = b.pick;
+  b.idx++; b.open = false; b.pick = null;
+  go("ballot");
+}
+
+// Vote counts, most first. The vote is tied (-1) when several players share the most votes.
+function tally(r) {
+  const counts = {};
+  for (const t of Object.values(r.ballot.votes)) counts[t] = (counts[t] || 0) + 1;
+  const rows = Object.entries(counts).map(([i, c]) => [+i, c]).sort((a, b) => b[1] - a[1]);
+  const top = rows.filter(x => x[1] === rows[0][1]);
+  return { rows, out: top.length === 1 ? top[0][0] : -1 };
 }
 
 function countdown() {
@@ -513,11 +580,21 @@ function viewSetup() {
     <p class="hint">${state.hintOn
       ? "The Imposter’s card shows a related word to say as their clue on the first go-around, so they can blend in."
       : "The Imposter only knows the category."}</p>
+    ${Object.keys(state.hintOverrides).length ? `<p class="hint">You’ve changed ${plural(Object.keys(state.hintOverrides).length, "hint word")}.
+      <button class="linkbtn" data-a="reset-hints">Restore the originals</button></p>` : ""}
     <span class="label" style="margin-top:4px">Votes per game</span>
     <div class="chips" role="group" aria-label="Votes per game">
       ${voteOpts.map(v => `<button class="chip" data-a="votes" data-n="${v}" aria-pressed="${state.voteRounds === v}">${v === 1 ? "1 vote" : `Up to ${v} votes`}</button>`).join("")}
     </div>
     <p class="hint">${voteHint}</p>
+    <span class="label" style="margin-top:4px">How to vote</span>
+    <div class="chips" role="group" aria-label="How to vote">
+      <button class="chip" data-a="secret" data-v="0" aria-pressed="${!state.secretVote}">Point on three</button>
+      <button class="chip" data-a="secret" data-v="1" aria-pressed="${state.secretVote}">Anonymous</button>
+    </div>
+    <p class="hint">${state.secretVote
+      ? "Pass the device around. Each player picks a suspect in private, and only the totals are shown."
+      : "Everyone points at their suspect at the same time."}</p>
   </section>
 
   ${scored ? `<section class="panel">
@@ -534,7 +611,7 @@ function viewSetup() {
       <li><b>Look at your card.</b> <span>Pass the device around. Each player taps to see their secret word, then hides it. Imposters see IMPOSTER instead, plus a hint word if hints are on.</span></li>
       <li><b>Give clues.</b> <span>Going clockwise, each player says one word about the secret. Prove you know it without making it obvious. Imposters listen and bluff.</span></li>
       <li><b>Discuss.</b> <span>Debate whose clue sounded off, hesitant or too generic. End the discussion when you’re ready to vote.</span></li>
-      <li><b>Vote.</b> <span>On the count of three, everyone points at their suspect.</span></li>
+      <li><b>Vote.</b> <span>On the count of three, everyone points at their suspect. With anonymous voting, pass the device around and vote in private instead.</span></li>
       <li><b>Win.</b> <span>Civilians win if they catch every Imposter. An Imposter who is caught can still steal the win by guessing the word.</span></li>
     </ol>
     <p class="hint" style="margin-top:10px">Scoring: each civilian gets 1 point when the civilians win. Each Imposter gets 2 points when the Imposters win.</p>
@@ -596,8 +673,8 @@ function viewCard() {
 }
 
 function viewClues() {
-  const r = state.round, n = state.players.length;
-  const order = Array.from({ length: n }, (_, k) => (r.starter + k) % n).filter(i => !r.out.includes(i));
+  const r = state.round;
+  const order = clueOrder(r);
   const multi = r.imposters.length > 1;
   return `
   <section class="center">
@@ -658,6 +735,52 @@ function viewVote() {
   <button class="btn ghost" data-a="count">Count down again</button>`;
 }
 
+function viewBallot() {
+  const r = state.round, b = r.ballot;
+  const label = `Secret ballot${state.voteRounds > 1 ? ` · Vote ${r.voteNo} of ${state.voteRounds}` : ""}`;
+  if (b.idx >= b.voters.length) return viewTally(label);
+  const v = b.voters[b.idx], p = nm(v);
+  const progress = `<div class="progress" aria-label="${b.idx} of ${b.voters.length} players have voted">
+    ${b.voters.map((_, k) => `<span class="dot ${k < b.idx ? "done" : k === b.idx ? "now" : ""}"></span>`).join("")}</div>`;
+  if (!b.open) return `
+  <section class="slip tilt-r">
+    <span class="label">${label}</span>
+    <span class="label">Hand the device to</span>
+    <div class="pass-name">${esc(p)}</div>
+    <p class="hint">Everyone else, look away. Nobody will see who you voted for.</p>
+  </section>
+  ${progress}
+  <button class="btn" data-a="ballot-open">I’m ${esc(p)}, cast my vote</button>`;
+  return `
+  <section class="panel">
+    <span class="label">${label}</span>
+    <h2>${esc(p)}, who is ${r.imposters.length > 1 ? "an" : "the"} Imposter?</h2>
+    <div class="suspects">
+      ${alive(r).filter(i => i !== v).map(i => `<button class="suspect" data-a="pick" data-i="${i}" aria-pressed="${b.pick === i}">${esc(nm(i))}</button>`).join("")}
+    </div>
+  </section>
+  ${progress}
+  <button class="btn" data-a="cast" ${b.pick === null ? "disabled" : ""}>${b.pick === null ? "Pick a suspect" : `Vote for ${esc(nm(b.pick))}, then hide`}</button>`;
+}
+
+function viewTally(label) {
+  const r = state.round, t = tally(r);
+  return `
+  <section class="center">
+    <span class="label">${label}</span>
+    <h1>${t.out >= 0 ? `Most votes: ${esc(nm(t.out))}` : "It’s a tie"}</h1>
+    <p class="hint">${t.out >= 0 ? "Put the device where everyone can see it." : "Nobody got the most votes, so nobody is voted out unless you vote again."}</p>
+  </section>
+  <section class="panel">
+    <h2>The votes</h2>
+    <ul class="scores">${t.rows.map(([i, c]) => `<li><span>${esc(nm(i))}</span><span class="pts">${plural(c, "vote")}</span></li>`).join("")}</ul>
+  </section>
+  ${t.out >= 0
+    ? `<button class="btn" data-a="accuse" data-i="${t.out}">Reveal whether ${esc(nm(t.out))} is ${r.imposters.length > 1 ? "an" : "the"} Imposter</button>`
+    : `<button class="btn" data-a="accuse" data-i="-1">Nobody is out, carry on</button>
+       <button class="btn ghost" data-a="revote">Vote again</button>`}`;
+}
+
 function viewElim() {
   const r = state.round, a = r.accused;
   const left = state.players.length - r.out.length, hiding = impLeft(r).length;
@@ -702,11 +825,12 @@ function viewResult() {
     <dl class="facts">
       <dt>${multi ? "Imposters" : "Imposter"}</dt><dd>${esc(nameList(r.imposters))}</dd>
       <dt>Word</dt><dd>${esc(r.word)}</dd>
-      ${state.hintOn && r.hint ? `<dt>Hint word</dt><dd>${esc(r.hint)}</dd>` : ""}
+      ${state.hintOn ? `<dt>Hint word</dt><dd>${r.hint ? esc(r.hint) : "None"}<button class="linkbtn" data-a="edit-hint">${r.hint ? "Change" : "Add one"}</button></dd>` : ""}
       <dt>Category</dt><dd>${esc(r.category)}</dd>
       <dt>Voted out</dt><dd>${r.out.length ? esc(nameList(r.out)) : "Nobody"}</dd>
     </dl>
   </section>
+  ${state.editHint ? viewHintEditor(r) : ""}
   <section class="panel">
     <h2>Scores</h2>
     ${scoreList(r.gained)}
@@ -715,7 +839,22 @@ function viewResult() {
   <button class="btn ghost" data-a="setup">Change players or settings</button>`;
 }
 
-const VIEWS = { setup: viewSetup, pass: viewPass, card: viewCard, clues: viewClues, discuss: viewDiscuss, vote: viewVote, elim: viewElim, guess: viewGuess, result: viewResult };
+function viewHintEditor(r) {
+  const overridden = r.catKey !== "custom" && r.hint !== r.origHint;
+  return `
+  <section class="panel">
+    <h2>A better hint for ${esc(r.word)}</h2>
+    <p class="hint">The Imposter gets this word whenever ${esc(r.word)} comes up again. It’s saved on this device.</p>
+    <input type="text" id="hint-input" value="${esc(r.hint)}" placeholder="e.g. ${esc(r.origHint || "Related word")}" maxlength="30" autocomplete="off" aria-label="New hint word for ${esc(r.word)}">
+    <div class="btn-row">
+      <button class="btn" data-a="hint-save">Save hint</button>
+      <button class="btn ghost" data-a="hint-cancel">Cancel</button>
+    </div>
+    ${overridden ? `<button class="linkbtn" data-a="hint-restore" style="align-self:flex-start">Restore the original hint, “${esc(r.origHint)}”</button>` : ""}
+  </section>`;
+}
+
+const VIEWS = { setup: viewSetup, pass: viewPass, card: viewCard, clues: viewClues, discuss: viewDiscuss, vote: viewVote, ballot: viewBallot, elim: viewElim, guess: viewGuess, result: viewResult };
 
 function render() {
   const app = document.getElementById("app");
@@ -754,9 +893,13 @@ document.getElementById("app").addEventListener("click", e => {
       state.error = ""; save(); render(); break;
     case "hint": state.hintOn = b.dataset.v === "1"; save(); render(); break;
     case "votes": state.voteRounds = +b.dataset.n; save(); render(); break;
+    case "secret": state.secretVote = b.dataset.v === "1"; save(); render(); break;
+    case "reset-hints":
+      if (confirm("Restore every hint word you’ve changed back to the original?")) { state.hintOverrides = {}; saveHints(); render(); }
+      break;
     case "reset-scores": state.scores = {}; render(); break;
     case "start": startRound(); break;
-    case "setup": state.round = null; go("setup"); break;
+    case "setup": state.round = null; state.editHint = false; go("setup"); break;
     case "quit": state.confirmQuit = true; render(); break;
     case "quit-no": state.confirmQuit = false; render(); break;
     case "quit-yes": state.confirmQuit = false; state.round = null; state.roundNo = Math.max(0, state.roundNo - 1); go("setup"); break;
@@ -767,7 +910,17 @@ document.getElementById("app").addEventListener("click", e => {
       go(r.revealIdx >= state.players.length ? "clues" : "pass"); break;
     case "another": r.clueRound++; r.starter = nextAlive(r, r.starter); render(); window.scrollTo(0, 0); break;
     case "discuss": go("discuss"); break;
-    case "vote": r.count = null; go("vote"); break;
+    case "vote": r.count = null; if (state.secretVote) startBallot(); else go("vote"); break;
+    case "ballot-open": r.ballot.open = true; go("ballot"); break;
+    case "pick": r.ballot.pick = +b.dataset.i; render(); break;
+    case "cast": castVote(); break;
+    case "revote": startBallot(); break;
+    case "edit-hint":
+      state.editHint = true; render();
+      document.getElementById("hint-input")?.focus(); document.getElementById("hint-input")?.select(); break;
+    case "hint-save": setHint(r, document.getElementById("hint-input").value.trim()); state.editHint = false; render(); break;
+    case "hint-cancel": state.editHint = false; render(); break;
+    case "hint-restore": setHint(r, r.origHint); state.editHint = false; render(); break;
     case "count": countdown(); break;
     case "accuse": accuse(+b.dataset.i); break;
     case "to-clues": go("clues"); break;
@@ -788,6 +941,11 @@ document.getElementById("app").addEventListener("input", e => {
 });
 
 document.getElementById("app").addEventListener("keydown", e => {
+  if (e.key === "Enter" && e.target.id === "hint-input") {
+    e.preventDefault();
+    setHint(state.round, e.target.value.trim()); state.editHint = false; render(); return;
+  }
+  if (e.key === "Escape" && e.target.id === "hint-input") { state.editHint = false; render(); return; }
   if (e.key !== "Enter" || !e.target.id.startsWith("player-")) return;
   e.preventDefault();
   const i = +e.target.dataset.i;
