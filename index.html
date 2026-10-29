@@ -318,83 +318,17 @@
     .gd-chips .ic { width: 11px; height: 11px; }
     .gd-play { justify-content: center; width: 100%; font-size: 0.95rem; padding: 0.9rem 1rem; margin-top: 0.2rem; }
 
-    /* ── EduArcade Chatroom ── */
+    /* ── EduArcade Chat (moved notice) ── */
     .cr { width: 100%; background: var(--navy-2); border-top: 1px solid rgba(255,255,255,0.06); padding: 2.8rem 1rem 3.2rem; display: flex; justify-content: center; }
     .cr-wrap { width: 100%; max-width: 1120px; }
-    .cr-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1.2rem; flex-wrap: wrap; }
-    .cr-head h2 { font-size: 1.35rem; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; }
-    .cr-head p { font-size: 0.88rem; font-weight: 600; color: var(--muted); margin-top: 0.25rem; }
-    .cr-badges { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-    .cr-age { background: var(--gold); color: #000; font-weight: 900; font-size: 0.75rem; letter-spacing: 1px; padding: 0.3rem 0.8rem; border-radius: 20px; }
-    .cr-e2e { display: inline-flex; align-items: center; gap: 0.35rem; background: rgba(39,174,96,0.15); border: 1.5px solid rgba(127,224,168,0.5); color: var(--mint); font-weight: 900; font-size: 0.72rem; letter-spacing: 1px; text-transform: uppercase; padding: 0.28rem 0.8rem; border-radius: 20px; }
-    .cr-more-row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: flex-start; margin-bottom: 1rem; }
-    .cr-more { flex: 1 1 300px; background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 14px; }
-    .cr-more summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; gap: 1rem; padding: 0.7rem 1rem; font-size: 0.82rem; font-weight: 900; }
-    .cr-more summary::-webkit-details-marker { display: none; }
-    .cr-more summary::after { content: "+"; color: var(--muted); }
-    .cr-more[open] summary::after { content: "−"; }
-    .cr-more ul { list-style: none; padding: 0 1rem 0.9rem; display: flex; flex-direction: column; gap: 0.45rem; }
-    .cr-more li { font-size: 0.8rem; font-weight: 600; color: var(--muted); line-height: 1.5; }
-    .cr-more li b { color: #fff; }
-
     .cr-card { background: rgba(255,255,255,0.05); border: 1px solid var(--line); border-radius: 16px; padding: 1.1rem 1.2rem; }
-    .cr-hidden { display: none !important; }
-    .cr-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
-    .cr-form { display: flex; flex-direction: column; align-items: flex-start; gap: 0.45rem; }
-    .cr-lbl { display: block; font-size: 0.62rem; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.5); margin-bottom: 0.35rem; }
-    .cr-in { width: 100%; padding: 0.6rem 0.85rem; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.25); color: #fff; font-family: inherit; font-size: 0.92rem; font-weight: 700; outline: none; }
-    .cr-in:focus { border-color: #5dade2; }
-    .cr-code { text-transform: uppercase; letter-spacing: 6px; font-weight: 900; }
-    .cr-hint { font-size: 0.78rem; font-weight: 600; color: rgba(255,255,255,0.55); line-height: 1.5; margin-bottom: 0.4rem; }
-    .cr-check { display: flex; align-items: center; gap: 0.5rem; font-size: 0.88rem; font-weight: 800; cursor: pointer; margin: 0.2rem 0 0.4rem; }
-    .cr-check input { width: 17px; height: 17px; accent-color: var(--green); }
-    .cr-btn { font-family: inherit; font-size: 0.8rem; font-weight: 900; letter-spacing: 1px; color: #fff; border: none; border-radius: 20px; padding: 0.55rem 1.3rem; cursor: pointer; background: var(--green); white-space: nowrap; box-shadow: 0 3px 0 #1b7a43; transition: transform 0.12s, filter 0.12s; }
+    .cr-moved { text-align: center; padding: 1.8rem 1.2rem; }
+    .cr-moved h2 { font-size: 1.35rem; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; }
+    .cr-moved p { font-size: 0.92rem; font-weight: 600; color: var(--muted); line-height: 1.6; margin: 0.5rem auto 1.1rem; max-width: 560px; }
+    .cr-moved p b { color: #fff; }
+    .cr-btn { display: inline-block; text-decoration: none; font-family: inherit; font-size: 0.8rem; font-weight: 900; letter-spacing: 1px; color: #fff; border: none; border-radius: 20px; padding: 0.55rem 1.3rem; cursor: pointer; background: var(--green); white-space: nowrap; box-shadow: 0 3px 0 #1b7a43; transition: transform 0.12s, filter 0.12s; }
     .cr-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
     .cr-btn:active { transform: translateY(1px); box-shadow: 0 1px 0 #1b7a43; }
-    .cr-btn:disabled { opacity: 0.45; cursor: default; }
-    .cr-link { background: none; border: 1.5px solid rgba(255,255,255,0.25); color: #fff; border-radius: 20px; padding: 0.28rem 0.85rem; font-family: inherit; font-size: 0.75rem; font-weight: 800; cursor: pointer; }
-    .cr-link:hover { background: rgba(255,255,255,0.1); }
-    .cr-link.on { color: var(--gold); border-color: rgba(245,197,24,0.5); }
-    .cr-rules { background: rgba(0,0,0,0.2); border-radius: 12px; padding: 0.85rem 1rem; font-size: 0.8rem; font-weight: 600; line-height: 1.6; color: rgba(255,255,255,0.75); }
-    .cr-rules ul { padding-left: 1.1rem; margin-top: 0.3rem; }
-    .cr-err { color: #ff9a8a; font-size: 0.8rem; font-weight: 800; min-height: 1.1rem; margin-top: 0.4rem; }
-    .cr-err.ok { color: var(--mint); }
-    .cr-bar { display: flex; justify-content: space-between; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.9rem; font-size: 0.88rem; }
-    .cr-pub { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.6rem; margin-bottom: 1rem; }
-    .cr-room { text-align: left; background: rgba(0,0,0,0.25); border: 1.5px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 0.75rem 0.95rem; color: #fff; font-family: inherit; cursor: pointer; transition: border-color 0.12s, transform 0.12s; }
-    .cr-room:hover { border-color: var(--green); transform: translateY(-2px); }
-    .cr-room b { display: block; font-size: 0.92rem; font-weight: 900; }
-    .cr-room span { display: block; font-size: 0.75rem; font-weight: 600; color: rgba(255,255,255,0.55); margin-top: 0.15rem; }
-    .cr-room i { font-style: normal; font-size: 0.72rem; color: var(--mint); font-weight: 900; }
-    .cr-box { background: rgba(0,0,0,0.2); border-radius: 12px; padding: 0.85rem 0.95rem; }
-    .cr-row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
-    .cr-tag { background: rgba(245,197,24,0.18); border: 1px solid rgba(245,197,24,0.5); color: var(--gold); font-weight: 900; letter-spacing: 3px; padding: 0.1rem 0.5rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer; }
-    .cr-count { color: rgba(255,255,255,0.5); font-size: 0.75rem; font-weight: 700; margin-left: 0.3rem; }
-    .cr-lock { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.66rem; font-weight: 900; letter-spacing: 0.8px; text-transform: uppercase; color: var(--mint); background: rgba(39,174,96,0.15); border: 1px solid rgba(127,224,168,0.45); border-radius: 20px; padding: 0.15rem 0.6rem; cursor: help; }
-    .cr-lock.off { color: var(--gold); background: rgba(245,197,24,0.12); border-color: rgba(245,197,24,0.45); }
-    .cr-main { display: grid; grid-template-columns: minmax(0, 1fr) 170px; gap: 0.8rem; }
-    .cr-log { height: 330px; overflow-y: auto; background: rgba(0,0,0,0.25); border-radius: 12px; padding: 0.6rem 0.85rem; font-size: 0.88rem; font-weight: 600; line-height: 1.5; }
-    .cr-log .m { padding: 0.15rem 0; overflow-wrap: anywhere; position: relative; }
-    .cr-left { font-size: 0.72rem; font-weight: 900; color: rgba(255,255,255,0.4); min-width: 2.2rem; text-align: right; font-variant-numeric: tabular-nums; }
-    .cr-left.low { color: #ffb08a; }
-    .cr-left:empty { display: none; }
-    .cr-log .m b { font-weight: 900; margin-right: 0.35rem; }
-    .cr-log .m.me b { text-decoration: underline; text-underline-offset: 3px; }
-    .cr-log .m.ping { background: rgba(245,197,24,0.12); border-left: 3px solid var(--gold); padding-left: 0.4rem; margin-left: -0.55rem; border-radius: 4px; }
-    .cr-log .at { color: #8fc3ff; font-weight: 800; }
-    .cr-log .at.me { color: var(--gold); }
-    .cr-log .m b, .cr-users div { cursor: pointer; }
-    .cr-log .m time { color: rgba(255,255,255,0.3); font-size: 0.68rem; margin-right: 0.4rem; }
-    .cr-log .plain { font-size: 0.62rem; font-weight: 900; text-transform: uppercase; color: var(--gold); margin-left: 0.4rem; }
-    .cr-log .sys { color: rgba(255,255,255,0.45); font-style: italic; font-size: 0.8rem; padding: 0.1rem 0; }
-    .cr-log .acts { display: none; margin-left: 0.4rem; }
-    .cr-log .m:hover .acts { display: inline; }
-    .cr-log .acts button { background: none; border: none; color: rgba(255,255,255,0.5); font-family: inherit; font-size: 0.68rem; font-weight: 800; cursor: pointer; padding: 0 0.25rem; }
-    .cr-log .acts button:hover { color: #fff; }
-    .cr-users { background: rgba(0,0,0,0.2); border-radius: 12px; padding: 0.6rem 0.75rem; font-size: 0.8rem; height: 330px; overflow-y: auto; }
-    .cr-users div { padding: 0.15rem 0; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .cr-send { margin-top: 0.7rem; flex-wrap: nowrap; }
-    .cr-status { font-size: 0.75rem; font-weight: 600; color: rgba(255,255,255,0.4); margin-top: 0.6rem; min-height: 1rem; }
 
     footer { background: rgba(0,0,0,0.55); width: 100%; text-align: center; padding: 1.5rem 1rem; font-size: 0.75rem; font-weight: 700; color: rgba(255,255,255,0.38); letter-spacing: 1px; line-height: 2; }
     footer nav { margin-bottom: 0.4rem; }
@@ -413,9 +347,6 @@
       .card .badge { font-size: 0.55rem; padding: 0.2rem 0.6rem; }
       .genre { font-size: 0.52rem; padding: 2px 6px 2px 5px; }
       .genre .ic { display: none; }
-      .cr-cols, .cr-main { grid-template-columns: 1fr; }
-      .cr-users { height: auto; max-height: 90px; }
-      .cr-log { height: 270px; }
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -441,7 +372,7 @@
     <div class="hero-btns">
       <a class="btn btn-gold" href="#games"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg>Play now</a>
       <a class="btn btn-glass" href="mission.html">Our Mission</a>
-      <a class="btn btn-glass" href="#chatroom"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg>Chatroom</a>
+      <a class="btn btn-glass" href="#chatroom"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg>Chat</a>
     </div>
     <div class="hero-facts"><span>15 free games</span><span>No login</span><span>No downloads</span></div>
   </div>
@@ -583,111 +514,14 @@
     </div>
   </main>
 
-<!-- ── EduArcade Chatroom ── -->
+<!-- ── EduArcade Chat ── -->
 <section class="cr" id="chatroom">
   <div class="cr-wrap">
-    <div class="cr-head">
-      <div>
-        <h2>EduArcade Chatroom</h2>
-        <p>Talk games, strategies and homework with other players.</p>
-      </div>
-      <div class="cr-badges">
-        <span class="cr-e2e"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg>End-to-end encrypted</span>
-        <span class="cr-age" title="For people aged 13 and older">13+</span>
-      </div>
+    <div class="cr-card cr-moved">
+      <h2>EduArcade chat has moved</h2>
+      <p>EduArcade chat has migrated to an app version, <b>privatewebchat</b>. Download the latest release to keep chatting.</p>
+      <a class="cr-btn" href="https://github.com/gronkreeks/privatewebchat/releases/latest" target="_blank" rel="noopener">Get privatewebchat</a>
     </div>
-
-    <div class="cr-more-row">
-      <details class="cr-more">
-        <summary>Why is the chatroom educational?</summary>
-        <ul>
-          <li><b>Digital citizenship.</b> Practise being kind, disagreeing respectfully and thinking before you post.</li>
-          <li><b>Staying safe online.</b> Use a nickname, keep personal details private, and know when to mute, report and tell an adult.</li>
-          <li><b>Clear writing.</b> The 200-character limit rewards getting your point across in a few good words.</li>
-          <li><b>Teamwork.</b> Swap tactics, explain your thinking and help others with games and homework.</li>
-        </ul>
-      </details>
-      <details class="cr-more">
-        <summary>How are messages protected?</summary>
-        <ul>
-          <li><b>Encrypted.</b> Each message is locked with a key only the people in the room have. The server can’t read it.</li>
-          <li><b>Filtered.</b> The safety filter runs on every screen, so personal details and slurs stay hidden.</li>
-          <li><b>Not saved.</b> Messages disappear when a room empties. Reporting shares only that one message so it can be checked.</li>
-        </ul>
-      </details>
-    </div>
-
-    <!-- Step 1: name + age -->
-    <div class="cr-card" id="crJoin">
-      <div class="cr-cols">
-        <div class="cr-form">
-          <label class="cr-lbl" for="crName">Pick a chat name</label>
-          <input class="cr-in" id="crName" maxlength="16" placeholder="e.g. PixelFox" autocomplete="off" spellcheck="false">
-          <p class="cr-hint">Use a nickname, not your real name.</p>
-          <label class="cr-check"><input type="checkbox" id="crAge"> I am 13 years old or older</label>
-          <button class="cr-btn" id="crEnter">Enter Chatroom</button>
-          <div class="cr-err" id="crJoinErr"></div>
-        </div>
-        <div class="cr-rules">
-          <b>Chat rules</b>
-          <ul>
-            <li>Be kind. No bullying, hate or sexual talk.</li>
-            <li>Never share personal info: your real name, school, address, phone number or social accounts.</li>
-            <li>No links. They're removed automatically.</li>
-            <li>If anyone makes you uncomfortable, mute or report them and tell a trusted adult.</li>
-            <li>Messages aren't saved. People who get reported by several others are removed.</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 2: pick a room -->
-    <div class="cr-card cr-hidden" id="crRooms">
-      <div class="cr-bar">
-        <span>Chatting as <b id="crMe"></b></span>
-        <button class="cr-link" id="crRename">Change name</button>
-      </div>
-      <span class="cr-lbl">Public rooms</span>
-      <div id="crPub" class="cr-pub"></div>
-      <div class="cr-cols cr-priv">
-        <div class="cr-box">
-          <span class="cr-lbl">Chat with friends</span>
-          <p class="cr-hint">Create a private room and share its 4-letter code.</p>
-          <button class="cr-btn" id="crCreate">Create Private Room</button>
-        </div>
-        <div class="cr-box">
-          <span class="cr-lbl">Join with code</span>
-          <div class="cr-row" style="flex-wrap:nowrap">
-            <input class="cr-in cr-code" id="crCode" maxlength="4" placeholder="ABCD" autocomplete="off" spellcheck="false">
-            <button class="cr-btn" id="crJoinCode">Join</button>
-          </div>
-        </div>
-      </div>
-      <div class="cr-err" id="crRoomsErr"></div>
-    </div>
-
-    <!-- Step 3: chat -->
-    <div class="cr-card cr-hidden" id="crChat">
-      <div class="cr-bar">
-        <div class="cr-row"><b id="crTitle"></b> <span id="crCodeTag" class="cr-tag cr-hidden"></span> <span class="cr-count" id="crCount"></span> <span class="cr-lock" id="crLock"></span></div>
-        <div class="cr-row">
-          <button class="cr-link" id="crBell" title="Sound, tab badge and a desktop popup when someone writes @yourname"></button>
-          <button class="cr-link" id="crLeave">← Rooms</button>
-        </div>
-      </div>
-      <div class="cr-main">
-        <div class="cr-log" id="crLog" aria-live="polite"></div>
-        <div class="cr-users" id="crUsers"></div>
-      </div>
-      <div class="cr-row cr-send">
-        <input class="cr-in" id="crMsg" maxlength="200" placeholder="Type a message…" autocomplete="off">
-        <span class="cr-left" id="crLeft"></span>
-        <button class="cr-btn" id="crSend">Send</button>
-      </div>
-      <div class="cr-err" id="crChatErr"></div>
-    </div>
-
-    <div class="cr-status" id="crStatus"></div>
   </div>
 </section>
 
@@ -773,10 +607,6 @@
   d.addEventListener('click', ev => { if (ev.target === d) d.close(); });
 })();
 </script>
-
-<script src="chat-alerts.js"></script>
-<script src="chat-safety.js"></script>
-<script src="chatroom.js"></script>
 
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "f19965aca353444c9351b9a951d995e7"}'></script><!-- End Cloudflare Web Analytics -->
 
