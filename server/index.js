@@ -7,7 +7,12 @@
 const http = require('http');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
+const fs = require('fs');
 const Core = require('../frontier-core.js');
+// Render only redeploys when something in server/ changes, but the game rules live in
+// ../frontier-core.js. After changing the core, touch this file (or deploy by hand) or the live
+// server keeps running the old rules. /status reports the core it loaded so you can check.
+const CORE_HASH = crypto.createHash('sha1').update(fs.readFileSync(require.resolve('../frontier-core.js'))).digest('hex').slice(0, 8);
 const { filterMessage, checkName, newRate, rateCheck, createChat } = require('./chat.js');
 
 const PORT = process.env.PORT || 8080;
@@ -274,7 +279,7 @@ function onMessage(ws, raw) {
 const server = http.createServer((req, res) => {
   if (req.url === '/status') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-    res.end(JSON.stringify({ ok: true, online: clients.size, games: runningGames(), lobbies: rooms.size - runningGames(), chat: chat.stats() }));
+    res.end(JSON.stringify({ ok: true, online: clients.size, games: runningGames(), core: CORE_HASH, lobbies: rooms.size - runningGames(), chat: chat.stats() }));
     return;
   }
   res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -318,4 +323,4 @@ setInterval(() => {
 }, 20000);
 
 function log(...a) { console.log(new Date().toISOString(), ...a); }
-server.listen(PORT, () => log(`Frontier server listening on port ${PORT}`));
+server.listen(PORT, () => log(`Frontier server listening on port ${PORT} (core ${CORE_HASH})`));
