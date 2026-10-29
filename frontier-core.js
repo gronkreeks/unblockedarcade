@@ -1,8 +1,14 @@
 // Frontier game rules, shared by the browser (singleplayer + multiplayer view) and the
 // Node multiplayer server. Troop growth, troop cap, attack loss/speed and building costs
 // follow OpenFront's open-source engine (packages/engine & engine-lib), scaled for a smaller map.
+// Nations are led by historical leaders (frontier-leaders.js) whose personality drives the AI and
+// whose opinion of each player drives diplomacy: alliances, trades, joint wars and peace.
+// Real-world maps come from frontier-maps.js.
 (function (root) {
 'use strict';
+const inNode = typeof module !== 'undefined' && module.exports;
+const Maps = inNode ? require('./frontier-maps.js') : root.FrontierMaps;
+const { LEADERS } = inNode ? require('./frontier-leaders.js') : root.FrontierLeaders;
 
 // ════════════════ Utilities ════════════════
 function mulberry32(a) {
@@ -66,6 +72,24 @@ const NUKE = { atom: { inner: 7, outer: 12 }, hydrogen: { inner: 16, outer: 26 }
 // terrainAttackBase() in OpenFront
 const TERR = [null, { mag: 80, cost: 16.5, name: 'Plains' }, { mag: 100, cost: 20, name: 'Highland' }, { mag: 120, cost: 25, name: 'Mountains' }];
 const MAP_SIZES = { small: [320, 200], medium: [440, 272], large: [560, 344] };
+const MAP_NAMES = { continents: 'Continents', pangaea: 'Pangaea', archipelago: 'Archipelago', twin: 'Twin Continents', inland: 'Inland Sea', earth: 'Earth', europe: 'Europe' };
+const MAP_KINDS = Object.keys(MAP_NAMES);
+// Real maps keep their own shape and get about as many tiles as a generated map of that size.
+function mapDims(map, size) {
+  const [w, h] = MAP_SIZES[size] || MAP_SIZES.medium, real = Maps.MAPS[map];
+  if (!real) return [w, h];
+  const aspect = real.w / real.h, W = Math.min(real.w, Math.round(Math.sqrt(w * h * aspect)));
+  return [W, Math.round(W / aspect)];
+}
+
+// Diplomacy
+const WAR_TICKS = 3000;           // declared wars last 5 minutes unless peace is made
+const PEACE_MIN_TICKS = 600;      // a war must run for a minute before peace talks
+const OFFER_TICKS = 200;          // offers to players expire after 20 s
+const TROOP_GOLD = 1;             // how much gold one troop is worth in trades
+const NEUTRAL_TRAITS = { aggr: 0.5, expand: 0.5, loyal: 0.5, nuke: 0, naval: 0.5, econ: 0.5, defense: 0.5, generous: 0.5, grudge: 0.5 };
+const ATTITUDES = [[6, 'Friendly'], [-3, 'Neutral'], [-9, 'Unfriendly'], [-Infinity, 'Hostile']];
+const attitude = v => ATTITUDES.find(a => v >= a[0])[1];
 
 // AI nations. Hard plays like the old Easy; Impossible like the old Medium plus nukes and factories.
 const DIFF = {
@@ -96,13 +120,35 @@ const SHIP_KINDS = ['transport', 'trade', 'warship'];
 // Index order is sent over the network, so new types go at the end
 const STRUCT_TYPES = ['city', 'port', 'defense', 'silo', 'sam', 'factory'];
 
-const NATION_NAMES = ['Aurelia', 'Borovia', 'Caldora', 'Drakmar', 'Elyria', 'Fenmark', 'Galdor', 'Halvard', 'Istria', 'Jorvik', 'Kaldera',
-  'Lumina', 'Morvath', 'Norland', 'Ostara', 'Pyrrha', 'Quorin', 'Rhovan', 'Sylvara', 'Tarsis', 'Umbra', 'Valtor', 'Westmark', 'Xandria',
-  'Ysolde', 'Zephyra', 'Arkos', 'Brennic', 'Corvina', 'Dunmere'];
 const SYL = ['ka', 'ro', 'th', 'ul', 'mi', 'zan', 'ok', 'ra', 'en', 'dor', 'vi', 'ash', 'ur', 'tek', 'mo', 'lia', 'gar', 'is', 'bo', 'nu'];
 // Bright, well-separated colours for human players (the first is the singleplayer colour).
 const HUMAN_COLORS = [[30, 96, 255], [255, 64, 129], [0, 200, 140], [255, 152, 0], [156, 39, 176], [0, 188, 212], [205, 220, 57], [233, 30, 99],
   [63, 81, 181], [255, 87, 34], [76, 175, 80], [121, 85, 72], [96, 125, 139], [255, 235, 59], [0, 150, 136], [103, 58, 183]];
+
+// ════════════════ Real-map terrain ════════════════
+const maskCache = {};
+// Mountain ranges as segments with a bounding box, so each tile only measures nearby ridges.
+const RANGE_SEGS = Maps.RANGES.map(r => {
+  const str = r[0], wid = r[1] * 1.4, pts = r.slice(2), segs = [];   // a bit wider than the ridge, for foothills
+  for (let i = 0; i + 3 < pts.length; i += 2) segs.push(pts[i], pts[i + 1], pts[i + 2], pts[i + 3]);
+  const xs = pts.filter((_, i) => i % 2 === 0), ys = pts.filter((_, i) => i % 2 === 1);
+  return { str, wid, segs, x0: Math.min(...xs) - wid, x1: Math.max(...xs) + wid, y0: Math.min(...ys) - wid, y1: Math.max(...ys) + wid };
+});
+function rangeHeight(lon, lat) {
+  let best = 0;
+  for (const r of RANGE_SEGS) {
+    if (lon < r.x0 || lon > r.x1 || lat < r.y0 || lat > r.y1) continue;
+    let d = Infinity;
+    for (let i = 0; i < r.segs.length; i += 4) {
+      const ax = r.segs[i], ay = r.segs[i + 1], dx = r.segs[i + 2] - ax, dy = r.segs[i + 3] - ay;
+      const u = within(((lon - ax) * dx + (lat - ay) * dy) / (dx * dx + dy * dy), 0, 1);
+      const px = ax + u * dx - lon, py = ay + u * dy - lat;
+      d = Math.min(d, Math.sqrt(px * px + py * py));
+    }
+    best = Math.max(best, r.str * (1 - d / r.wid));
+  }
+  return best;
+}
 
 // ════════════════ Game ════════════════
 // opt: { cfg: {map, size, diff, nations, bots, seed}, humans: [{name}], spawnTicks, allowStartNow,
@@ -122,7 +168,9 @@ function createGame(opt) {
   let falloutList = [], tradePaths = new Map();
   const pendingReq = new Map();   // "from:to" -> expiry tick
   const askCooldown = new Map();  // "from:to" -> tick when `from` may ask again
-  let shipSeq = 1, structVer = 1, allyVer = 1;
+  const offers = new Map();       // id -> trade, joint war or peace offer waiting for a player's answer
+  let shipSeq = 1, structVer = 1, allyVer = 1, warVer = 1, offerSeq = 1;
+  let moodDirty = false;          // diplomacy changed a grudge or goodwill: send them to clients right away
   let tileBuf = [], falloutBuf = [], fxBuf = [];
   let stampArr, stampId = 0, bfsPrev, bfsMark, bfsQ, bfsStamp = 0;
   const NB = new Int32Array(4);
@@ -141,35 +189,56 @@ function createGame(opt) {
 
   // ──────────── Map ────────────
   function genMap() {
-    [W, H] = MAP_SIZES[cfg.size] || MAP_SIZES.medium; N = W * H;
+    [W, H] = mapDims(cfg.map, cfg.size); N = W * H;
     const rng = mulberry32(cfg.seed >>> 0);
     const n1 = makeNoise(rng), n2 = makeNoise(rng), n3 = makeNoise(rng);
-    const freq = cfg.map === 'archipelago' ? 9 : cfg.map === 'pangaea' ? 3.4 : 4.4;
+    const real = Maps.MAPS[cfg.map];
     const h = new Float32Array(N), e = new Float32Array(N);
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      const t = y * W + x, nx = x / W * freq, ny = y / W * freq;
-      let v = fbm(n1, nx, ny, 5);
-      if (cfg.map === 'continents') v = v * 0.75 + fbm(n2, nx * 0.3 + 7, ny * 0.3 + 3, 2) * 0.45;
-      if (cfg.map === 'pangaea') {
-        const dx = (x / W - 0.5) * 2, dy = (y / H - 0.5) * 2;
-        v = v * 0.55 + (1 - Math.sqrt(dx * dx + dy * dy)) * 0.5;
-      }
-      const ex = Math.min(x, W - 1 - x) / W, ey = Math.min(y, H - 1 - y) / H;
-      const edge = Math.min(ex / 0.07, ey / 0.1, 1);
-      v -= (1 - edge) * 0.5;
-      h[t] = v;
-      e[t] = (1 - Math.abs(fbm(n3, nx * 1.6, ny * 1.6, 4) * 2 - 1));
-    }
-    const waterFrac = { continents: 0.52, pangaea: 0.46, archipelago: 0.64 }[cfg.map] || 0.52;
-    const sorted = Float32Array.from(h).sort();
-    const sea = sorted[Math.floor(N * waterFrac)];
-
+    let sea, pHigh, pMount;
     terrain = new Uint8Array(N);
-    const landE = [];
-    for (let t = 0; t < N; t++) if (h[t] > sea) { e[t] = (h[t] - sea) * 2 + e[t] * 0.35; landE.push(e[t]); }
-    landE.sort((a, b) => a - b);
-    const pHigh = landE[Math.floor(landE.length * 0.58)] || 0, pMount = landE[Math.floor(landE.length * 0.86)] || 0;
-    for (let t = 0; t < N; t++) if (h[t] > sea) terrain[t] = e[t] < pHigh ? 1 : e[t] < pMount ? 2 : 3;
+    if (real) {
+      realLand(real, h, e, n1, n3);
+      sea = 0.5; pHigh = 0.34; pMount = 0.72;
+      for (let t = 0; t < N; t++) if (h[t] > sea) terrain[t] = e[t] < pHigh ? 1 : e[t] < pMount ? 2 : 3;
+      carveStraits(real);
+    } else {
+      const freq = cfg.map === 'archipelago' ? 9 : cfg.map === 'pangaea' ? 3.4 : 4.4;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const t = y * W + x, nx = x / W * freq, ny = y / W * freq;
+        let v = fbm(n1, nx, ny, 5);
+        if (cfg.map === 'continents') v = v * 0.75 + fbm(n2, nx * 0.3 + 7, ny * 0.3 + 3, 2) * 0.45;
+        if (cfg.map === 'pangaea') {
+          const dx = (x / W - 0.5) * 2, dy = (y / H - 0.5) * 2;
+          v = v * 0.55 + (1 - Math.sqrt(dx * dx + dy * dy)) * 0.5;
+        }
+        if (cfg.map === 'twin') {
+          // Two big continents facing each other across an ocean
+          const blob = (cx, cy) => { const dx = (x / W - cx) / 0.24, dy = (y / H - cy) / 0.4; return 1 - Math.sqrt(dx * dx + dy * dy); };
+          v = v * 0.8 + fbm(n2, nx * 0.5 + 3, ny * 0.5 + 9, 3) * 0.25 + Math.max(blob(0.26, 0.47), blob(0.74, 0.53)) * 0.3;
+          v -= Math.max(0, 1 - Math.abs(x / W - 0.5) / 0.07) * 0.45;   // keep an ocean between them
+        }
+        if (cfg.map === 'inland') {
+          // A ring of land around a central sea, joined to the ocean by a winding strait in the west
+          const dx = (x / W - 0.5) * 2, dy = (y / H - 0.5) * 2, d = Math.sqrt(dx * dx + dy * dy);
+          v = v * 0.65 + (0.5 - Math.abs(d - 0.56) * 1.7) * 0.45;
+          const sy = Math.abs(dy + (fbm(n2, x / W * 6, 0.5, 2) - 0.5) * 0.35);
+          if (dx < 0 && sy < 0.06) v -= 0.45 * (1 - sy / 0.06) + 0.1;
+        }
+        const ex = Math.min(x, W - 1 - x) / W, ey = Math.min(y, H - 1 - y) / H;
+        const edge = Math.min(ex / 0.07, ey / 0.1, 1);
+        v -= (1 - edge) * 0.5;
+        h[t] = v;
+        e[t] = (1 - Math.abs(fbm(n3, nx * 1.6, ny * 1.6, 4) * 2 - 1));
+      }
+      const waterFrac = { continents: 0.52, pangaea: 0.46, archipelago: 0.64, twin: 0.55, inland: 0.5 }[cfg.map] || 0.52;
+      const sorted = Float32Array.from(h).sort();
+      sea = sorted[Math.floor(N * waterFrac)];
+      const landE = [];
+      for (let t = 0; t < N; t++) if (h[t] > sea) { e[t] = (h[t] - sea) * 2 + e[t] * 0.35; landE.push(e[t]); }
+      landE.sort((a, b) => a - b);
+      pHigh = landE[Math.floor(landE.length * 0.58)] || 0; pMount = landE[Math.floor(landE.length * 0.86)] || 0;
+      for (let t = 0; t < N; t++) if (h[t] > sea) terrain[t] = e[t] < pHigh ? 1 : e[t] < pMount ? 2 : 3;
+    }
 
     // Remove specks of land and puddles
     let lb = labelBodies(t => terrain[t] !== 0);
@@ -221,6 +290,45 @@ function createGame(opt) {
     distT = new Uint16Array(N);
     stampArr = new Uint32Array(N);
     bfsPrev = new Int32Array(N); bfsMark = new Uint32Array(N); bfsQ = new Int32Array(N);
+  }
+  // Real maps: land from the baked mask (box-averaged down to the map size, with a little noise
+  // so coasts aren't stair-stepped), height from the mountain ranges plus some rolling hills.
+  function realLand(m, h, e, n1, n3) {
+    const mask = maskCache[cfg.map] || (maskCache[cfg.map] = Maps.decodeMask(m));
+    for (let y = 0; y < H; y++) {
+      const sy0 = Math.floor(y * m.h / H), sy1 = Math.max(sy0 + 1, Math.floor((y + 1) * m.h / H));
+      const lat = m.lat[0] - (y + 0.5) / H * (m.lat[0] - m.lat[1]);
+      for (let x = 0; x < W; x++) {
+        const sx0 = Math.floor(x * m.w / W), sx1 = Math.max(sx0 + 1, Math.floor((x + 1) * m.w / W));
+        let land = 0;
+        for (let sy = sy0; sy < sy1; sy++) for (let sx = sx0; sx < sx1; sx++) land += mask[sy * m.w + sx];
+        const t = y * W + x, lon = m.lon[0] + (x + 0.5) / W * (m.lon[1] - m.lon[0]);
+        h[t] = land / ((sy1 - sy0) * (sx1 - sx0)) + (n1(x * 0.35, y * 0.35) - 0.5) * 0.25;
+        e[t] = rangeHeight(lon, lat) * 1.15 + (1 - Math.abs(fbm(n3, x * 0.05, y * 0.05, 3) * 2 - 1)) * 0.36;
+      }
+    }
+  }
+  function lonLatTile(m, lon, lat) {
+    const x = Math.floor((lon - m.lon[0]) / (m.lon[1] - m.lon[0]) * W), y = Math.floor((m.lat[0] - lat) / (m.lat[0] - m.lat[1]) * H);
+    return x < 0 || y < 0 || x >= W || y >= H ? -1 : y * W + x;
+  }
+  function carveStraits(m) {
+    for (const s of Maps.STRAITS) {
+      let px = -1, py = -1;
+      for (let i = 0; i + 3 < s.length; i += 2) {
+        const ax = (s[i] - m.lon[0]) / (m.lon[1] - m.lon[0]) * W, ay = (m.lat[0] - s[i + 1]) / (m.lat[0] - m.lat[1]) * H;
+        const bx = (s[i + 2] - m.lon[0]) / (m.lon[1] - m.lon[0]) * W, by = (m.lat[0] - s[i + 3]) / (m.lat[0] - m.lat[1]) * H;
+        const steps = Math.ceil(Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay)) * 4) + 1;
+        for (let k = 0; k <= steps; k++) {
+          const x = Math.floor(ax + (bx - ax) * k / steps), y = Math.floor(ay + (by - ay) * k / steps);
+          if (x < 0 || y < 0 || x >= W || y >= H) { px = -1; continue; }
+          terrain[y * W + x] = 0;
+          // Keep the channel connected through edges, not just corners, so boats can follow it
+          if (px >= 0 && px !== x && py !== y) terrain[y * W + px] = 0;
+          px = x; py = y;
+        }
+      }
+    }
   }
   function labelBodies(pred) {
     const id = new Int32Array(N).fill(-1), sizes = [], st = new Int32Array(N), buf = new Int32Array(4);
@@ -313,19 +421,27 @@ function createGame(opt) {
   }
 
   // ──────────── Players ────────────
-  function makePlayer(name, type, color, id) {
+  function makePlayer(name, type, color, id, leader) {
     const p = {
       id: id || players.length, name, type, color,
+      leader: LEADERS[leader] ? leader : -1,
       troops: type === 'bot' ? 10000 : type === 'nation' ? D.start : 25000,
       gold: 0, tiles: 0, border: new Set(), alive: true, spawned: false,
       civs: 0, share: type === 'human' ? DEFAULT_SHARE : 1, factories: 0,
       allies: new Map(), traitorUntil: 0, hate: new Map(), cityLevels: 0,
+      wars: new Map(),     // enemy id -> { until, start }
+      favor: new Map(),    // goodwill from gifts and fair trades
+      kills: 0,
       lx: 0, ly: 0, lfs: 0, best: 0, bestT: -1, minX: W, maxX: 0, minY: H, maxY: 0,
       aiPhase: (rand() * 20) | 0, lastHitBy: 0,
     };
     players[p.id] = p;
     return p;
   }
+  function traitsOf(p) { return p && p.leader >= 0 ? LEADERS[p.leader].t : NEUTRAL_TRAITS; }
+  function leaderOf(p) { return p && p.leader >= 0 ? LEADERS[p.leader] : null; }
+  // "Gandhi (India)" for diplomatic messages
+  function who(p) { const L = leaderOf(p); return L && p.type === 'nation' ? `<b>${esc(L.name)}</b> (${esc(p.name)})` : `<b>${esc(p.name)}</b>`; }
   function botName() {
     const n = SYL[rand() * SYL.length | 0] + SYL[rand() * SYL.length | 0] + (rand() < 0.5 ? SYL[rand() * SYL.length | 0] : '');
     return n[0].toUpperCase() + n.slice(1);
@@ -648,13 +764,16 @@ function createGame(opt) {
       case 'factory': return Math.min(2e6, 2 ** n * 200000);
       case 'defense': return Math.min(250000, (n + 1) * 50000);
       case 'sam': return Math.min(3e6, (n + 1) * 1.5e6);
-      case 'silo': return 1e6;
+      case 'silo': return 1e6 * nukeDiscount(p);
       case 'warship': return Math.min(1e6, (n + 1) * 250000);
-      case 'atom': return 750000;
+      case 'atom': return 750000 * nukeDiscount(p);
       case 'hydrogen': return 5e6;
     }
     return Infinity;
   }
+  // AI nations led by a nuke lover (Gandhi) run a cheap nuclear program, like the per-difficulty
+  // bonuses nations already get
+  function nukeDiscount(p) { return p.type === 'nation' && traitsOf(p).nuke >= 0.9 ? 0.5 : 1; }
   function spacingOk(t, minD) {
     const x = t % W, y = (t / W) | 0, m2 = minD * minD;
     for (const s of structs) {
@@ -803,7 +922,9 @@ function createGame(opt) {
   function boom(x, y, r, big) { fx({ kind: 'boom', x, y, r, dur: big ? 1400 : 600, big: !!big }); }
 
   // ──────────── Diplomacy ────────────
+  function atWar(a, b) { return a !== b && a > 0 && b > 0 && !!players[a] && players[a].wars.has(b); }
   function formAlliance(a, b) {
+    if (atWar(a, b)) return;
     const until = tick + ALLIANCE_TICKS;
     players[a].allies.set(b, until); players[b].allies.set(a, until);
     allyVer++;
@@ -815,25 +936,157 @@ function createGame(opt) {
     if (betray) {
       players[a].traitorUntil = tick + 300;
       addHate(players[b], a, 8);
+      moodDirty = true;
       for (const q of players) if (q && q.type === 'nation' && q.id !== b && q.id !== a) addHate(q, a, 1);
     }
   }
+  function addFavor(p, towards, v) { if (p && p.type === 'nation') { p.favor.set(towards, within((p.favor.get(towards) || 0) + v, 0, 10)); moodDirty = true; } }
+  // A gift worth a tenth of a nation's wealth earns about one point of goodwill
+  function giftScale(p) { return Math.max(20000, (p.gold + p.troops * TROOP_GOLD) * 0.1); }
+
+  // ── Opinions ──
+  // How AI nation p feels about player q, as labelled modifiers. Everything used here is synced to
+  // multiplayer clients, so the diplomacy screen shows the same numbers the server decides with.
+  const q10 = v => Math.round((v || 0) * 10) / 10;   // the precision clients receive
+  const hasBoatsOut = q => ships.some(s => s.kind === 'transport' && s.owner === q.id);
+  const attackingNations = (q, except) => attacks.some(a => a.p === q.id && a.target && a.target !== except && players[a.target].type !== 'bot');
+  const AGENDAS = {
+    peace: (p, q) => q.wars.size || attackingNations(q, p.id) ? [['Disapproves of your wars', -4]] : [['Appreciates your peaceful ways', 2]],
+    army: (p, q) => q.troops > p.troops * 1.1 ? [['Respects your mighty army', 3]] : q.troops < p.troops * 0.5 ? [['Scorns your weak army', -3]] : [],
+    conquest: (p, q) => [q.kills > 0 && ['Admires your conquests', 2], q.tiles < p.tiles * 0.4 && ['Sees you as easy prey', -2]],
+    navy: (p, q) => {
+      const n = countUnits(q, 'port') + countUnits(q, 'warship');
+      return n >= 2 ? [['Respects your navy', 2]] : n ? [] : [['Thinks you have no navy', -2]];
+    },
+    loyalty: (p, q) => q.traitorUntil > tick ? [['Despises traitors', -5]] : q.allies.size ? [['Values your loyalty to allies', 2]] : [],
+    gold: (p, q) => q.gold > p.gold ? [['Impressed by your treasury', 2]] : q.gold < p.gold * 0.2 ? [['Thinks you are poor', -1]] : [],
+    walls: (p, q) => [countUnits(q, 'defense') > 0 && ['Respects your defenses', 2], attacks.some(a => a.p === q.id && a.target === p.id) && ['You are attacking their land', -3]],
+    land: (p, q) => q.tiles > p.tiles * 1.2 ? [['Envies your vast lands', -3]] : q.tiles < p.tiles * 0.8 ? [['Does not feel threatened by you', 1]] : [],
+    industry: (p, q) => q.factories ? [['Admires your industry', 2]] : [],
+    isolation: (p, q) => hasBoatsOut(q) ? [['Dislikes your boats on the sea', -2]] : [['Likes that you keep to yourself', 1]],
+    opportunist: (p, q) => q.troops < p.troops * 0.6 ? [['Smells weakness', -2]] : q.troops > p.troops * 1.3 ? [['Respects your strength', 2]] : [],
+    alliances: (p, q) => q.allies.size ? [['Admires your friendships', Math.min(3, q.allies.size)]] : [['Pities the friendless', -1]],
+    trade: (p, q) => countUnits(q, 'port') ? [['Likes your trading ports', 1]] : [],
+    cities: (p, q) => q.cityLevels >= Math.max(1, p.cityLevels) ? [['Admires your great cities', 2]] : q.cityLevels ? [] : [['Thinks you have no great cities', -1]],
+  };
+  function opinionMods(p, q) {
+    if (!p || !q || p === q || p.type !== 'nation') return [];
+    const L = leaderOf(p), T = traitsOf(p), mods = [];
+    if (allied(p.id, q.id)) mods.push(['Allies', 4]);
+    if (atWar(p.id, q.id)) mods.push(['At war', -10]);
+    else for (const [id] of p.wars) if (q.wars.has(id)) { mods.push(['Fighting a common enemy', 3]); break; }
+    const hate = q10(p.hate.get(q.id));
+    if (hate >= 0.5) mods.push(['Attacks and insults', -Math.min(15, Math.round(hate * (0.6 + T.grudge * 0.8)))]);
+    const fav = q10(p.favor.get(q.id));
+    if (fav >= 0.5) mods.push(L && L.agenda === 'trade' ? ['Loves trading with you', Math.min(12, Math.round(fav * 2))] : ['Gifts and fair trades', Math.min(8, Math.round(fav))]);
+    if (q.traitorUntil > tick && !(L && L.agenda === 'loyalty')) mods.push(['Betrayed an ally recently', -Math.round(2 + T.loyal * 3)]);
+    if (L && AGENDAS[L.agenda]) for (const m of AGENDAS[L.agenda](p, q)) if (m) mods.push(m);
+    return mods.filter(m => m[1]);
+  }
+  function opinion(p, q) { let s = 0; for (const m of opinionMods(p, q)) s += m[1]; return s; }
+
+  // ── Verdicts ──
+  // Each says whether an AI nation would agree, and why, without changing anything. The same
+  // function makes the decision, so the diplomacy screen can predict the answer exactly.
+  // ok: true / false, or null when a human player decides.
+  function verdict(factors, need, yes, no) {
+    factors = factors.filter(f => f[0] && f[1]);
+    const score = factors.reduce((s, f) => s + f[1], 0);
+    return { ok: score >= need, score, need, factors, reason: score >= need ? yes : no };
+  }
+  function allianceVerdict(q, p) {   // would q accept an alliance with p?
+    if (allied(q.id, p.id)) return { ok: false, reason: 'Already allies' };
+    if (atWar(q.id, p.id)) return { ok: false, reason: 'You are at war. Make peace first.' };
+    if (isHuman(q)) return { ok: null, reason: `${q.name} will decide` };
+    if (q.type === 'bot') return { ok: null, reason: 'Tribes accept about one request in seven' };
+    const T = traitsOf(q);
+    return verdict([
+      ['Their opinion of you', opinion(q, p)],
+      ['Difficulty', Math.round((D.acc - 0.7) * 20)],
+      [T.loyal >= 0.5 ? 'Loyal by nature' : 'Distrustful by nature', Math.round((T.loyal - 0.5) * 4)],
+      ['Their other alliances', -Math.round(q.allies.size * 1.5)],
+      ['Your army is bigger', p.troops > q.troops ? 2 : 0],
+    ], 0, 'Would accept an alliance', 'Would refuse an alliance');
+  }
+  function cleanDeal(d) { d = d || {}; return { gold: Math.max(0, Math.floor(+d.gold || 0)), troops: Math.max(0, Math.floor(+d.troops || 0)) }; }
+  const dealEmpty = d => !d.gold && !d.troops;
+  function dealText(d) { return [d.gold && fmt(d.gold) + ' gold', d.troops && fmt(d.troops) + ' troops'].filter(Boolean).join(' and ') || 'nothing'; }
+  // What a deal is worth to p: warlike leaders value troops more, economic ones gold
+  function dealValue(p, d) { const T = traitsOf(p); return d.gold * (0.8 + T.econ * 0.4) + d.troops * TROOP_GOLD * (0.8 + T.aggr * 0.4); }
+  function tradeVerdict(q, p, give, get) {   // would q take `give` from p in return for `get`?
+    if (dealEmpty(give) && dealEmpty(get)) return { ok: false, reason: 'Add gold or troops to the deal' };
+    if (give.gold > p.gold || give.troops > p.troops) return { ok: false, reason: "You don't have that much" };
+    if (get.gold > q.gold || get.troops > q.troops) return { ok: false, reason: `${q.name} doesn't have that much` };
+    if (dealEmpty(get)) return { ok: true, gift: true, reason: 'A gift is always welcome' };
+    if (isHuman(q)) return { ok: null, reason: `${q.name} will decide` };
+    if (q.type === 'bot') return { ok: false, reason: 'Tribes only accept gifts' };
+    if (atWar(q.id, p.id)) return { ok: false, reason: 'They will not trade with an enemy' };
+    if (get.troops && q.troops - get.troops < maxTroops(q) * 0.25) return { ok: false, reason: 'They need those troops to defend themselves' };
+    const T = traitsOf(q), op = within(opinion(q, p), -15, 15);
+    let worth = dealValue(q, give) * (1 + op * 0.03);
+    // Allies and friends will hand over a little for nothing
+    if (allied(q.id, p.id) || op >= 6) worth += T.generous * 0.05 * (q.gold + q.troops * TROOP_GOLD);
+    const need = dealValue(q, get) * (1.25 - T.generous * 0.35);
+    if (worth >= need) return { ok: true, reason: worth > need * 1.3 ? 'A generous offer' : 'A fair deal' };
+    const short = (need - worth) / ((0.8 + T.econ * 0.4) * (1 + op * 0.03));
+    return { ok: false, short, reason: `They want about ${fmt(short)} more gold in value` };
+  }
+  // Reasons a joint war of a and b against e can't happen, or null
+  function warBlocker(a, b, e) {
+    if (!e || !e.alive || e === a || e === b) return 'Pick another nation to fight';
+    if (!a.alive || !b.alive) return 'That nation is gone';
+    if (allied(a.id, e.id)) return `${a.name} is allied with ${e.name}`;
+    if (allied(b.id, e.id)) return `${b.name} is allied with ${e.name}`;
+    if (atWar(a.id, b.id)) return `${a.name} and ${b.name} are at war`;
+    return null;
+  }
+  function jointWarVerdict(q, p, e) {   // would q join p in a war on e?
+    const err = warBlocker(q, p, e);
+    if (err) return { ok: false, reason: err };
+    if (isHuman(q)) return { ok: null, reason: `${q.name} will decide` };
+    if (q.type === 'bot') return { ok: false, reason: 'Tribes do not join wars' };
+    const T = traitsOf(q), L = leaderOf(q), opE = opinion(q, e), ratio = (p.troops + q.troops) / Math.max(1, e.troops);
+    const near = touches(q, e.id, -1);
+    return verdict([
+      ['Their opinion of you', Math.round(opinion(q, p) * 0.5)],
+      ['You are allies', allied(q.id, p.id) ? 4 : 0],
+      [`Already at war with ${e.name}`, atWar(q.id, e.id) ? 6 : 0],
+      [opE < 0 ? `Dislikes ${e.name}` : `Likes ${e.name}`, -Math.round(opE * 0.6)],
+      [T.aggr >= 0.5 ? 'Warlike by nature' : 'Cautious by nature', Math.round((T.aggr - 0.5) * 8)],
+      ['Prefers peace', L && L.agenda === 'peace' ? -3 : 0],
+      [ratio >= 1.5 ? 'Together you are stronger' : `${e.name} is too strong`, ratio >= 1.5 ? 2 : ratio < 0.8 ? -4 : 0],
+      [`Doesn't border ${e.name}`, near ? 0 : -2],
+    ], 3, `Would join a war on ${e.name}`, `Won't join a war on ${e.name}`);
+  }
+  function peaceVerdict(q, p) {   // would q make peace with p?
+    if (!atWar(q.id, p.id)) return { ok: false, reason: 'You are not at war' };
+    if (isHuman(q)) return { ok: null, reason: `${q.name} will decide` };
+    const w = q.wars.get(p.id), T = traitsOf(q);
+    if (tick - w.start < PEACE_MIN_TICKS) return { ok: false, reason: `The war has only just begun. Ask again in ${Math.ceil((w.start + PEACE_MIN_TICKS - tick) / 10)}s` };
+    return verdict([
+      ['Their opinion of you', Math.round((opinion(q, p) + 10) * 0.5)],   // +10 leaves out the at-war penalty
+      [p.troops > q.troops ? 'Your army is bigger' : 'Their army is bigger', p.troops > q.troops ? 3 : -2],
+      [T.aggr < 0.5 ? 'Peaceful by nature' : 'Warlike by nature', Math.round((0.5 - T.aggr) * 8)],
+      ['Their army is worn out', q.troops < maxTroops(q) * 0.3 ? 3 : 0],
+      ['Tired of the long war', Math.min(4, Math.floor((tick - w.start) / 600))],
+    ], 1, 'Would agree to peace', 'Wants to keep fighting');
+  }
+
+  // ── Acting on diplomacy ──
   function requestAlliance(p, q) {
     const key = p.id + ':' + q.id;
     if ((askCooldown.get(key) || 0) > tick) return `Wait before asking ${q.name} again`;
+    if (atWar(p.id, q.id)) return `You are at war with ${q.name}. Make peace first.`;
     askCooldown.set(key, tick + 300);
     if (isHuman(q)) {
       pendingReq.set(key, tick + 200);
-      ev(q.id, `<b>${esc(p.name)}</b> requests an alliance`, 'info', { req: p.id, ttl: 20000 });
+      ev(q.id, `${who(p)} requests an alliance`, 'info', { req: p.id, ttl: 20000 });
       ev(p.id, `Alliance request sent to <b>${esc(q.name)}</b>`, 'info');
       return null;
     }
-    // Nation q decides whether to accept p's request.
-    const hate = q.hate.get(p.id) || 0;
-    let chance = D.acc + (p.troops > q.troops ? 0.2 : 0) - hate * 0.08 - (p.traitorUntil > tick ? 0.5 : 0) - q.allies.size * 0.1;
-    if (q.type === 'bot') chance = 0.15;
-    if (rand() < chance) { formAlliance(p.id, q.id); ev(p.id, `<b>${esc(q.name)}</b> accepted your alliance`, 'good'); }
-    else ev(p.id, `<b>${esc(q.name)}</b> declined your alliance`, 'info');
+    const ok = q.type === 'bot' ? rand() < 0.15 : allianceVerdict(q, p).ok;
+    if (ok) { formAlliance(p.id, q.id); ev(p.id, `${who(q)} accepted your alliance`, 'good'); }
+    else ev(p.id, `${who(q)} declined your alliance`, 'info');
     return null;
   }
   function replyAlliance(p, fromId, yes) {
@@ -845,27 +1098,148 @@ function createGame(opt) {
       if (isHuman(q)) ev(q.id, `<b>${esc(p.name)}</b> declined your alliance`, 'info');
       return null;
     }
-    if (!q.alive || !p.alive) return null;
+    if (!q.alive || !p.alive || atWar(p.id, q.id)) return null;
     formAlliance(p.id, q.id);
-    ev(p.id, `You are now allied with <b>${esc(q.name)}</b>`, 'good');
+    ev(p.id, `You are now allied with ${who(q)}`, 'good');
     if (isHuman(q)) ev(q.id, `<b>${esc(p.name)}</b> accepted your alliance`, 'good');
     return null;
   }
   function sendTroops(p, q, troops) {
     if (troops < 1) return;
     p.troops -= troops; q.troops += troops;
+    addFavor(q, p.id, troops * TROOP_GOLD / giftScale(q));
     ev(p.id, `Sent ${fmt(troops)} troops to <b>${esc(q.name)}</b>`, 'good');
     if (isHuman(q)) ev(q.id, `<b>${esc(p.name)}</b> sent you ${fmt(troops)} troops`, 'good');
   }
+  // a gives `give` to b, b gives `get` to a
+  function executeTrade(a, b, give, get) {
+    a.gold += get.gold - give.gold; a.troops += get.troops - give.troops;
+    b.gold += give.gold - get.gold; b.troops += give.troops - get.troops;
+    // Goodwill grows with how much the deal favoured each AI side, and shrinks if they were the generous one
+    if (b.type === 'nation') addFavor(b, a.id, (dealValue(b, give) - dealValue(b, get)) / giftScale(b));
+    if (a.type === 'nation') addFavor(a, b.id, (dealValue(a, get) - dealValue(a, give)) / giftScale(a));
+  }
+  function makeOffer(from, to, kind, data, html) {
+    const id = offerSeq++;
+    offers.set(id, Object.assign({ id, kind, from: from.id, to: to.id, until: tick + OFFER_TICKS }, data));
+    ev(to.id, html, 'info', { offer: id, ttl: OFFER_TICKS * TICK_MS });
+  }
+  function cooldown(p, q, what, ticks) {
+    const key = p.id + ':' + q.id + ':' + what;
+    if ((askCooldown.get(key) || 0) > tick) return true;
+    askCooldown.set(key, tick + ticks);
+    return false;
+  }
+  function proposeTrade(p, q, give, get) {
+    if (dealEmpty(give) && dealEmpty(get)) return 'Add gold or troops to the deal';
+    if (give.gold > p.gold || give.troops > p.troops) return "You don't have that much";
+    if (get.gold > q.gold || get.troops > q.troops) return `${q.name} doesn't have that much`;
+    if (cooldown(p, q, 'trade', 20)) return 'Wait a moment before offering again';
+    if (isHuman(q) && !dealEmpty(get)) {
+      makeOffer(p, q, 'trade', { give, get }, `${who(p)} offers you ${dealText(give)} for ${dealText(get)}`);
+      ev(p.id, `Trade offer sent to <b>${esc(q.name)}</b>`, 'info');
+      return null;
+    }
+    const v = tradeVerdict(q, p, give, get);
+    if (!v.ok) { ev(p.id, `${who(q)} declined: ${esc(v.reason)}`, 'info'); return null; }
+    executeTrade(p, q, give, get);
+    if (v.gift) {
+      ev(p.id, `You gave ${who(q)} ${dealText(give)}`, 'good');
+      if (isHuman(q)) ev(q.id, `<b>${esc(p.name)}</b> gave you ${dealText(give)}`, 'good');
+    } else ev(p.id, `${who(q)} accepted: you gave ${dealText(give)} for ${dealText(get)}`, 'good');
+    return null;
+  }
+  function declareWar(a, b) {
+    const old = a.wars.get(b.id), w = { until: tick + WAR_TICKS, start: old ? old.start : tick };
+    a.wars.set(b.id, w); b.wars.set(a.id, { ...w });
+    warVer++;
+    addHate(b, a.id, 4);
+    moodDirty = true;
+  }
+  function endWar(a, b) { players[a].wars.delete(b); players[b].wars.delete(a); warVer++; }
+  function startJointWar(a, b, e) {
+    declareWar(a, e); declareWar(b, e);
+    ev(e.id, `&#9876; ${who(a)} and ${who(b)} declared war on you!`, 'bad');
+    ev(0, `&#9876; ${who(a)} and ${who(b)} declared a joint war on ${who(e)}`, 'warn', { except: [e.id] });
+  }
+  function proposeJointWar(p, q, e) {
+    if (q.type === 'bot') return 'Tribes do not join wars';
+    const err = warBlocker(p, q, e);
+    if (err) return err;
+    if (cooldown(p, q, 'war', 100)) return `Wait before asking ${q.name} again`;
+    if (isHuman(q)) {
+      makeOffer(p, q, 'war', { enemy: e.id }, `${who(p)} proposes a joint war against ${who(e)}`);
+      ev(p.id, `Joint war proposal sent to <b>${esc(q.name)}</b>`, 'info');
+      return null;
+    }
+    const v = jointWarVerdict(q, p, e);
+    if (!v.ok) { ev(p.id, `${who(q)} won't join a war on <b>${esc(e.name)}</b>`, 'info'); return null; }
+    startJointWar(p, q, e);
+    return null;
+  }
+  function makePeace(a, b) {
+    endWar(a.id, b.id);
+    ev(a.id, `You made peace with ${who(b)}`, 'good');
+    ev(b.id, `You made peace with ${who(a)}`, 'good');
+    ev(0, `&#128330; ${who(a)} and ${who(b)} made peace`, 'info', { except: [a.id, b.id] });
+  }
+  function proposePeace(p, q) {
+    if (!atWar(p.id, q.id)) return `You are not at war with ${q.name}`;
+    if (cooldown(p, q, 'peace', 100)) return `Wait before asking ${q.name} again`;
+    if (isHuman(q)) {
+      makeOffer(p, q, 'peace', {}, `${who(p)} offers peace`);
+      ev(p.id, `Peace offer sent to <b>${esc(q.name)}</b>`, 'info');
+      return null;
+    }
+    const v = peaceVerdict(q, p);
+    if (!v.ok) { ev(p.id, `${who(q)} refused peace: ${esc(v.reason)}`, 'info'); return null; }
+    makePeace(p, q);
+    return null;
+  }
+  function replyOffer(p, id, yes) {
+    const o = offers.get(id);
+    if (!o || o.to !== p.id) return null;
+    offers.delete(id);
+    const q = players[o.from];
+    if (!q || !q.alive || !p.alive) return 'That offer is no longer valid';
+    if (!yes) {
+      addHate(q, p.id, o.demand ? 3 : 0.5);
+      if (isHuman(q)) ev(q.id, `<b>${esc(p.name)}</b> declined your ${o.kind === 'war' ? 'joint war' : o.kind} offer`, 'info');
+      if (o.demand) ev(p.id, `${who(q)} will remember this.`, 'warn');
+      moodDirty = true;
+      return null;
+    }
+    if (o.kind === 'trade') {
+      if (o.give.gold > q.gold || o.give.troops > q.troops) return `${q.name} no longer has that much`;
+      if (o.get.gold > p.gold || o.get.troops > p.troops) return "You don't have that much any more";
+      executeTrade(q, p, o.give, o.get);
+      ev(p.id, dealEmpty(o.give) ? `You paid ${who(q)} ${dealText(o.get)}` : `Trade done: you got ${dealText(o.give)} for ${dealText(o.get)}`, 'good');
+      if (isHuman(q)) ev(q.id, `<b>${esc(p.name)}</b> accepted your trade`, 'good');
+    } else if (o.kind === 'war') {
+      const e = players[o.enemy], err = warBlocker(q, p, e);
+      if (err) return err;
+      startJointWar(q, p, e);
+    } else if (o.kind === 'peace' && atWar(p.id, q.id)) makePeace(p, q);
+    return null;
+  }
 
   // ──────────── AI ────────────
+  // Nations play by their leader's personality (traitsOf): aggressive leaders attack sooner and
+  // with more troops, seafarers send more boats and warships, builders favour factories, and a
+  // leader who loves nukes builds silos whatever the difficulty.
   function aiTick(p) {
-    const info = neighbors(p), max = maxTroops(p), imm = tick < immunityUntil;
+    const info = neighbors(p), max = maxTroops(p), imm = tick < immunityUntil, T = traitsOf(p);
     aiBuild(p, info);
     aiDiplomacy(p, info);
-    if (p.troops < max * D.thr) return;
+    const ratio = D.ratio * (0.85 + 0.3 * T.aggr), maxBoats = T.naval >= 0.7 ? 3 : 2;
+    // Declared wars come first: push into the enemy even below the usual troop threshold
+    if (!imm && p.wars.size && p.troops > max * D.thr * 0.8) {
+      for (const [id] of p.wars) if (info.players.has(id)) { startAttack(p, id, p.troops * ratio * 1.1); return; }
+      if (info.coastal && boatsOf(p) < maxBoats && rand() < 0.2 + T.naval * 0.3 && aiWarBoat(p)) return;
+    }
+    if (p.troops < max * Math.min(0.95, D.thr * (1.1 - 0.2 * T.aggr))) return;
     if (info.neutral > 0) {
-      startAttack(p, 0, p.troops * D.ratio);
+      startAttack(p, 0, p.troops * D.ratio * (0.8 + 0.4 * T.expand));
       if (!info.players.size || rand() < 0.6) return;
     }
     if (!imm && info.players.size) {
@@ -875,16 +1249,27 @@ function createGame(opt) {
         const q = players[id];
         let s = q.troops / Math.max(1, p.troops);
         if (q.type === 'bot') s -= 0.6;
+        else { const op = opinion(p, q); s += op > 0 ? op * 0.04 : op * 0.02; }   // spare friends, pick on rivals
         if (q.traitorUntil > tick) s -= 0.3;
-        s -= Math.min(10, p.hate.get(id) || 0) * 0.05;
+        s -= Math.min(10, p.hate.get(id) || 0) * 0.05 * (0.5 + T.grudge);
         if (s < bs) { bs = s; best = q; }
       }
-      if (best && bs < 0.9 * D.aggr + (p.troops > max * 0.9 ? 0.5 : 0)) {
-        startAttack(p, best.id, p.troops * D.ratio * (best.type === 'bot' ? 0.8 : 1.2));
+      if (best && bs < 0.9 * D.aggr * (0.8 + 0.4 * T.aggr) + (p.troops > max * 0.9 ? 0.5 : 0)) {
+        startAttack(p, best.id, p.troops * ratio * (best.type === 'bot' ? 0.8 : 1.2));
         return;
       }
     }
-    if (!info.neutral && info.coastal && boatsOf(p) < 2 && (!info.players.size || rand() < 0.15)) aiBoat(p, imm);
+    if (!info.neutral && info.coastal && boatsOf(p) < maxBoats && (!info.players.size || rand() < 0.15 + T.naval * 0.3)) aiBoat(p, imm);
+  }
+  // Land a boat on the coast of a nation p is at war with
+  function aiWarBoat(p) {
+    for (const [id] of p.wars) {
+      const e = players[id], opts = [];
+      if (!e.alive) continue;
+      for (const t of e.border) if (coastal[t]) { opts.push(t); if (opts.length > 40) break; }
+      if (opts.length && !sendBoat(p, opts[rand() * opts.length | 0], p.troops * D.ratio * 1.2)) return true;
+    }
+    return false;
   }
   function aiBoat(p, imm) {
     let pick = -1, pd = 1e18;
@@ -901,23 +1286,30 @@ function createGame(opt) {
   }
   function aiBuild(p, info) {
     if (rand() > 0.5) return;
-    const g = p.gold;
+    const g = p.gold, T = traitsOf(p), nukeLover = T.nuke >= 0.9;
     const ok = (type, t) => t >= 0 && g >= costOf(p, type) && !build(p, type, t);
+    // A leader who loves nukes spends on them before anything else, and saves up for them once
+    // a first city (and factory, for a builder) is standing
+    if (nukeLover) {
+      if (aiNukes(p, g, ok, true)) return;
+      const invested = countUnits(p, 'city') && (countUnits(p, 'factory') || T.econ < 0.85);
+      if (tick > immunityUntil && invested && (!countUnits(p, 'silo') || g < costOf(p, 'atom'))) return;
+    }
     if (g >= costOf(p, 'city') && countUnits(p, 'city') < 2 + p.tiles / 700) {
       if (ok('city', findTile(p, t => distT[t] >= 3 && !placeError(p, 'city', t)))) return;
     }
-    if (D.factories && g >= costOf(p, 'factory') && countUnits(p, 'factory') < 1 + p.tiles / 1200) {
+    if ((D.factories || T.econ >= 0.85) && g >= costOf(p, 'factory') && countUnits(p, 'factory') < (D.factories ? 1 + p.tiles / 1200 + T.econ : 1)) {
       if (ok('factory', findTile(p, t => distT[t] >= 3 && !placeError(p, 'factory', t)))) return;
     }
-    if (info.coastal && g >= costOf(p, 'port') && countUnits(p, 'port') < 1 + p.tiles / 1600) {
+    if (info.coastal && g >= costOf(p, 'port') && countUnits(p, 'port') < 1 + p.tiles / 1600 + T.naval) {
       const opts = [];
       for (const t of p.border) if (coastal[t] && !placeError(p, 'port', t)) { opts.push(t); if (opts.length > 30) break; }
       if (opts.length && ok('port', opts[rand() * opts.length | 0])) return;
     }
-    if (D.defense && tick > immunityUntil && g >= costOf(p, 'defense') && countUnits(p, 'defense') < 1 + p.tiles / 450) {
+    if ((D.defense || T.defense >= 0.85) && tick > immunityUntil && g >= costOf(p, 'defense') && countUnits(p, 'defense') < (D.defense ? 1 : 0.5) * (1 + p.tiles / 450 * (0.5 + T.defense))) {
       let threat = 0, tt = 0;
       for (const [id] of info.players) { const q = players[id]; if (!allied(p.id, id) && q.type !== 'bot' && q.troops > tt) { tt = q.troops; threat = id; } }
-      if (threat && tt > p.troops * 0.7) {
+      if (threat && (tt > p.troops * 0.7 || atWar(p.id, threat))) {
         const buf = new Int32Array(4); const opts = [];
         for (const t of p.border) {
           const c = nb4(t, buf);
@@ -928,55 +1320,123 @@ function createGame(opt) {
         if (t >= 0 && !placeError(p, 'defense', t) && ok('defense', t)) return;
       }
     }
-    if (D.nukes && p.tiles > landTotal * 0.05) {
-      if (!countUnits(p, 'silo') && g >= 1e6) { if (ok('silo', findTile(p, t => distT[t] >= 4 && !placeError(p, 'silo', t)))) return; }
-      const enemySilo = structs.some(s => s.alive && s.type === 'silo' && s.owner !== p.id && !allied(s.owner, p.id));
-      if (enemySilo && g >= costOf(p, 'sam') && countUnits(p, 'sam') < Math.min(3, countUnits(p, 'city'))) {
-        const city = structs.find(s => s.alive && s.type === 'city' && s.owner === p.id);
-        if (city) {
-          const t = findTile(p, u => (u % W - city.x) ** 2 + (((u / W) | 0) - city.y) ** 2 < 100 && !placeError(p, 'sam', u), 300);
-          if (ok('sam', t)) return;
-        }
-      }
-      if (countUnits(p, 'silo') && g >= 750000 + 250000 && rand() < 0.35) {
-        let tgt = null, ts = 0;
-        for (const q of players) {
-          if (!q || !q.alive || q === p || q.type === 'bot' || allied(p.id, q.id)) continue;
-          const s = q.tiles * (1 + Math.min(10, p.hate.get(q.id) || 0) * 0.2);
-          if (s > ts) { ts = s; tgt = q; }
-        }
-        if (tgt && tgt.bestT >= 0) {
-          const city = structs.find(s => s.alive && s.owner === tgt.id && s.type === 'city');
-          const t = city ? city.t : tgt.bestT;
-          if (ok(g >= 5.5e6 ? 'hydrogen' : 'atom', t)) return;
-        }
-      }
-    }
-    if (rand() < 0.3 && g >= costOf(p, 'warship') && countUnits(p, 'warship') < countUnits(p, 'port')) {
+    if (!nukeLover && aiNukes(p, g, ok, false)) return;
+    if (rand() < 0.3 + T.naval * 0.4 && g >= costOf(p, 'warship') && countUnits(p, 'warship') < countUnits(p, 'port') * (1 + T.naval)) {
       const port = structs.find(s => s.alive && s.type === 'port' && s.owner === p.id && s.doneAt <= tick);
       if (port) ok('warship', port.dock);
     }
   }
+  // Silos, SAMs and nukes. A nuke lover builds up to three silos early and fires whenever it can pay.
+  function aiNukes(p, g, ok, lover) {
+    if (!(D.nukes || traitsOf(p).nuke >= 0.8) || tick < immunityUntil || p.tiles <= landTotal * (lover ? 0.01 : 0.05)) return false;
+    const silos = countUnits(p, 'silo');
+    const siloCost = costOf(p, 'silo'), atomCost = costOf(p, 'atom');
+    if ((!silos || (lover && silos < 3 && g >= siloCost + atomCost)) && g >= siloCost) { if (ok('silo', findTile(p, t => distT[t] >= 4 && !placeError(p, 'silo', t)))) return true; }
+    const enemySilo = structs.some(s => s.alive && s.type === 'silo' && s.owner !== p.id && !allied(s.owner, p.id));
+    if (enemySilo && g >= costOf(p, 'sam') && countUnits(p, 'sam') < Math.min(3, countUnits(p, 'city'))) {
+      const city = structs.find(s => s.alive && s.type === 'city' && s.owner === p.id);
+      if (city) {
+        const t = findTile(p, u => (u % W - city.x) ** 2 + (((u / W) | 0) - city.y) ** 2 < 100 && !placeError(p, 'sam', u), 300);
+        if (ok('sam', t)) return true;
+      }
+    }
+    if (silos && g >= (lover ? atomCost : 1e6) && rand() < (lover ? 0.9 : 0.35)) {
+      let tgt = null, ts = 0;
+      for (const q of players) {
+        if (!q || !q.alive || q === p || q.type === 'bot' || allied(p.id, q.id)) continue;
+        const s = q.tiles * (1 + Math.min(10, p.hate.get(q.id) || 0) * 0.2) * (atWar(p.id, q.id) ? 3 : 1);
+        if (s > ts) { ts = s; tgt = q; }
+      }
+      if (tgt && tgt.bestT >= 0) {
+        const city = structs.find(s => s.alive && s.owner === tgt.id && s.type === 'city');
+        if (ok(g >= 5.5e6 ? 'hydrogen' : 'atom', city ? city.t : tgt.bestT)) return true;
+      }
+    }
+    return false;
+  }
   function aiDiplomacy(p, info) {
     if (tick < immunityUntil) return;
+    const T = traitsOf(p);
+    // Offer an alliance to a neighbouring player the leader likes
     for (const [id] of info.players) {
       const h = players[id];
-      if (!isHuman(h) || !h.alive || allied(p.id, id)) continue;
+      if (!isHuman(h) || !h.alive || allied(p.id, id) || atWar(p.id, id)) continue;
       const key = p.id + ':' + id;
       if (pendingReq.has(key) || rand() >= 0.02) continue;
-      if ((p.hate.get(id) || 0) >= 2 || h.troops < p.troops * 0.7 || h.traitorUntil > tick) continue;
+      if (opinion(p, h) < 0 || h.troops < p.troops * 0.6 || h.traitorUntil > tick) continue;
       pendingReq.set(key, tick + 200);
-      ev(id, `<b>${esc(p.name)}</b> requests an alliance`, 'info', { req: p.id, ttl: 20000 });
+      ev(id, `${who(p)} requests an alliance`, 'info', { req: p.id, ttl: 20000 });
       return;
     }
     if (rand() < 0.01) {
       for (const [id] of info.players) {
         const q = players[id];
-        if (q.type !== 'nation' || allied(p.id, id) || (p.hate.get(id) || 0) > 1 || (q.hate.get(p.id) || 0) > 1) continue;
-        if (p.allies.size >= 2 || q.allies.size >= 2) continue;
+        if (q.type !== 'nation' || allied(p.id, id) || atWar(p.id, id) || p.allies.size >= 2 || q.allies.size >= 2) continue;
+        if (opinion(p, q) < 1 || !allianceVerdict(q, p).ok) continue;
         formAlliance(p.id, id);
+        ev(0, `&#129309; ${who(p)} and ${who(q)} formed an alliance`, 'info', { ttl: 4000 });
         break;
       }
+    }
+    // Rally an ally into a joint war against a neighbour the leader dislikes
+    if (p.allies.size && rand() < 0.004 * (0.5 + T.aggr)) {
+      let e = null, es = 0;
+      for (const [id] of info.players) {
+        const q = players[id];
+        if (q.type === 'bot' || allied(p.id, id) || atWar(p.id, id)) continue;
+        const s = -opinion(p, q) + (q.troops < p.troops ? 2 : 0);
+        if (s > es) { es = s; e = q; }
+      }
+      if (e && es >= 3) for (const [aid] of p.allies) {
+        const a = players[aid];
+        if (warBlocker(p, a, e) || atWar(a.id, e.id)) continue;
+        if (isHuman(a)) {
+          if (cooldown(p, a, 'war', 600)) continue;
+          makeOffer(p, a, 'war', { enemy: e.id }, `${who(p)} asks you to join a war against ${who(e)}`);
+          break;
+        }
+        if (jointWarVerdict(a, p, e).ok) { startJointWar(p, a, e); break; }
+      }
+    }
+    // Faithless leaders turn on weak allies
+    if (T.loyal < 0.35 && rand() < 0.03 * (1 - T.loyal)) {
+      for (const [aid] of p.allies) {
+        const a = players[aid];
+        if (!info.players.has(aid) || a.troops > p.troops * 0.35) continue;
+        breakAlliance(p.id, aid, true);
+        ev(aid, `&#128481; ${who(p)} betrayed your alliance!`, 'bad');
+        startAttack(p, aid, p.troops * D.ratio * 1.5);
+        return;
+      }
+    }
+    // Warlike leaders demand tribute from weaker neighbours
+    if (T.aggr >= 0.7 && rand() < 0.003) {
+      for (const [id] of info.players) {
+        const h = players[id];
+        if (!isHuman(h) || allied(p.id, id) || h.troops > p.troops * 0.6 || h.gold < 50000 || cooldown(p, h, 'demand', 1800)) continue;
+        const want = cleanDeal({ gold: h.gold * 0.25 });
+        makeOffer(p, h, 'trade', { give: cleanDeal(), get: want, demand: true },
+          `${who(p)} demands ${fmt(want.gold)} gold from you. Refuse, and they will remember it.`);
+        break;
+      }
+    }
+    // Generous leaders send gifts to their allies
+    if (T.generous >= 0.7 && p.gold > 300000 && rand() < 0.004 * T.generous) {
+      const ids = [...p.allies.keys()].filter(id => players[id].alive);
+      if (ids.length) {
+        const a = players[ids[rand() * ids.length | 0]], gift = Math.floor(p.gold * 0.1);
+        p.gold -= gift; a.gold += gift;
+        addFavor(a, p.id, gift / giftScale(a));
+        ev(a.id, `&#127873; ${who(p)} sent you a gift of ${fmt(gift)} gold`, 'good');
+      }
+    }
+    // A losing war ends in peace talks
+    for (const [id, w] of p.wars) {
+      const e = players[id];
+      if (tick - w.start < PEACE_MIN_TICKS || p.troops > e.troops * 0.6 || rand() > 0.05) continue;
+      if (isHuman(e)) { if (!cooldown(p, e, 'peace', 600)) makeOffer(p, e, 'peace', {}, `${who(p)} asks for peace`); }
+      else if (e.type === 'nation' && peaceVerdict(e, p).ok) makePeace(p, e);
+      break;
     }
   }
   function botTick(p) {
@@ -1014,8 +1474,23 @@ function createGame(opt) {
     }
     p.spawned = true;
   }
+  // On real maps a nation starts at its leader's capital, or the closest free land to it.
+  function spawnAtHome(p) {
+    const real = Maps.MAPS[cfg.map], L = leaderOf(p);
+    if (!real || !L) return false;
+    const c = lonLatTile(real, L.home[0], L.home[1]);
+    if (c < 0) return false;
+    const cx = c % W, cy = (c / W) | 0;
+    for (let r = 0; r <= 14; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+      const x = cx + dx, y = cy + dy;
+      if (x < 0 || y < 0 || x >= W || y >= H) continue;
+      if (canSpawn(y * W + x, 3, 0)) { claimSpawn(p, y * W + x, 3); return true; }
+    }
+    return false;
+  }
   function spawnAIs() {
-    const ais = players.filter(p => p && p.type !== 'human');
+    const ais = players.filter(p => p && p.type !== 'human' && !spawnAtHome(p));
     let gap = Math.max(4, Math.floor(Math.sqrt(landTotal / Math.max(1, ais.length)) * 0.45));
     for (const p of ais) {
       let done = false;
@@ -1105,10 +1580,26 @@ function createGame(opt) {
           const q = players[id];
           if (isHuman(p)) ev(p.id, `Your alliance with <b>${esc(q.name)}</b> expired`, 'info');
           if (isHuman(q)) ev(q.id, `Your alliance with <b>${esc(p.name)}</b> expired`, 'info');
+          // A nation that still likes its human ally offers to renew
+          for (const [a, b] of [[p, q], [q, p]]) {
+            if (a.type !== 'nation' || !isHuman(b) || !a.alive || !b.alive || opinion(a, b) < 4) continue;
+            pendingReq.set(a.id + ':' + b.id, tick + 200);
+            ev(b.id, `${who(a)} would like to renew your alliance`, 'info', { req: a.id, ttl: 20000 });
+          }
         }
-        for (const [id, v] of p.hate) p.hate.set(id, v * 0.995);
+        for (const [id, w] of p.wars) if (w.until <= tick && id > p.id) {
+          endWar(p.id, id);
+          const q = players[id];
+          if (isHuman(p)) ev(p.id, `Your war with ${who(q)} has ended`, 'info');
+          if (isHuman(q)) ev(q.id, `Your war with ${who(p)} has ended`, 'info');
+        }
+        // Grudges fade, slower for leaders who hold them
+        const fade = 0.995 + traitsOf(p).grudge * 0.004;
+        for (const [id, v] of p.hate) if (v < 0.05) p.hate.delete(id); else p.hate.set(id, v * fade);
+        for (const [id, v] of p.favor) if (v < 0.05) p.favor.delete(id); else p.favor.set(id, v * 0.997);
       }
       for (const [k, until] of pendingReq) if (until <= tick) pendingReq.delete(k);
+      for (const [id, o] of offers) if (o.until <= tick) offers.delete(id);
     }
     if (tick % 20 === 0) computeLabels();
     if (tick % 50 === 0) sweepFallout();
@@ -1142,10 +1633,12 @@ function createGame(opt) {
       }
       for (const s of ships) if (s.owner === p.id) s.dead = true;
       for (const [id] of p.allies) breakAlliance(p.id, id, false);
+      for (const [id] of p.wars) endWar(p.id, id);
+      for (const [id, o] of offers) if (o.from === p.id || o.to === p.id || o.enemy === p.id) offers.delete(id);
       const killer = players[p.lastHitBy];
       if (killer && killer.alive) killer.gold += p.gold;
       p.gold = 0; p.civs = 0;
-      if (killer) killer.kills = (killer.kills || 0) + 1;
+      if (killer) killer.kills++;
       const msg = `<b>${esc(p.name)}</b> was eliminated${killer ? ' by <b>' + esc(killer.name) + '</b>' : ''}`;
       if (p.type !== 'bot') ev(0, msg, isHuman(p) ? 'bad' : 'warn');
       else if (isHuman(killer)) ev(killer.id, msg, 'warn');
@@ -1212,6 +1705,10 @@ function createGame(opt) {
         if (isHuman(q)) ev(target, `<b>${esc(p.name)}</b> betrayed your alliance!`, 'bad');
         return null;
       case 'donate': if (q && allied(pid, target)) sendTroops(p, q, p.troops * r); return null;
+      case 'trade': return q && q.alive && q !== p ? proposeTrade(p, q, cleanDeal(i.give), cleanDeal(i.get)) : null;
+      case 'jointWar': return q && q.alive && q !== p ? proposeJointWar(p, q, players[i.enemy | 0]) : null;
+      case 'peace': return q && q.alive && q !== p ? proposePeace(p, q) : null;
+      case 'offerReply': return replyOffer(p, i.id | 0, !!i.yes);
     }
     return null;
   }
@@ -1223,7 +1720,7 @@ function createGame(opt) {
     const m = {
       k: tick, st: state, sl: spawnLeft, im: immunityUntil,
       p: players.map(p => p ? [Math.floor(p.troops), Math.floor(p.gold), p.tiles, p.alive ? 1 : 0, p.traitorUntil, p.cityLevels, p.spawned ? 1 : 0,
-        Math.floor(p.civs), Math.round(p.share * 100), p.factories] : null),
+        Math.floor(p.civs), Math.round(p.share * 100), p.factories, p.kills] : null),
       sh: ships.map(s => [s.id, SHIP_KINDS.indexOf(s.kind), s.owner, r1(s.x), r1(s.y), r1(s.ang), Math.floor(s.troops || 0)]),
       n: nukes.map(n => [n.owner, n.type === 'atom' ? 0 : 1, n.x0, n.y0, n.tx, n.ty, n.t, n.start, n.dur, n.intercept]),
       a: attacks.map(a => [a.p, a.target, Math.floor(a.troops)]),
@@ -1236,9 +1733,25 @@ function createGame(opt) {
       lastAllyVer = allyVer;
       m.al = players.map(p => p ? [...p.allies] : null);
     }
+    if (force || warVer !== lastWarVer) {
+      lastWarVer = warVer;
+      m.w = players.map(p => p ? [...p.wars].map(([id, w]) => [id, w.until, w.start]) : null);
+    }
+    // Nations' grudges and goodwill (x10), so clients can show leaders' opinions: [nation, towards, hate, favor, ...]
+    if (force || moodDirty || tick % 10 === 0) {
+      moodDirty = false;
+      m.hf = [];
+      for (const p of players) {
+        if (!p || p.type !== 'nation' || !p.alive) continue;
+        for (const id of new Set([...p.hate.keys(), ...p.favor.keys()])) {
+          const h = Math.round((p.hate.get(id) || 0) * 10), f = Math.round((p.favor.get(id) || 0) * 10);
+          if (h || f) m.hf.push(p.id, id, h, f);
+        }
+      }
+    }
     return m;
   }
-  let lastStructVer = 0, lastAllyVer = 0;
+  let lastStructVer = 0, lastAllyVer = 0, lastWarVer = 0;
   function delta() {
     const m = snapshotCommon(false);
     if (tileBuf.length) m.o = tileBuf;
@@ -1249,7 +1762,7 @@ function createGame(opt) {
   }
   function full() {
     const m = snapshotCommon(true);
-    lastStructVer = 0; lastAllyVer = 0;   // make the next delta resend, so everyone stays in sync
+    lastStructVer = 0; lastAllyVer = 0; lastWarVer = 0;   // make the next delta resend, so everyone stays in sync
     const runs = [];
     let cur = owner[0], len = 0;
     for (let t = 0; t < N; t++) {
@@ -1263,7 +1776,7 @@ function createGame(opt) {
     return m;
   }
   function startInfo() {
-    return { cfg, players: players.map(p => p ? { id: p.id, name: p.name, type: p.type, color: p.color } : null), landTotal };
+    return { cfg, players: players.map(p => p ? { id: p.id, name: p.name, type: p.type, color: p.color, leader: p.leader } : null), landTotal };
   }
 
   // Client side (mirror): apply a server message.
@@ -1292,9 +1805,19 @@ function createGame(opt) {
       if (!p || !d) return;
       [p.troops, p.gold, p.tiles, p.alive, p.traitorUntil, p.cityLevels, p.spawned] = d;
       p.alive = !!p.alive; p.spawned = !!p.spawned;
-      p.civs = d[7] || 0; p.share = d[8] == null ? 1 : d[8] / 100; p.factories = d[9] || 0;
+      p.civs = d[7] || 0; p.share = d[8] == null ? 1 : d[8] / 100; p.factories = d[9] || 0; p.kills = d[10] || 0;
     });
     if (m.al) m.al.forEach((list, id) => { if (players[id] && list) players[id].allies = new Map(list); });
+    if (m.w) m.w.forEach((list, id) => { if (players[id] && list) players[id].wars = new Map(list.map(([e, until, start]) => [e, { until, start }])); });
+    if (m.hf) {
+      for (const p of players) if (p && p.type === 'nation') { p.hate.clear(); p.favor.clear(); }
+      for (let i = 0; i < m.hf.length; i += 4) {
+        const p = players[m.hf[i]];
+        if (!p) continue;
+        if (m.hf[i + 2]) p.hate.set(m.hf[i + 1], m.hf[i + 2] / 10);
+        if (m.hf[i + 3]) p.favor.set(m.hf[i + 1], m.hf[i + 3] / 10);
+      }
+    }
     if (m.s) {
       structAt.fill(-1);
       structs = [];
@@ -1318,15 +1841,36 @@ function createGame(opt) {
   // ──────────── Setup ────────────
   genMap();
   if (mirror) {
-    for (const p of opt.players) if (p) makePlayer(p.name, p.type, p.color, p.id);
+    for (const p of opt.players) if (p) makePlayer(p.name, p.type, p.color, p.id, p.leader);
   } else {
-    (opt.humans || []).forEach((h, i) => makePlayer(String(h.name || 'Player').slice(0, 16), 'human', HUMAN_COLORS[i % HUMAN_COLORS.length]));
-    const names = NATION_NAMES.slice();
-    for (let i = names.length - 1; i > 0; i--) { const j = rand() * (i + 1) | 0; [names[i], names[j]] = [names[j], names[i]]; }
+    const humans = opt.humans || [];
+    humans.forEach((h, i) => makePlayer(String(h.name || 'Player').slice(0, 16), 'human', HUMAN_COLORS[i % HUMAN_COLORS.length], 0, h.leader));
+    // Nations get the leaders nobody picked. On a real map, leaders whose capital is on it go first.
+    const taken = new Set(humans.map(h => h.leader));
+    let pool = LEADERS.map((_, i) => i).filter(i => !taken.has(i));
+    for (let i = pool.length - 1; i > 0; i--) { const j = rand() * (i + 1) | 0; [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    const real = Maps.MAPS[cfg.map];
+    if (real) {
+      const onMap = i => LEADERS[i].home[0] >= real.lon[0] && LEADERS[i].home[0] <= real.lon[1] && LEADERS[i].home[1] <= real.lat[0] && LEADERS[i].home[1] >= real.lat[1];
+      // Spread the nations out: each next leader is one whose capital is far from those already picked
+      const left = pool.filter(onMap), spread = left.splice(0, 1);
+      while (left.length) {
+        let bi = 0, bs = -1;
+        left.forEach((c, k) => {
+          let md = Infinity;
+          for (const s of spread) { const dx = LEADERS[c].home[0] - LEADERS[s].home[0], dy = LEADERS[c].home[1] - LEADERS[s].home[1]; md = Math.min(md, dx * dx + dy * dy); }
+          const sc = md * (0.6 + rand() * 0.8);
+          if (sc > bs) { bs = sc; bi = k; }
+        });
+        spread.push(left.splice(bi, 1)[0]);
+      }
+      pool = spread.concat(pool.filter(i => !onMap(i)));
+    }
     for (let i = 0; i < (cfg.nations | 0); i++) {
       let hue = (i * 137.508 + 20) % 360;
       if (hue > 195 && hue < 240) hue = (hue + 60) % 360;
-      makePlayer(names[i % names.length] + (i >= names.length ? ' II' : ''), 'nation', hsl2rgb(hue, 62, 52));
+      const L = pool[i % pool.length];
+      makePlayer(LEADERS[L].civ + (i >= pool.length ? ' II' : ''), 'nation', hsl2rgb(hue, 62, 52), 0, L);
     }
     for (let i = 0; i < (cfg.bots | 0); i++) makePlayer(botName(), 'bot', hsl2rgb(rand() * 360, 18 + rand() * 14, 40 + rand() * 16));
     spawnAIs();
@@ -1345,12 +1889,14 @@ function createGame(opt) {
     cfg, D,
     step: gameTick, act, delta, full, startInfo, apply,
     maxTroops, troopRate, goldRate, costOf, placeError, hasDefensePost, allied, nukePos, civGold: p => (p.civs || 0) * CIV_GOLD,
+    atWar, countUnits, traitsOf, leaderOf, opinionMods, opinion, touches,
+    allianceVerdict, tradeVerdict: (q, p, give, get) => tradeVerdict(q, p, cleanDeal(give), cleanDeal(get)), jointWarVerdict, peaceVerdict,
   };
 }
 
 const api = {
   createGame, fmt, esc, within, TICK_MS, SPAWN_TICKS, IMMUNITY_TICKS, WIN_SHARE, DEFENSE_RANGE, SAM_RANGE,
-  NUKE, TERR, DIFF, BUILD, BUILD_ORDER, MAP_SIZES, DEFAULT_SHARE,
+  NUKE, TERR, DIFF, BUILD, BUILD_ORDER, MAP_SIZES, MAP_NAMES, MAP_KINDS, DEFAULT_SHARE, LEADERS, attitude, ALLIANCE_TICKS, WAR_TICKS,
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.FrontierCore = api;

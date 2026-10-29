@@ -11,9 +11,14 @@ const { WebSocketServer } = require('ws');
 const fs = require('fs');
 const Core = require('../frontier-core.js');
 // Render only redeploys when something in server/ changes, but the game rules live in
-// ../frontier-core.js. After changing the core, touch this file (or deploy by hand) or the live
-// server keeps running the old rules. /status reports the core it loaded so you can check.
-const CORE_HASH = crypto.createHash('sha1').update(fs.readFileSync(require.resolve('../frontier-core.js'))).digest('hex').slice(0, 8);
+// ../frontier-core.js (with ../frontier-leaders.js and ../frontier-maps.js). After changing them,
+// touch this file (or deploy by hand) or the live server keeps running the old rules. /status
+// reports the rules it loaded so you can check.
+const CORE_HASH = (() => {
+  const h = crypto.createHash('sha1');
+  for (const f of ['../frontier-core.js', '../frontier-leaders.js', '../frontier-maps.js']) h.update(fs.readFileSync(require.resolve(f)));
+  return h.digest('hex').slice(0, 8);
+})();
 const { filterMessage, checkName, newRate, rateCheck, createChat } = require('./chat.js');
 const { createImposter } = require('./imposter.js');
 
@@ -28,12 +33,12 @@ const PUBLIC_COUNTDOWN_MS = 30000;
 const SPAWN_TICKS = 150;                                // 15 s to pick a spawn
 const GAME_OVER_LINGER_MS = 60000;
 const EMPTY_GAME_TIMEOUT_MS = 60000;
-const MAPS = ['continents', 'pangaea', 'archipelago'];
+const MAPS = Core.MAP_KINDS;
 const SIZES = Object.keys(Core.MAP_SIZES);
 const DIFFS = Object.keys(Core.DIFF);
 
 const clients = new Set();
-const sessions = new Map();   // token -> { token, name, ws, room, pid }
+const sessions = new Map();   // token -> { token, name, leader, ws, room, pid }
 const rooms = new Map();      // id -> room
 let publicRotation = 0;
 
@@ -46,6 +51,7 @@ function cleanName(n) {
   if (n && !checkName(n).ok && checkName(n).reason === 'Please pick a different name') return 'Player';
   return n || 'Player';
 }
+const cleanLeader = n => Number.isInteger(n) && n >= 0 && n < Core.LEADERS.length ? n : -1;
 function cleanCfg(c) {
   c = c || {};
   return {
@@ -128,10 +134,10 @@ function startGame(room) {
   if (room.isPublic && humans.length > 6) cfg.size = 'large';
   const byPid = new Map();
   const game = Core.createGame({
-    cfg, humans: humans.map(h => ({ name: h.name })), spawnTicks: SPAWN_TICKS, track: true,
+    cfg, humans: humans.map(h => ({ name: h.name, leader: h.leader })), spawnTicks: SPAWN_TICKS, track: true,
     hooks: {
       event(pid, html, cls, extra) {
-        const msg = JSON.stringify({ t: 'ev', html, cls, req: extra && extra.req, ttl: extra && extra.ttl });
+        const msg = JSON.stringify({ t: 'ev', html, cls, req: extra && extra.req, offer: extra && extra.offer, ttl: extra && extra.ttl });
         if (pid) { const s = byPid.get(pid); if (s) send(s.ws, msg); return; }
         const except = (extra && extra.except) || [];
         for (const s of humans) if (!except.includes(s.pid)) send(s.ws, msg);
@@ -219,7 +225,7 @@ function onMessage(ws, raw) {
       send(ws, { t: 'tick', ...g.full() });
       return;
     }
-    const s = { token: crypto.randomBytes(16).toString('hex'), name: cleanName(m.name), ws, room: null, pid: 0, chatOn: false, chatRate: newRate() };
+    const s = { token: crypto.randomBytes(16).toString('hex'), name: cleanName(m.name), leader: cleanLeader(m.leader), ws, room: null, pid: 0, chatOn: false, chatRate: newRate() };
     sessions.set(s.token, s);
     ws.session = s;
     send(ws, { t: 'welcome', token: s.token });
@@ -228,7 +234,11 @@ function onMessage(ws, raw) {
   const s = ws.session;
   if (!s) return;
   switch (m.t) {
-    case 'name': s.name = cleanName(m.name); if (s.room && s.room.state === 'lobby') pushRoom(s.room); break;
+    case 'name':
+      s.name = cleanName(m.name);
+      if ('leader' in m) s.leader = cleanLeader(m.leader);
+      if (s.room && s.room.state === 'lobby') pushRoom(s.room);
+      break;
     case 'joinPublic': {
       const room = rooms.get(String(m.id));
       if (room && room.isPublic) joinRoom(s, room); else send(ws, { t: 'err', msg: 'That lobby no longer exists' });
