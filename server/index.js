@@ -2,7 +2,8 @@
 // The server runs the real game (frontier-core.js) and streams changes to every player over
 // WebSockets. Players only send intents ("attack this tile", "build a city here"), so nobody
 // can cheat by editing their own copy of the game.
-// It also hosts the EduArcade chatroom and Frontier's lobby/in-game chat (see chat.js).
+// It also hosts the EduArcade chatroom and Frontier's lobby/in-game chat (see chat.js), and
+// Imposter games played on several devices (see imposter.js).
 'use strict';
 const http = require('http');
 const crypto = require('crypto');
@@ -14,6 +15,7 @@ const Core = require('../frontier-core.js');
 // server keeps running the old rules. /status reports the core it loaded so you can check.
 const CORE_HASH = crypto.createHash('sha1').update(fs.readFileSync(require.resolve('../frontier-core.js'))).digest('hex').slice(0, 8);
 const { filterMessage, checkName, newRate, rateCheck, createChat } = require('./chat.js');
+const { createImposter } = require('./imposter.js');
 
 const PORT = process.env.PORT || 8080;
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ||
@@ -191,6 +193,7 @@ setInterval(() => {
 }, 1000);
 
 const chat = createChat({ send, now, log });
+const imposter = createImposter({ send, now, log, checkName, filterMessage });
 
 // ──────────── Messages ────────────
 function onMessage(ws, raw) {
@@ -202,6 +205,7 @@ function onMessage(ws, raw) {
   try { m = JSON.parse(raw); } catch { return; }
   if (!m || typeof m.t !== 'string') return;
   if (m.t.startsWith('c_')) { chat.handle(ws, m); return; }
+  if (m.t.startsWith('i_')) { imposter.handle(ws, m); return; }
 
   if (m.t === 'hello') {
     const old = typeof m.token === 'string' && sessions.get(m.token);
@@ -279,7 +283,7 @@ function onMessage(ws, raw) {
 const server = http.createServer((req, res) => {
   if (req.url === '/status') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-    res.end(JSON.stringify({ ok: true, online: clients.size, games: runningGames(), core: CORE_HASH, lobbies: rooms.size - runningGames(), chat: chat.stats() }));
+    res.end(JSON.stringify({ ok: true, online: clients.size, games: runningGames(), core: CORE_HASH, lobbies: rooms.size - runningGames(), chat: chat.stats(), imposter: imposter.stats() }));
     return;
   }
   res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -308,6 +312,7 @@ wss.on('connection', (ws, req) => {
   ws.on('close', () => {
     clients.delete(ws);
     chat.close(ws);
+    imposter.close(ws);
     const s = ws.session;
     if (!s || s.ws !== ws) return;
     s.ws = null;
