@@ -405,6 +405,46 @@
     .pcard b { font-size: 0.76rem; line-height: 1.2; }
     .pcard small { font-size: 0.64rem; color: rgba(255,255,255,0.55); font-weight: 600; line-height: 1.3; }
     .field.wide { grid-column: 1 / -1; }
+    .styleBar { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.7rem; }
+    .styleBar button {
+      font-family: inherit; font-size: 0.66rem; font-weight: 800; padding: 0.22rem 0.65rem; border-radius: 20px; cursor: pointer;
+      color: rgba(255,255,255,0.75); background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15);
+    }
+    .styleBar button.on { color: #fff; border-color: #f5c518; background: rgba(245,197,24,0.16); }
+    .pcard .sty { font-size: 0.58rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: #f7d46a; }
+    .pickInfo { display: flex; gap: 0.9rem; align-items: flex-start; background: rgba(0,0,0,0.25); border-radius: 12px; padding: 0.75rem 0.9rem; margin-bottom: 0.8rem; }
+    .pickInfo img { width: 76px; height: 76px; border-radius: 50%; flex-shrink: 0; background: #16294d; }
+    .pickInfo .tx { flex: 1; min-width: 0; font-size: 0.78rem; line-height: 1.5; color: rgba(255,255,255,0.8); }
+    .pickInfo .tx b.nm { font-size: 1rem; color: #fff; }
+    .pickInfo .tx p { margin-top: 0.25rem; }
+    .pickInfo .dbtn { align-self: center; flex-shrink: 0; }
+
+    /* Leader power button (first in the build bar) */
+    .bb.abil { flex: 1 0 104px; min-width: 104px; border-color: rgba(245,197,24,0.55); overflow: hidden; }
+    .bb.abil img { width: 22px; height: 22px; border-radius: 50%; }
+    .bb.abil .n { max-width: 96px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bb.abil.ready { box-shadow: 0 0 14px rgba(245,197,24,0.55); background: rgba(245,197,24,0.14); }
+    .bb.abil.on { background: rgba(245,197,24,0.3); border-color: #f5c518; }
+    .bb.abil .cdfill { position: absolute; left: 0; bottom: 0; height: 3px; background: #f5c518; width: 0; }
+
+    /* Lineup editor */
+    #lineOv { position: fixed; inset: 0; z-index: 45; background: rgba(5,10,25,0.7); display: flex; align-items: center; justify-content: center; padding: 16px; }
+    #line { width: min(820px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; padding: 1rem 1.1rem; background: rgba(10,20,45,0.97); }
+    .lineGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.4rem; margin-bottom: 0.8rem; }
+    .lrow2 { display: flex; align-items: center; gap: 0.55rem; padding: 0.35rem 0.5rem; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
+    .lrow2.has { border-color: rgba(46,204,113,0.6); background: rgba(46,204,113,0.1); }
+    .lrow2 img { width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; background: #16294d; }
+    .lrow2 .who { flex: 1; min-width: 0; font-size: 0.75rem; font-weight: 800; line-height: 1.25; }
+    .lrow2 .who small { display: block; font-size: 0.62rem; font-weight: 600; color: rgba(255,255,255,0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .step { display: flex; align-items: center; gap: 0.2rem; flex-shrink: 0; }
+    .step button { width: 24px; height: 24px; border-radius: 50%; border: none; cursor: pointer; font-family: inherit; font-weight: 900; color: #fff; background: rgba(255,255,255,0.14); }
+    .step button:hover { background: rgba(255,255,255,0.25); }
+    .step input { width: 34px; text-align: center; padding: 0.15rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: #fff; font-family: inherit; font-weight: 800; font-size: 0.75rem; -moz-appearance: textfield; }
+    .step input::-webkit-inner-spin-button { -webkit-appearance: none; }
+    .lineSum { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.45rem; font-size: 0.72rem; font-weight: 700; color: rgba(255,255,255,0.7); }
+    .lineSum span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    input[type=range]:disabled { opacity: 0.35; }
+    @media (max-width: 760px) { .pickInfo { flex-wrap: wrap; } .pickInfo img { width: 56px; height: 56px; } .pickInfo .dbtn { width: 100%; } }
 
     @media (max-width: 760px) {
       #dip { grid-template-columns: 1fr; }
@@ -534,7 +574,8 @@
       </div>
       <div class="field">
         <span class="fl">Nations (AI) <span class="rv" id="nNationsV">10</span></span>
-        <input type="range" id="nNations" min="2" max="24" value="10">
+        <input type="range" id="nNations" min="2" max="48" value="10">
+        <div class="lineSum"><span id="lineSum">Random leaders</span><button class="pill" id="lineBtn">CHOOSE LEADERS</button></div>
       </div>
       <div class="field">
         <span class="fl">Bots (tribes) <span class="rv" id="nBotsV">40</span></span>
@@ -557,6 +598,7 @@
         <li><b>Your population regrows fastest at about half your cap.</b> Sitting at the cap wastes growth, and sending everything leaves you open.</li>
         <li><b>Troops or civilians?</b> The second slider splits your population. Civilians earn gold but don't fight, so more civilians means a richer nation that's easier to invade.</li>
         <li><b>Spend gold on buildings</b>: Cities raise your population cap, Ports earn trade gold, Factories produce gold every second, Defense Posts make nearby land 5&times; harder to take, and Silos and SAMs are for nukes.</li>
+        <li><b>Every leader has a playstyle</b>: an always-on bonus and a power you trigger with the &#9889; button or <b>F</b> (raiders plunder gold, island leaders get fast boats, Leonidas has fewer but far stronger troops...). Pick yours with <b>Your leader</b>, and choose who the computer plays with <b>Choose leaders</b>.</li>
         <li><b>Every nation has a leader</b> from history with their own personality. Click a leader's portrait on the map or in the leaderboard (or right-click their land) to open diplomacy: see how they feel about you and why, ally with them, trade gold and troops, and ask them to join a war. Gandhi is peaceful... until he isn't.</li>
         <li><b>Right-click</b> (or long-press) any nation to ally, break an alliance, or send troops. Breaking an alliance marks you as a traitor.</li>
         <li><b>On Earth and Europe</b>, nations start at their real capitals.</li>
@@ -620,7 +662,19 @@
 <div id="pickOv" class="hidden">
   <div id="pick" class="panel">
     <div class="pickHd"><b>Choose your leader</b><button class="pill" id="pickClose">&#10005;</button></div>
+    <div class="pickInfo" id="pickInfo"></div>
+    <div class="styleBar" id="pickStyles"></div>
     <div class="pickGrid" id="pickGrid"></div>
+  </div>
+</div>
+
+<div id="lineOv" class="hidden">
+  <div id="line" class="panel">
+    <div class="pickHd"><b>Leaders in this game <span id="lineTotal" style="color:#f5c518"></span></b><button class="pill" id="lineClose">&#10005;</button></div>
+    <p class="dnote" style="margin:0 0 .7rem">Pick which leaders the computer nations get. Repeats are allowed, so forty Gandhis is a valid choice. Up to 48 nations.</p>
+    <div class="styleBar" id="lineStyles"></div>
+    <div class="lineGrid" id="lineGrid"></div>
+    <div class="dacts"><button class="dbtn" id="lineDone">DONE</button><button class="dbtn alt" id="lineClear">CLEAR (ALL RANDOM)</button></div>
   </div>
 </div>
 
@@ -636,9 +690,9 @@
 </div>
 
 <!-- ?v= makes browsers fetch the matching rules after an update -->
-<script src="frontier-maps.js?v=2"></script>
-<script src="frontier-leaders.js?v=2"></script>
-<script src="frontier-core.js?v=2"></script>
+<script src="frontier-maps.js?v=3"></script>
+<script src="frontier-leaders.js?v=3"></script>
+<script src="frontier-core.js?v=3"></script>
 <script src="chat-alerts.js"></script>
 <script>
 'use strict';
@@ -732,6 +786,10 @@ const HATS = {
   headband: k => `<ellipse cx="38" cy="26" rx="3" ry="4.5" transform="rotate(-30 38 30)" fill="${k.hatC2}"/><ellipse cx="62" cy="26" rx="3" ry="4.5" transform="rotate(30 62 30)" fill="${k.hatC2}"/>
     <rect x="33.5" y="28" width="33" height="5.5" rx="2.5" fill="${k.hatC}"/><circle cx="39" cy="30.7" r="1" fill="#3a2a1a"/><circle cx="46" cy="30" r="1" fill="#3a2a1a"/><circle cx="54" cy="31" r="1" fill="#3a2a1a"/><circle cx="61" cy="30.4" r="1" fill="#3a2a1a"/>`,
   cap: k => `<path d="M34 34 Q32 10 50 9 Q68 10 66 34 Z" fill="${k.hatC}"/><rect x="34" y="30" width="32" height="4.5" fill="${k.hatC2}"/>`,
+  scarf: k => `<path d="M32 38 Q31 19 50 18 Q69 19 68 38 Q60 30 50 30 Q40 30 32 38 Z" fill="${k.hatC}"/>
+    <path d="M66 30 Q74 36 72 48 L67 46 Q68 38 64 33 Z" fill="${k.hatC}"/><circle cx="50" cy="24" r="2.2" fill="${k.hatC2}"/>`,
+  corno: k => `<path d="M34 34 Q33 17 48 14 Q58 11 63 18 Q66 24 66 34 Z" fill="${k.hatC}" stroke="${shade(k.hatC, -0.35)}" stroke-width=".8"/>
+    <path d="M32 31 Q50 27 68 31 L68 35 Q50 31 32 35 Z" fill="${k.hatC2}"/><circle cx="50" cy="24" r="1.8" fill="#c23b22"/>`,
 };
 const HAIR = {
   short: c => `<path d="M34.3 41 Q33.5 23.5 50 22.5 Q66.5 23.5 65.7 41 Q63 31 50 30 Q37 31 34.3 41 Z" fill="${c}"/>`,
@@ -1075,7 +1133,7 @@ function render(now, alpha) {
 
   effects = effects.filter(e => now - e.t0 < e.dur);
   for (const e of effects) {
-    const f = (now - e.t0) / e.dur;
+    const f = Math.max(0, (now - e.t0) / e.dur);   // effects made during this frame start slightly after it
     if (e.kind === 'boom') {
       const r = e.r * (0.3 + 0.9 * Math.sqrt(f));
       const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, r);
@@ -1117,7 +1175,9 @@ function render(now, alpha) {
       if (im) {
         ctx.save(); ctx.beginPath(); ctx.arc(sx, cy, r, 0, Math.PI * 2); ctx.clip();
         ctx.drawImage(im, sx - r, cy - r, r * 2, r * 2); ctx.restore();
-        ctx.strokeStyle = war ? '#e74c3c' : ally ? '#2ecc71' : 'rgba(255,255,255,0.85)'; ctx.lineWidth = Math.max(1.5, r * 0.12);
+        // Gold ring while their leader's power is active
+        const powered = q.powerUntil > tick;
+        ctx.strokeStyle = powered ? '#f5c518' : war ? '#e74c3c' : ally ? '#2ecc71' : 'rgba(255,255,255,0.85)'; ctx.lineWidth = Math.max(1.5, r * (powered ? 0.2 : 0.12));
         ctx.beginPath(); ctx.arc(sx, cy, r, 0, Math.PI * 2); ctx.stroke();
         iconHits.push({ id: q.id, x: sx, y: cy, r: Math.max(r, 12) });
       }
@@ -1175,7 +1235,8 @@ function updateHUD() {
   $('sGoldRate').textContent = play && p.alive ? '+' + fmt(G.goldRate(p) * 10) + '/s' : '';
   $('sLand').textContent = (p.tiles / G.landTotal * 100).toFixed(1) + '%';
   $('ratioVal').textContent = Math.round(ratio() * 100) + '% · ' + fmt(p.troops * ratio()) + ' troops';
-  for (const b of document.querySelectorAll('.bb')) {
+  updatePowerButton(p);
+  for (const b of document.querySelectorAll('.bb[data-t]')) {
     const type = b.dataset.t, c = G.costOf(p, type);
     b.querySelector('.c').textContent = fmt(c);
     b.classList.toggle('off', p.gold < c);
@@ -1242,8 +1303,29 @@ function addEvent(html, cls, extra) {
 }
 
 function buildButtons() {
-  $('builds').innerHTML = BUILD_ORDER.map(t => `<button class="bb" data-t="${t}" title="${BUILD[t].name}: ${BUILD[t].tip}"><span class="k">${BUILD[t].key}</span>${ICON_SVG[t]}<span class="n">${BUILD[t].name}</span><span class="c">0</span></button>`).join('');
-  for (const b of document.querySelectorAll('.bb')) b.onclick = () => toggleBuild(b.dataset.t);
+  $('builds').innerHTML = `<button class="bb abil" id="abilBtn"><span class="k">F</span><img id="abilImg" alt=""><span class="n" id="abilName"></span><span class="c" id="abilCd"></span><div class="cdfill" id="abilFill"></div></button>` +
+    BUILD_ORDER.map(t => `<button class="bb" data-t="${t}" title="${BUILD[t].name}: ${BUILD[t].tip}"><span class="k">${BUILD[t].key}</span>${ICON_SVG[t]}<span class="n">${BUILD[t].name}</span><span class="c">0</span></button>`).join('');
+  for (const b of document.querySelectorAll('.bb[data-t]')) b.onclick = () => toggleBuild(b.dataset.t);
+  $('abilBtn').onclick = usePower;
+}
+function usePower() {
+  const p = me();
+  if (G && p && p.leader >= 0 && G.state === 'play' && p.alive) sendAct({ a: 'power' });
+}
+// The leader power button: name, recharge timer and progress
+function updatePowerButton(p) {
+  const L = p.leader >= 0 ? LEADERS[p.leader] : null, b = $('abilBtn');
+  b.classList.toggle('hidden', !L);
+  if (!L) return;
+  const P = L.power, play = G.state === 'play', on = p.powerUntil > G.tick, wait = p.powerReady - G.tick;
+  $('abilImg').src = picURL(p);
+  $('abilName').textContent = '⚡ ' + P.name;
+  $('abilCd').textContent = !p.alive ? '—' : !play ? 'soon' : on ? 'active ' + fmtTime(p.powerUntil - G.tick) : wait > 0 ? fmtTime(wait) : 'READY';
+  $('abilFill').style.width = (on ? (p.powerUntil - G.tick) / (P.dur || 1) : wait > 0 ? 1 - wait / P.cd : 1) * 100 + '%';
+  b.classList.toggle('ready', play && p.alive && !on && wait <= 0);
+  b.classList.toggle('off', !p.alive);
+  b.classList.toggle('on', on);
+  b.title = `${P.name} (F): ${P.desc}\n\n${L.bonus.name} (always on): ${L.bonus.desc}`;
 }
 function toggleBuild(t) {
   const p = me();
@@ -1267,6 +1349,7 @@ function updateTip() {
     if (q.leader >= 0) {
       const L = LEADERS[q.leader];
       html += `<br>Led by ${esc(L.name)}`;
+      if (q.powerUntil > G.tick) html += `<br><span style="color:#f5c518">&#9889; ${esc(L.power.name)} active</span>`;
       if (q.type === 'nation' && o !== meId) { const att = attitude(G.opinion(q, me())); html += ` · <span style="color:${ATT_COLOR[att]}">${att}</span>`; }
     }
     if (G.hasDefensePost(t, o)) html += '<br><span style="color:#f5c518">Protected by a defense post</span>';
@@ -1450,12 +1533,12 @@ function chip(id, cls, extra) {
   const q = G.players[id];
   return `<button data-dip="open:${id}" class="${cls || ''}">${esc(q.name)}${extra ? ' · ' + extra : ''}</button>`;
 }
-function traitChips(T) {
+function traitChips(T, known) {
   return [
     T.aggr >= 0.75 ? ['Warlike', 'hot'] : T.aggr <= 0.3 ? ['Peaceful', 'cool'] : null,
     T.expand >= 0.85 && ['Expansionist'],
     T.loyal >= 0.8 ? ['Loyal ally', 'cool'] : T.loyal <= 0.3 ? ['Treacherous', 'hot'] : null,
-    T.nuke >= 0.9 && ['&#9762; Loves nukes', 'hot'],
+    T.nuke >= 0.9 && known && ['&#9762; Loves nukes', 'hot'],
     T.naval >= 0.85 && ['Seafarer'],
     T.econ >= 0.85 && ['Builder'],
     T.defense >= 0.85 && ['Defender'],
@@ -1518,9 +1601,16 @@ function relHTML(q) {
     h += `<div class="dsec"><h4>${nation ? 'Agenda' : 'Leader'}</h4>`;
     h += nation ? `<div class="agenda"><b>${esc(L.agendaName)}</b> · ${esc(L.agendaDesc)}</div>`
       : `<div class="agenda">${esc(L.title)}. When the computer plays ${esc(L.name)}, their agenda is <b>${esc(L.agendaName)}</b>: ${esc(L.agendaDesc)}</div>`;
-    if (L.hidden && nation) h += `<div class="agenda secret">&#9762; <b>Hidden agenda.</b> ${esc(L.hidden)}</div>`;
-    if (nation) h += `<div style="margin-top:.5rem" class="chips">${traitChips(L.t)}</div>`;
+    // A hidden agenda stays secret until the leader gives it away (Gandhi: his first nuke)
+    const known = !L.hidden || q.nukes > 0 || self;
+    if (L.hidden && nation && q.nukes > 0) h += `<div class="agenda secret">&#9762; <b>Hidden agenda revealed.</b> ${esc(L.hidden)}</div>`;
+    if (nation) h += `<div style="margin-top:.5rem" class="chips">${traitChips(L.t, known)}</div>`;
     h += '</div>';
+    const P = L.power, on = q.powerUntil > G.tick;
+    const status = !q.alive ? '' : on ? `<span class="pos">active · ${fmtTime(q.powerUntil - G.tick)}</span>` : G.state === 'play' && G.tick < q.powerReady ? `ready in ${fmtTime(q.powerReady - G.tick)}` : '<span class="pos">ready</span>';
+    h += `<div class="dsec"><h4>Abilities · ${esc(known ? L.style : 'Peace')}</h4>
+      <div class="agenda"><b>${esc(L.bonus.name)}</b> · ${esc(L.bonus.desc)}${known && L.hidden ? ` <span style="color:#f7d46a">${esc(L.hidden)}</span>` : ''}</div>
+      <div class="agenda"><b>&#9889; ${esc(P.name)}</b> · ${P.secret && !known ? '<i>Something he keeps to himself.</i>' : esc(P.desc)} <span style="color:rgba(255,255,255,.55)">(${status})</span></div></div>`;
   }
   const allies = [...q.allies.keys()].filter(id => G.players[id] && G.players[id].alive);
   const wars = [...q.wars].filter(([id]) => G.players[id] && G.players[id].alive);
@@ -1732,6 +1822,7 @@ addEventListener('keydown', e => {
   else if (dipId) return;   // the diplomacy screen is open: keys don't reach the map
   else if (k === 'p') togglePause();
   else if (k === 'c') centerOnMe();
+  else if (k === 'f') usePower();
   else if (k === '=' || k === '+') zoomAt(VW / 2, VH / 2, 1.25);
   else if (k === '-') zoomAt(VW / 2, VH / 2, 0.8);
   else if (k === 'q' || k === 'e') { const r = $('ratio'); r.value = within(+r.value + (k === 'e' ? 5 : -5), 1, 100); updateHUD(); }
@@ -1795,22 +1886,43 @@ let myLeader = -1;   // -1 = random
 try { const v = localStorage.getItem('frontier-leader'); if (v !== null && LEADERS[+v]) myLeader = +v; } catch (e) { }
 let randomLeader = Math.random() * LEADERS.length | 0;
 const leaderPick = () => myLeader >= 0 ? myLeader : randomLeader;
+const STYLES = FrontierCore.STYLES;
 function showLeaderChoice() {
   const L = LEADERS[myLeader];
   $('leaderImg').src = picURL(null, myLeader);
   $('leaderName').textContent = L ? L.name : 'Random leader';
-  $('leaderSub').textContent = L ? `${L.civ} · ${L.agendaName}` : 'Click to choose who you play as';
+  $('leaderSub').textContent = L ? `${L.civ} · ${L.style} · ⚡ ${L.power.name}` : 'Click to choose who you play as';
   $('nameIn').placeholder = L ? L.civ : 'Player';
 }
-$('leaderBtn').onclick = () => {
-  $('pickGrid').innerHTML = `<button class="pcard ${myLeader < 0 ? 'on' : ''}" data-l="-1"><img src="${picURL(null, -1)}" alt=""><b>Random</b><small>Surprise me</small></button>` +
-    LEADERS.map((L, i) => `<button class="pcard ${myLeader === i ? 'on' : ''}" data-l="${i}" title="${esc(L.agendaName)}: ${esc(L.agendaDesc)}"><img src="${picURL(null, i)}" alt=""><b>${esc(L.name)}</b><small>${esc(L.civ)}</small></button>`).join('');
-  $('pickOv').classList.remove('hidden');
-};
-$('pickGrid').onclick = e => {
+// Bonus and power text for the picker; shows the secret too, since you'd be the one playing them
+function abilityText(L) {
+  return `<p><b>${esc(L.bonus.name)}</b> · ${esc(L.bonus.desc)}</p>
+    <p><b>&#9889; ${esc(L.power.name)}</b> · ${esc(L.power.desc)} <span style="color:rgba(255,255,255,.5)">(recharges in ${fmtTime(L.power.cd)})</span></p>` +
+    (L.hidden ? `<p style="color:#f7d46a"><b>Secret:</b> ${esc(L.hidden)} Other players only see a peaceful leader until the first bomb.</p>` : '');
+}
+function styleBar(el, cur) {
+  el.innerHTML = ['All', ...STYLES].map(s => `<button data-style="${s}" class="${s === cur ? 'on' : ''}">${esc(s)}</button>`).join('');
+}
+let pickStyle = 'All', pickSel = -1;
+function renderPicker() {
+  styleBar($('pickStyles'), pickStyle);
+  const L = LEADERS[pickSel];
+  $('pickInfo').innerHTML = `<img src="${picURL(null, pickSel)}" alt=""><div class="tx">` +
+    (L ? `<b class="nm">${esc(L.name)}</b> · ${esc(L.civ)} · <span style="color:#f7d46a;font-weight:800">${esc(L.style)}</span>${abilityText(L)}`
+       : '<b class="nm">Random leader</b><p>You get a different leader, with their own bonus and power, every game.</p>') +
+    `</div><button class="dbtn" id="pickGo">PLAY AS ${esc(L ? L.name.toUpperCase() : 'RANDOM')}</button>`;
+  const cards = LEADERS.map((L, i) => [L, i]).filter(([L]) => pickStyle === 'All' || L.style === pickStyle);
+  $('pickGrid').innerHTML = (pickStyle === 'All' ? `<button class="pcard ${pickSel < 0 ? 'on' : ''}" data-l="-1"><img src="${picURL(null, -1)}" alt=""><b>Random</b><small>Surprise me</small></button>` : '') +
+    cards.map(([L, i]) => `<button class="pcard ${pickSel === i ? 'on' : ''}" data-l="${i}"><img src="${picURL(null, i)}" alt=""><b>${esc(L.name)}</b><small>${esc(L.civ)}</small><span class="sty">${esc(L.style)}</span></button>`).join('');
+}
+$('leaderBtn').onclick = () => { pickSel = myLeader; renderPicker(); $('pickOv').classList.remove('hidden'); };
+$('pick').onclick = e => {
+  const st = e.target.closest('[data-style]');
+  if (st) { pickStyle = st.dataset.style; renderPicker(); return; }
   const b = e.target.closest('[data-l]');
-  if (!b) return;
-  myLeader = +b.dataset.l;
+  if (b) { pickSel = +b.dataset.l; renderPicker(); return; }
+  if (!e.target.closest('#pickGo')) return;
+  myLeader = pickSel;
   try { if (myLeader >= 0) localStorage.setItem('frontier-leader', myLeader); else localStorage.removeItem('frontier-leader'); } catch (e) { }
   showLeaderChoice();
   $('pickOv').classList.add('hidden');
@@ -1820,8 +1932,63 @@ $('pickClose').onclick = () => $('pickOv').classList.add('hidden');
 $('pickOv').addEventListener('pointerdown', e => { if (e.target === $('pickOv')) $('pickOv').classList.add('hidden'); });
 showLeaderChoice();
 
+// ── Lineup: which leaders the computer nations get ──
+// Counts by leader id (so saved lineups survive roster changes); '_random' slots get any leader.
+let lineCounts = {}, lineStyle = 'All';
+try { lineCounts = JSON.parse(localStorage.getItem('frontier-lineup')) || {}; } catch (e) { }
+const lineTotal = () => Object.values(lineCounts).reduce((a, b) => a + b, 0);
+function lineup() {
+  const out = [];
+  for (const [id, n] of Object.entries(lineCounts)) {
+    const i = id === '_random' ? -1 : LEADERS.findIndex(L => L.id === id);
+    if (id === '_random' || i >= 0) for (let k = 0; k < n; k++) out.push(i);
+  }
+  for (let i = out.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [out[i], out[j]] = [out[j], out[i]]; }
+  return out;
+}
+function setLineCount(id, n) {
+  const others = lineTotal() - (lineCounts[id] || 0);
+  n = within(n | 0, 0, FrontierCore.MAX_NATIONS - others);
+  if (n) lineCounts[id] = n; else delete lineCounts[id];
+  try { localStorage.setItem('frontier-lineup', JSON.stringify(lineCounts)); } catch (e) { }
+}
+function showLineup() {
+  const tot = lineTotal(), slider = $('nNations');
+  slider.disabled = tot > 0;
+  if (tot) { slider.value = tot; $('nNationsV').textContent = tot; }
+  const top = Object.entries(lineCounts).sort((a, b) => b[1] - a[1]).map(([id, n]) => `${n} × ${id === '_random' ? 'random' : (LEADERS.find(L => L.id === id) || {}).name}`);
+  $('lineSum').textContent = tot ? top.slice(0, 2).join(', ') + (top.length > 2 ? ` +${top.length - 2} more` : '') : 'Random leaders';
+}
+function renderLineup() {
+  styleBar($('lineStyles'), lineStyle);
+  $('lineTotal').textContent = `· ${lineTotal()} / ${FrontierCore.MAX_NATIONS}`;
+  const row = (id, img, name, sub) => {
+    const n = lineCounts[id] || 0;
+    return `<div class="lrow2 ${n ? 'has' : ''}"><img src="${img}" alt=""><div class="who">${esc(name)}<small>${esc(sub)}</small></div>
+      <div class="step"><button data-lc="${id}" data-d="-1">&minus;</button><input data-li="${id}" type="number" min="0" max="48" value="${n}"><button data-lc="${id}" data-d="1">+</button></div></div>`;
+  };
+  $('lineGrid').innerHTML = (lineStyle === 'All' ? row('_random', picURL(null, -1), 'Random leader', 'Any leader') : '') +
+    LEADERS.map((L, i) => [L, i]).filter(([L]) => lineStyle === 'All' || L.style === lineStyle)
+      .map(([L, i]) => row(L.id, picURL(null, i), L.name, `${L.civ} · ${L.style}`)).join('');
+}
+$('lineBtn').onclick = () => { renderLineup(); $('lineOv').classList.remove('hidden'); };
+$('line').onclick = e => {
+  const st = e.target.closest('[data-style]');
+  if (st) { lineStyle = st.dataset.style; renderLineup(); return; }
+  const b = e.target.closest('[data-lc]');
+  if (b) { setLineCount(b.dataset.lc, (lineCounts[b.dataset.lc] || 0) + +b.dataset.d); renderLineup(); }
+};
+$('line').addEventListener('change', e => { const id = e.target.dataset && e.target.dataset.li; if (id) { setLineCount(id, +e.target.value); renderLineup(); } });
+const closeLineup = () => { $('lineOv').classList.add('hidden'); showLineup(); };
+$('lineDone').onclick = closeLineup;
+$('lineClose').onclick = closeLineup;
+$('lineClear').onclick = () => { lineCounts = {}; setLineCount('_random', 0); renderLineup(); };
+$('lineOv').addEventListener('pointerdown', e => { if (e.target === $('lineOv')) closeLineup(); });
+showLineup();
+
 $('startBtn').onclick = () => {
-  const cfg = { ...menuCfg, nations: +$('nNations').value, bots: +$('nBots').value, seed: (Math.random() * 2 ** 31) | 0 };
+  const lu = lineup();
+  const cfg = { ...menuCfg, nations: lu.length || +$('nNations').value, bots: +$('nBots').value, seed: (Math.random() * 2 ** 31) | 0, lineup: lu };
   paintReady = false;
   const game = FrontierCore.createGame({ cfg, humans: [{ name: playerName(), leader: leaderPick() }], allowStartNow: true, hooks });
   initGame(game, 1, 'sp');
@@ -1913,7 +2080,8 @@ document.addEventListener('click', e => {
 $('mpCreate').onclick = () => {
   $('mpErr').textContent = '';
   netSend({ t: 'name', name: playerName() });
-  netSend({ t: 'create', cfg: { map: 'continents', size: 'medium', diff: 'medium', nations: 8, bots: 30 } });
+  const lu = lineup();
+  netSend({ t: 'create', cfg: { map: 'continents', size: 'medium', diff: 'medium', nations: lu.length || 8, bots: 30, lineup: lu } });
 };
 $('mpJoin').onclick = () => {
   const code = $('codeIn').value.trim().toUpperCase();
@@ -1939,14 +2107,15 @@ function renderRoom() {
   const c = room.cfg;
   if (room.isHost) {
     const sel = (key, opts, names) => `<div><span class="fl">${key}</span><select data-cfg="${key}">${opts.map(o => `<option value="${o}" ${String(c[key]) === String(o) ? 'selected' : ''}>${names ? names[o] : o}</option>`).join('')}</select></div>`;
-    $('roomCfg').innerHTML = `<div class="mpsel">${sel('map', MAP_KINDS, MAP_NAMES)}${sel('size', ['small', 'medium', 'large'])}${sel('diff', ['easy', 'medium', 'hard', 'impossible'])}${sel('nations', [0, 2, 4, 6, 8, 10, 14, 18, 24])}${sel('bots', [0, 10, 20, 30, 40, 60, 80, 120])}</div>`;
+    $('roomCfg').innerHTML = `<div class="mpsel">${sel('map', MAP_KINDS, MAP_NAMES)}${sel('size', ['small', 'medium', 'large'])}${sel('diff', ['easy', 'medium', 'hard', 'impossible'])}${c.lineup && c.lineup.length ? '' : sel('nations', [0, 2, 4, 6, 8, 10, 14, 18, 24, 32, 40, 48])}${sel('bots', [0, 10, 20, 30, 40, 60, 80, 120])}</div>` +
+      (c.lineup && c.lineup.length ? `<p class="dnote" style="margin:-.4rem 0 .8rem">${c.lineup.length} nations with the leaders you chose in the Singleplayer tab.</p>` : '');
     for (const s of document.querySelectorAll('[data-cfg]')) s.onchange = () => {
       const cfg = { ...room.cfg };
       for (const x of document.querySelectorAll('[data-cfg]')) cfg[x.dataset.cfg] = isNaN(+x.value) ? x.value : +x.value;
       netSend({ t: 'cfg', cfg });
     };
   } else if (!room.isPublic) {
-    $('roomCfg').innerHTML = `<p style="font-size:.8rem;color:rgba(255,255,255,.65);margin-bottom:.9rem">${MAP_NAMES[c.map] || esc(c.map)} · ${esc(c.size)} · ${esc(c.diff)} AI · ${c.nations} nations · ${c.bots} bots. Waiting for the host to start…</p>`;
+    $('roomCfg').innerHTML = `<p style="font-size:.8rem;color:rgba(255,255,255,.65);margin-bottom:.9rem">${MAP_NAMES[c.map] || esc(c.map)} · ${esc(c.size)} · ${esc(c.diff)} AI · ${c.lineup && c.lineup.length ? c.lineup.length + ' hand-picked' : c.nations} nations · ${c.bots} bots. Waiting for the host to start…</p>`;
   } else $('roomCfg').innerHTML = '';
 }
 

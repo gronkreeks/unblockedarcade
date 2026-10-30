@@ -58,8 +58,10 @@ function cleanCfg(c) {
     map: MAPS.includes(c.map) ? c.map : 'continents',
     size: SIZES.includes(c.size) ? c.size : 'medium',
     diff: DIFFS.includes(c.diff) ? c.diff : 'medium',
-    nations: Math.max(0, Math.min(24, c.nations | 0)),
+    nations: Math.max(0, Math.min(Core.MAX_NATIONS, c.nations | 0)),
     bots: Math.max(0, Math.min(120, c.bots | 0)),
+    // Hand-picked leaders, one per nation (repeats allowed, -1 = random)
+    lineup: Array.isArray(c.lineup) ? c.lineup.slice(0, Core.MAX_NATIONS).map(n => cleanLeader(n | 0)) : [],
   };
 }
 function lobbyCode() {
