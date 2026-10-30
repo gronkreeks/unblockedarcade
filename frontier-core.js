@@ -151,14 +151,14 @@ const TRAITOR_TICKS = 1200;        // breaking an alliance weakens your troops b
 const TRUCE_TICKS = 1200;          // computer nations keep a peace treaty for at least 2 minutes
 
 const BUILD = {
-  city:     { name: 'City',      key: '1', time: 50,  tip: '+250K troop cap' },
-  port:     { name: 'Port',      key: '2', time: 50,  tip: 'Trade ships earn gold. +600 gold/s and 15K jobs for civilians. Must be on the coast.' },
-  factory:  { name: 'Factory',   key: '3', time: 60,  tip: '+2.5K gold/s and 25K jobs for civilians' },
+  city:     { name: 'City',      key: '1', time: 50,  tip: '+250K troop cap. Build on a city to raise its level.' },
+  port:     { name: 'Port',      key: '2', time: 50,  tip: 'Sends trade ships that earn gold, plus +600 gold/s and 15K jobs for civilians. Must be on the coast. Build on a port to raise its level.' },
+  factory:  { name: 'Factory',   key: '3', time: 60,  tip: '+2.5K gold/s and 25K jobs for civilians. Build on a factory to raise its level.' },
   defense:  { name: 'Defense',   key: '4', time: 40,  tip: 'Land within 10 tiles is 5× harder to take' },
   silo:     { name: 'Silo',      key: '5', time: 100, tip: 'Launches nukes' },
   sam:      { name: 'SAM',       key: '6', time: 80,  tip: 'Shoots down nukes aimed within 24 tiles' },
-  warship:  { name: 'Warship',   key: '7', time: 0,   tip: 'Click water near your port. Its cannon sinks enemy boats and trade ships in range. Click it, then click water, to move it.' },
-  cruiser:  { name: 'Cruiser',   key: '8', time: 0,   tip: 'Click water near your port. Shells enemy ports, buildings and coast in range. Click it, then click water, to move it.' },
+  warship:  { name: 'Warship',   key: '7', time: 0,   tip: 'Click water near your port. Its cannon sinks the boats and trade ships of nations you are at war with. Click it to give orders: patrol, hold, hunt or escort.' },
+  cruiser:  { name: 'Cruiser',   key: '8', time: 0,   tip: 'Click water near your port. Shells the ports, buildings and coast of nations you are at war with. Click it to give orders: patrol, hold or siege.' },
   atom:     { name: 'Atom Bomb', key: '9', time: 0,   tip: 'Small blast. Needs a ready silo.' },
   hydrogen: { name: 'H-Bomb',    key: '0', time: 0,   tip: 'Huge blast. Needs a ready silo.' },
 };
@@ -166,6 +166,11 @@ const BUILD_ORDER = ['city', 'port', 'factory', 'defense', 'silo', 'sam', 'warsh
 const SHIP_KINDS = ['transport', 'trade', 'warship', 'cruiser'];
 // Index order is sent over the network, so new types go at the end
 const STRUCT_TYPES = ['city', 'port', 'defense', 'silo', 'sam', 'factory'];
+// Building one of these on top of your own raises its level instead (saves room on small islands)
+const STACKS = new Set(['city', 'port', 'factory']);
+// Warship and cruiser orders. Index order is sent over the network, so new ones go at the end.
+const NAVY_MODES = ['patrol', 'hold', 'hunt', 'escort', 'siege'];
+const SHIP_MODES = { warship: ['patrol', 'hold', 'hunt', 'escort'], cruiser: ['patrol', 'hold', 'siege'] };
 
 const SYL = ['ka', 'ro', 'th', 'ul', 'mi', 'zan', 'ok', 'ra', 'en', 'dor', 'vi', 'ash', 'ur', 'tek', 'mo', 'lia', 'gar', 'is', 'bo', 'nu'];
 // Bright, well-separated colours for human players (the first is the singleplayer colour).
@@ -475,6 +480,9 @@ function createGame(opt) {
       troops: type === 'bot' ? 10000 : type === 'nation' ? D.start : 25000,
       gold: 0, tiles: 0, border: new Set(), alive: true, spawned: false,
       civs: 0, share: type === 'human' ? DEFAULT_SHARE : 1, factories: 0, ports: 0,
+      autoStaff: false,    // keep just enough civilians to fill every job
+      freePorts: 0,        // free ports still owed (placed on the first coast the nation owns)
+      tradeIn: 0, tradeNow: 0,   // gold per tick from trade ships (about a minute's average)
       allies: new Map(), traitorUntil: 0, hate: new Map(), cityLevels: 0,
       wars: new Map(),     // enemy id -> { until, start }
       favor: new Map(),    // goodwill from gifts and fair trades
@@ -533,6 +541,15 @@ function createGame(opt) {
   const jobsOf = p => p.ports * PORT_JOBS + p.factories * FACTORY_JOBS;
   const workersOf = p => Math.min(p.civs || 0, jobsOf(p));
   const workerGold = p => workersOf(p) * WORKER_GOLD * p.m.civGold * (resActive('workers') ? 1.3 : 1);
+  // Where the gold comes from, per tick (the parts add up to goldRate before sanctions)
+  function incomeOf(p) {
+    let allies = 0;
+    if (p.m.allyGold) for (const [id] of p.allies) if (players[id].alive) allies += landGold(players[id]) * p.m.allyGold;
+    return {
+      land: landGold(p), workers: workerGold(p), factories: p.factories * FACTORY_GOLD * p.m.factoryGold, ports: p.ports * PORT_GOLD,
+      coast: p.coast * p.m.coastGold, cities: p.cityLevels * p.m.cityGold, allies, trade: p.tradeIn, sanctioned: resActive('sanctions', p.id),
+    };
+  }
   function goldRate(p) {
     let g = landGold(p) + workerGold(p) + p.factories * FACTORY_GOLD * p.m.factoryGold + p.ports * PORT_GOLD
       + p.coast * p.m.coastGold + p.cityLevels * p.m.cityGold;
@@ -786,7 +803,7 @@ function createGame(opt) {
     }
     if (!path) return;
     const t0 = path[0];
-    addShip({ kind: 'trade', owner: s.owner, path, i: 0, x: t0 % W + 0.5, y: ((t0 / W) | 0) + 0.5, dest: d, value: Math.floor(3000 + path.length * 120), speed: 0.9 });
+    addShip({ kind: 'trade', owner: s.owner, path, i: 0, x: t0 % W + 0.5, y: ((t0 / W) | 0) + 0.5, src: s, dest: d, value: Math.floor(3000 + path.length * 120), speed: 0.9 });
   }
   // Warships fire their cannon at enemy ships in range (only nations they are at war with):
   // boats and trade ships sink in one shot, warships and cruisers take damage.
@@ -846,7 +863,7 @@ function createGame(opt) {
         if (++tgt.hits >= 3) {
           tgt.hits = 0;
           const name = BUILD[tgt.type].name.toLowerCase();
-          if (tgt.type === 'city' && tgt.level > 1) { tgt.level--; structVer++; }
+          if (STACKS.has(tgt.type) && tgt.level > 1) { tgt.level--; structVer++; }
           else destroyStruct(tgt);
           if (isHuman(O)) ev(O.id, `An enemy cruiser from ${who(S)} shelled your ${name}`, 'bad', { ttl: 3000 });
           if (isHuman(S)) ev(S.id, `Your cruiser destroyed a ${name} of ${who(O)}`, 'good', { ttl: 3000 });
@@ -872,26 +889,99 @@ function createGame(opt) {
     }
     sail(s);
   }
-  // Warships and cruisers: follow an order, otherwise patrol around their home water
+  // Warships and cruisers: follow a move order, then act on their mode:
+  //   patrol: wander around their spot · hold: stay put · hunt: head for incoming enemy boats and
+  //   ships anywhere in their sea · escort: shadow the trade ships of an assigned port ·
+  //   siege (cruisers): sail to the nearest enemy port and shell it.
   function sail(s) {
-    const sp = players[s.owner].m.warshipSpeed;
+    const P = players[s.owner], sp = P.m.warshipSpeed;
     if (s.ordered) {
       if (s.path && s.i < s.path.length) { followPath(s, WARSHIP_SPEED * sp); return; }
-      s.ordered = false; s.path = null;   // arrived: patrol around the new spot
+      s.ordered = false; s.path = null;   // arrived: carry on from the new spot
     }
+    switch (s.mode) {
+      case 'hold': return;
+      case 'hunt': { const o = huntTarget(s); if (o && chase(s, shipTile(o), 2, 1.4 * sp)) return; break; }
+      case 'escort': {
+        const port = s.port;
+        if (!port || !port.alive || port.owner !== s.owner) { s.mode = 'patrol'; s.port = null; break; }
+        s.home = port.dock;
+        // Stay with one trade ship until it docks, then pick up the next
+        if (!s.escort || s.escort.dead) s.escort = escortTarget(s, port);
+        if (s.escort && chase(s, shipTile(s.escort), 2, 1.6 * sp)) return;
+        break;
+      }
+      case 'siege': {
+        const tgt = enemyPort(P, shipTile(s));
+        if (tgt && chase(s, tgt.dock, CRUISER_RANGE * 0.6, WARSHIP_SPEED * sp)) return;
+        break;
+      }
+    }
+    patrol(s, 0.8 * sp, s.mode === 'escort' ? 12 : 25);
+  }
+  // Sail toward water tile t, re-planning the route every 1.5 s; stops within `keep` tiles
+  function chase(s, t, keep, speed) {
+    const tx = t % W + 0.5, ty = ((t / W) | 0) + 0.5;
+    if (Math.hypot(tx - s.x, ty - s.y) <= keep) { s.path = null; return true; }
+    if (!s.path || s.i >= s.path.length || tick >= (s.replan || 0)) {
+      const cur = shipTile(s), g = waterBFS([t], u => u === cur, 40000);
+      if (g < 0) return false;
+      s.path = tracePath(g); s.i = 0; s.replan = tick + 15;
+    }
+    followPath(s, speed);
+    return true;
+  }
+  // Wander between random spots near home
+  function patrol(s, speed, radius) {
     if (!s.path || s.i >= s.path.length) {
       s.path = null;
       const hx = s.home % W, hy = (s.home / W) | 0, body = waterBody[s.home];
       for (let k = 0; k < 20; k++) {
-        const x = within(hx + ((rand() - 0.5) * 50 | 0), 0, W - 1), y = within(hy + ((rand() - 0.5) * 50 | 0), 0, H - 1), t = y * W + x;
+        const x = within(hx + ((rand() - 0.5) * radius * 2 | 0), 0, W - 1), y = within(hy + ((rand() - 0.5) * radius * 2 | 0), 0, H - 1), t = y * W + x;
         if (terrain[t] || waterBody[t] !== body) continue;
-        const cur = shipTile(s);
-        const g = waterBFS([t], u => u === cur, 6000);
+        const cur = shipTile(s), g = waterBFS([t], u => u === cur, 6000);
         if (g >= 0) { s.path = tracePath(g); s.i = 0; break; }
       }
       if (!s.path) return;
     }
-    followPath(s, 0.8 * sp);
+    followPath(s, speed);
+  }
+  // Nearest enemy ship in the same sea, boats heading for our land first
+  function huntTarget(s) {
+    const body = waterBody[shipTile(s)];
+    let best = null, bd = Infinity;
+    for (const o of ships) {
+      if (o.dead || !atWar(s.owner, o.owner) || waterBody[shipTile(o)] !== body) continue;
+      const d = (o.x - s.x) ** 2 + (o.y - s.y) ** 2, incoming = o.kind === 'transport' && (owner[o.target] === s.owner || allied(s.owner, owner[o.target]));
+      const w = incoming ? d * 0.1 : o.kind === 'trade' ? d * 2 : d;
+      if (w < bd) { bd = w; best = o; }
+    }
+    return best;
+  }
+  // The nearest of our trade ships sailing from this port
+  function escortTarget(s, port) {
+    let best = null, bd = Infinity;
+    for (const o of ships) {
+      if (o.kind !== 'trade' || o.dead || o.src !== port) continue;
+      const d = (o.x - s.x) ** 2 + (o.y - s.y) ** 2;
+      if (d < bd) { bd = d; best = o; }
+    }
+    return best;
+  }
+  // Set a ship's mode. Escorts guard one of their owner's ports.
+  function setShipMode(p, id, mode, portId) {
+    const s = ships.find(x => x.id === id && x.owner === p.id && !x.dead && SHIP_MODES[x.kind]);
+    if (!s) return null;
+    if (!SHIP_MODES[s.kind].includes(mode)) return `A ${s.kind} can't ${mode}`;
+    if (mode === 'escort') {
+      const port = structs.find(x => x.id === portId && x.alive && x.type === 'port' && x.owner === p.id);
+      if (!port) return 'Pick one of your ports to escort from';
+      if (waterBody[port.dock] !== waterBody[shipTile(s)]) return "That port is on another sea";
+      s.port = port; s.home = port.dock;
+    } else s.port = null;
+    s.mode = mode; s.ordered = false; s.path = null; s.escort = null;
+    if (mode === 'hold') s.home = shipTile(s);
+    return null;
   }
   // Send a warship or cruiser to water tile t. Returns why it can't go, or null.
   function orderShip(s, t) {
@@ -901,6 +991,7 @@ function createGame(opt) {
     const g = waterBFS([t], u => u === cur, 60000);
     if (g < 0) return "Your ship can't reach that water";
     s.path = tracePath(g); s.i = 0; s.home = t; s.ordered = true;
+    if (s.mode === 'escort' || s.mode === 'siege') { s.mode = 'patrol'; s.port = null; }   // a move order takes over
     return null;
   }
 
@@ -908,7 +999,7 @@ function createGame(opt) {
   function countUnits(p, type) {
     if (type === 'warship' || type === 'cruiser') return ships.filter(s => s.kind === type && s.owner === p.id).length;
     let n = 0;
-    for (const s of structs) if (s.alive && s.owner === p.id && s.type === type) n += type === 'city' ? s.level : 1;
+    for (const s of structs) if (s.alive && s.owner === p.id && s.type === type) n += STACKS.has(type) ? s.level : 1;
     return n;
   }
   function costOf(p, type) {
@@ -968,7 +1059,7 @@ function createGame(opt) {
     }
     if (owner[t] !== p.id) return 'Build on your own land';
     const ex = structAt[t] >= 0 ? structs[structAt[t]] : null;
-    if (type === 'city' && ex && ex.type === 'city') return null;   // upgrade
+    if (ex && ex.type === type && STACKS.has(type)) return null;   // upgrade
     if (type === 'port' && !coastal[t]) return 'Ports must be on the coast';
     if (!spacingOk(t, 4)) return 'Too close to another building';
     return null;
@@ -992,13 +1083,15 @@ function createGame(opt) {
     return null;
   }
   function addWarship(p, dock, home, kind = 'warship') {
-    return addShip({ kind, owner: p.id, x: dock % W + 0.5, y: ((dock / W) | 0) + 0.5, hp: (kind === 'cruiser' ? 1500 : 1000) * p.m.warshipHp, home, path: null, i: 0, cd: 0 });
+    // Players' ships start on patrol; computer nations hunt with warships and besiege with cruisers
+    const mode = p.type === 'human' ? 'patrol' : kind === 'cruiser' ? 'siege' : 'hunt';
+    return addShip({ kind, owner: p.id, x: dock % W + 0.5, y: ((dock / W) | 0) + 0.5, hp: (kind === 'cruiser' ? 1500 : 1000) * p.m.warshipHp, home, path: null, i: 0, cd: 0, mode, port: null });
   }
   // Put up a building (or raise a city's level) without paying for it
   function placeStruct(p, type, t) {
     structVer++;
     const ex = structAt[t] >= 0 ? structs[structAt[t]] : null;
-    if (type === 'city' && ex) { ex.level++; return ex; }
+    if (ex && ex.type === type && STACKS.has(type)) { ex.level++; return ex; }
     const time = Math.round(BUILD[type].time * p.m.buildTime);
     const s = { id: structs.length, type, owner: p.id, t, x: t % W, y: (t / W) | 0, level: 1, doneAt: tick + time, readyAt: 0, alive: true, dock: -1, nextTrade: tick + time + 30, hits: 0 };
     if (type === 'port') {
@@ -1793,11 +1886,16 @@ function createGame(opt) {
     // Easier difficulties build fewer factories
     if (g >= costOf(p, 'factory') && countUnits(p, 'factory') < (D.factories ? 1 + p.tiles / 1200 : 0.5 + p.tiles / 4000) + T.econ * 0.5) {
       if (ok('factory', findTile(p, t => distT[t] >= 3 && !placeError(p, 'factory', t)))) return;
+      // No room left (small islands): raise an existing factory's level instead
+      const ex = structs.find(s => s.alive && s.type === 'factory' && s.owner === p.id);
+      if (ex && ok('factory', ex.t)) return;
     }
     if (info.coastal && g >= costOf(p, 'port') && countUnits(p, 'port') < 1 + p.tiles / 1600 + T.naval) {
       const opts = [];
       for (const t of p.border) if (coastal[t] && !placeError(p, 'port', t)) { opts.push(t); if (opts.length > 30) break; }
       if (opts.length && ok('port', opts[rand() * opts.length | 0])) return;
+      const ex = structs.find(s => s.alive && s.type === 'port' && s.owner === p.id);
+      if (!opts.length && ex && ok('port', ex.t)) return;
     }
     if ((D.defense || T.defense >= 0.85) && tick > immunityUntil && g >= costOf(p, 'defense') && countUnits(p, 'defense') < (D.defense ? 1 : 0.5) * (1 + p.tiles / 450 * (0.5 + T.defense))) {
       let threat = 0, tt = 0;
@@ -1820,9 +1918,8 @@ function createGame(opt) {
     }
     if (p.wars.size && rand() < 0.2 + T.naval * 0.4 && g >= costOf(p, 'cruiser') && countUnits(p, 'cruiser') < Math.max(1, countUnits(p, 'port'))) {
       const port = structs.find(s => s.alive && s.type === 'port' && s.owner === p.id && s.doneAt <= tick && enemyPort(p, s.dock));
-      if (port && ok('cruiser', port.dock)) aiCruisers(p);
+      if (port) ok('cruiser', port.dock);
     }
-    if (tick % 100 < D.every) aiCruisers(p);
   }
   // An enemy port a ship starting from `dock` can sail to
   function enemyPort(p, dock) {
@@ -1833,14 +1930,6 @@ function createGame(opt) {
       if (d < bd) { bd = d; best = s; }
     }
     return best;
-  }
-  // Idle cruisers sail off to shell the nearest enemy port
-  function aiCruisers(p) {
-    for (const s of ships) {
-      if (s.kind !== 'cruiser' || s.owner !== p.id || s.ordered) continue;
-      const tgt = enemyPort(p, shipTile(s));
-      if (tgt && (s.home !== tgt.dock)) orderShip(s, tgt.dock);
-    }
   }
   // Silos, SAMs and nukes. A nuke lover builds up to three silos early and fires whenever it can pay.
   function aiNukes(p, g, ok, lover) {
@@ -2039,11 +2128,13 @@ function createGame(opt) {
     for (const p of players) {
       if (!p || !p.alive) continue;
       if (p.powerOn && tick >= p.powerUntil) refreshMods(p);
+      if (p.autoStaff && tick % 10 === 0) p.share = within(1 - jobsOf(p) / Math.max(1, p.troops + p.civs), 0.1, 1);
       growPopulation(p);
       p.gold += goldRate(p);
     }
     for (const a of attacks.slice()) if (attacks.includes(a)) stepAttack(a);
 
+    for (const p of players) if (p) p.tradeNow = 0;
     for (const s of ships) { s.px = s.x; s.py = s.y; }
     for (const s of ships) {
       if (s.dead) continue;
@@ -2055,11 +2146,13 @@ function createGame(opt) {
         if (s.kind === 'transport') landBoat(s);
         else if (s.dest.alive && players[s.dest.owner].alive) {
           const free = resActive('freetrade') ? 1.5 : 1;
-          players[s.owner].gold += s.value * players[s.owner].m.tradeGold * free; players[s.dest.owner].gold += s.value * players[s.dest.owner].m.tradeGold * free;
+          for (const q of [players[s.owner], players[s.dest.owner]]) { const g = s.value * q.m.tradeGold * free; q.gold += g; q.tradeNow += g; }
         }
       }
     }
     ships = ships.filter(s => !s.dead);
+    // Trade income averaged over about a minute, for the income panel
+    for (const p of players) if (p) p.tradeIn += (p.tradeNow - p.tradeIn) / 600;
 
     for (const nk of nukes.slice()) {
       if (nk.intercept >= 0 && tick >= nk.intercept) {
@@ -2079,10 +2172,10 @@ function createGame(opt) {
     for (const s of structs) {
       if (!s.alive) continue;
       if (s.type === 'city' && s.doneAt <= tick) players[s.owner].cityLevels += s.level;
-      if (s.type === 'factory' && s.doneAt <= tick) players[s.owner].factories++;
-      if (s.type === 'port' && s.doneAt <= tick) players[s.owner].ports++;
+      if (s.type === 'factory' && s.doneAt <= tick) players[s.owner].factories += s.level;
+      if (s.type === 'port' && s.doneAt <= tick) players[s.owner].ports += s.level;
       if (s.type === 'port' && s.doneAt <= tick && tick >= s.nextTrade && s.dock >= 0) {
-        s.nextTrade = tick + Math.round((100 + (rand() * 60 | 0)) / players[s.owner].m.tradeFreq);
+        s.nextTrade = tick + Math.round((100 + (rand() * 60 | 0)) / (players[s.owner].m.tradeFreq * Math.sqrt(s.level)));
         if (ships.length < 140) spawnTrade(s);
       }
     }
@@ -2125,6 +2218,14 @@ function createGame(opt) {
     if (tick % 20 === 0) computeLabels();
     if (tick % 50 === 0) sweepFallout();
     if (tick % 10 === 0) fairTick();
+    if (tick % 10 === 0) for (const p of players) {
+      if (!p || !p.alive || !p.freePorts) continue;
+      for (const t of p.border) if (coastal[t] && !placeError(p, 'port', t)) {
+        placeStruct(p, 'port', t).doneAt = tick; p.freePorts--;
+        if (isHuman(p)) ev(p.id, 'Your free port is ready', 'good');
+        break;
+      }
+    }
     checkElims();
   }
   function sweepFallout() {
@@ -2145,11 +2246,8 @@ function createGame(opt) {
     // AI nations on easier difficulties also wait longer for their first power
     for (const p of players) if (p) p.powerReady = immunityUntil + (p.type === 'nation' && leaderOf(p) ? Math.round(leaderOf(p).power.cd * (D.powerCd - 1) * 0.5) : 0);
     fair.start = players.filter(p => p && p.alive && p.type !== 'bot').length;
-    // Leaders who start with a free, finished port (Victoria)
-    for (const p of players) {
-      if (!p || !p.alive || !p.m.freePort) continue;
-      for (const t of p.border) if (coastal[t] && !placeError(p, 'port', t)) { placeStruct(p, 'port', t).doneAt = tick; break; }
-    }
+    // Leaders with a free port (Victoria) get it on their first coast
+    for (const p of players) if (p) p.freePorts = p.m.freePort;
     computeLabels();
     ev(0, 'The game has begun! Spawn protection lasts 30 seconds.', 'info');
   }
@@ -2204,7 +2302,12 @@ function createGame(opt) {
       return spawnHuman(p, t) ? null : "You can't spawn there. Pick open land away from other nations.";
     }
     if (i.a === 'startNow') { if (state === 'spawn' && opt.allowStartNow && p.spawned) spawnLeft = 1; return null; }
-    if (i.a === 'share') { if (p.type === 'human') p.share = within(+i.v || DEFAULT_SHARE, 0.1, 1); return null; }
+    if (i.a === 'share') {
+      if (p.type !== 'human') return null;
+      p.autoStaff = !!i.auto;
+      if (!p.autoStaff) p.share = within(+i.v || DEFAULT_SHARE, 0.1, 1);
+      return null;
+    }
     if (state !== 'play' || !p.alive || ended && winner) return null;
     const r = within(+i.r || 0.2, 0.01, 1);
     const q = players[target];
@@ -2218,6 +2321,7 @@ function createGame(opt) {
         const s = ships.find(x => x.id === (i.id | 0) && (x.kind === 'warship' || x.kind === 'cruiser') && x.owner === pid && !x.dead);
         return s ? orderShip(s, t) : null;
       }
+      case 'navy': return setShipMode(p, i.id | 0, String(i.mode), i.port | 0);
       case 'retreat': {
         const a = attacks.find(a => a.p === pid && a.target === target);
         if (a) { removeAttack(a, 0.75); ev(pid, 'Troops retreated', 'info', { ttl: 2000 }); }
@@ -2248,8 +2352,10 @@ function createGame(opt) {
     const m = {
       k: tick, st: state, sl: spawnLeft, im: immunityUntil,
       p: players.map(p => p ? [Math.floor(p.troops), Math.floor(p.gold), p.tiles, p.alive ? 1 : 0, p.traitorUntil, p.cityLevels, p.spawned ? 1 : 0,
-        Math.floor(p.civs), Math.round(p.share * 100), p.factories, p.kills, p.powerReady, p.powerUntil, p.freeNukes, p.nukes, p.ports] : null),
-      sh: ships.map(s => [s.id, SHIP_KINDS.indexOf(s.kind), s.owner, r1(s.x), r1(s.y), r1(s.ang), Math.floor(s.troops || 0)]),
+        Math.floor(p.civs), Math.round(p.share * 100), p.factories, p.kills, p.powerReady, p.powerUntil, p.freeNukes, p.nukes, p.ports,
+        Math.round(p.tradeIn), p.autoStaff ? 1 : 0] : null),
+      sh: ships.map(s => [s.id, SHIP_KINDS.indexOf(s.kind), s.owner, r1(s.x), r1(s.y), r1(s.ang), Math.floor(s.troops || 0),
+        s.kind === 'trade' ? s.src.id : NAVY_MODES.indexOf(s.mode), s.kind === 'trade' ? s.dest.id : s.port ? s.port.id : -1]),
       n: nukes.map(n => [n.owner, n.type === 'atom' ? 0 : 1, n.x0, n.y0, n.tx, n.ty, n.t, n.start, n.dur, n.intercept]),
       a: attacks.map(a => [a.p, a.target, Math.floor(a.troops)]),
     };
@@ -2340,6 +2446,7 @@ function createGame(opt) {
       p.alive = !!p.alive; p.spawned = !!p.spawned;
       p.civs = d[7] || 0; p.share = d[8] == null ? 1 : d[8] / 100; p.factories = d[9] || 0; p.kills = d[10] || 0;
       p.powerReady = d[11] || 0; p.powerUntil = d[12] || 0; p.freeNukes = d[13] || 0; p.nukes = d[14] || 0; p.ports = d[15] || 0;
+      p.tradeIn = d[16] || 0; p.autoStaff = !!d[17];
       if ((p.powerUntil > tick) !== p.powerOn) refreshMods(p);
     });
     if (m.al) m.al.forEach((list, id) => { if (players[id] && list) players[id].allies = new Map(list); });
@@ -2363,9 +2470,11 @@ function createGame(opt) {
       }
     }
     const prev = new Map(ships.map(s => [s.id, s]));
-    ships = m.sh.map(([id, ki, o, x, y, ang, troops]) => {
-      const old = prev.get(id);
-      return { id, kind: SHIP_KINDS[ki], owner: o, x, y, ang, troops, px: old ? old.x : x, py: old ? old.y : y };
+    ships = m.sh.map(([id, ki, o, x, y, ang, troops, a, b]) => {
+      const old = prev.get(id), kind = SHIP_KINDS[ki];
+      const s = { id, kind, owner: o, x, y, ang, troops, px: old ? old.x : x, py: old ? old.y : y };
+      if (kind === 'trade') { s.srcId = a; s.destId = b; } else if (SHIP_MODES[kind]) { s.mode = NAVY_MODES[a] || 'patrol'; s.portId = b; }
+      return s;
     });
     nukes = m.n.map(([o, ty, x0, y0, tx, ty2, t, start, dur, intercept]) => ({ owner: o, type: ty ? 'hydrogen' : 'atom', x0, y0, tx, ty: ty2, t, start, dur, intercept }));
     attacks = m.a.map(([p, target, troops]) => ({ p, target, troops }));
@@ -2432,7 +2541,9 @@ function createGame(opt) {
     cfg, D,
     step: gameTick, act, delta, full, startInfo, apply,
     maxTroops, troopRate, goldRate, costOf, placeError, hasDefensePost, allied, nukePos, civGold: workerGold, jobsOf, workersOf,
-    atWar, countUnits, traitsOf, leaderOf, opinionMods, opinion, touches, resActive, needsWar, declareBlocker,
+    atWar, countUnits, traitsOf, leaderOf, opinionMods, opinion, touches, resActive, needsWar, declareBlocker, incomeOf,
+    // Sea route between two water tiles (for drawing trade routes), or null
+    seaPath(a, b) { const g = waterBFS([b], u => u === a, 250000); return g < 0 ? null : tracePath(g); },
     get fair() { return fair; },
     allianceVerdict, tradeVerdict: (q, p, give, get) => tradeVerdict(q, p, cleanDeal(give), cleanDeal(get)), jointWarVerdict, peaceVerdict,
   };
@@ -2441,7 +2552,7 @@ function createGame(opt) {
 const api = {
   createGame, fmt, esc, within, TICK_MS, SPAWN_TICKS, IMMUNITY_TICKS, WIN_SHARE, DEFENSE_RANGE, SAM_RANGE,
   NUKE, TERR, DIFF, BUILD, BUILD_ORDER, MAP_SIZES, MAP_NAMES, MAP_KINDS, DEFAULT_SHARE, LEADERS, STYLES, attitude, ALLIANCE_TICKS, WAR_TICKS, MAX_NATIONS,
-  RESOLUTIONS, CANNON_RANGE, CRUISER_RANGE,
+  RESOLUTIONS, CANNON_RANGE, CRUISER_RANGE, STACKS, SHIP_MODES, PORT_JOBS, FACTORY_JOBS, PORT_GOLD, FACTORY_GOLD, WORKER_GOLD,
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.FrontierCore = api;

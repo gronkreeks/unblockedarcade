@@ -386,6 +386,22 @@
     #legend span { display: flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
     #legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 
+    .clickable { cursor: pointer; }
+    .clickable:hover .lbl { color: #f5c518; }
+    label.auto { display: flex; align-items: center; gap: 0.35rem; font-size: 0.66rem; font-weight: 800; color: rgba(255,255,255,0.7); cursor: pointer; margin-top: 0.15rem; }
+    label.auto input { accent-color: #f5c518; }
+    #econ { position: fixed; left: 50%; transform: translateX(-50%); bottom: 132px; z-index: 11; width: min(380px, calc(100% - 20px)); padding: 0.6rem 0.8rem; font-size: 0.76rem; }
+    #econ h4, #navy h4 { font-size: 0.6rem; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.5); margin-bottom: 0.35rem; display: flex; justify-content: space-between; }
+    #econ div.r { display: flex; justify-content: space-between; gap: 0.6rem; padding: 2px 0; font-weight: 700; }
+    #econ div.r small { color: rgba(255,255,255,0.5); font-weight: 600; margin-left: 0.4rem; }
+    #econ div.r b { color: #7beaa9; font-variant-numeric: tabular-nums; }
+    #navy { position: fixed; left: 50%; transform: translateX(-50%); bottom: 132px; z-index: 11; width: min(460px, calc(100% - 20px)); padding: 0.6rem 0.8rem; }
+    .navyModes { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+    .navyModes button { flex: 1; min-width: 80px; font-family: inherit; font-size: 0.72rem; font-weight: 800; color: #fff; padding: 0.4rem 0.3rem; border-radius: 9px; cursor: pointer; background: rgba(255,255,255,0.08); border: 1.5px solid rgba(255,255,255,0.15); }
+    .navyModes button.on { border-color: #f5c518; background: rgba(245,197,24,0.2); }
+    #navy .dnote { margin-top: 0.45rem; }
+    @media (max-width: 760px) { #econ, #navy { bottom: 186px; } }
+
     /* War confirmation and World's Fair */
     #askOv, #fairOv { position: fixed; inset: 0; z-index: 32; background: rgba(5,10,25,0.6); display: flex; align-items: center; justify-content: center; padding: 16px; }
     #ask { width: min(460px, 100%); padding: 1rem 1.1rem; background: rgba(10,20,45,0.97); }
@@ -515,7 +531,7 @@
       <div class="stat"><span class="lbl">Troops</span><span id="sTroops">0</span><span class="rate" id="sTroopRate"></span></div>
       <div class="bar"><div id="troopBar"></div></div>
       <div class="stat" title="Civilians only earn gold while working: each port has 15K jobs and each factory 25K"><span class="lbl">Civs</span><span id="sCivs">0</span><span class="rate" id="sCivGold" style="color:#f5c518"></span></div>
-      <div class="stat"><span class="lbl">Gold</span><span id="sGold" style="color:#f5c518">0</span><span class="rate" id="sGoldRate"></span></div>
+      <div class="stat clickable" id="goldStat" title="Click to see where your gold comes from"><span class="lbl">Gold</span><span id="sGold" style="color:#f5c518">0</span><span class="rate" id="sGoldRate"></span></div>
       <div class="stat"><span class="lbl">Land</span><span id="sLand">0%</span></div>
     </div>
     <div id="ratioBox">
@@ -525,10 +541,13 @@
       <span class="lbl" style="margin-top:0.25rem" title="Civilians earn gold but don't fight. Troops attack and defend your land.">Troops / civilians</span>
       <input type="range" id="share" min="10" max="100" value="80" class="share">
       <span id="shareVal">80% troops</span>
+      <label class="auto" title="Keep just enough civilians to fill every job in your ports and factories"><input type="checkbox" id="autoStaff"> Auto-staff jobs</label>
     </div>
     <div id="builds"></div>
   </div>
 
+  <div id="econ" class="panel hidden"></div>
+  <div id="navy" class="panel hidden"></div>
   <div id="tip" class="panel hidden"></div>
   <div id="ctx" class="panel hidden"></div>
 
@@ -730,12 +749,13 @@
 </div>
 
 <!-- ?v= makes browsers fetch the matching rules after an update -->
-<script src="frontier-maps.js?v=4"></script>
-<script src="frontier-leaders.js?v=4"></script>
-<script src="frontier-core.js?v=4"></script>
+<script src="frontier-maps.js?v=5"></script>
+<script src="frontier-leaders.js?v=5"></script>
+<script src="frontier-core.js?v=5"></script>
 <script src="chat-alerts.js"></script>
 <script>
 'use strict';
+const RULES_V = 5;   // keep in step with the ?v= on the rules scripts above
 // Frontier client: renders the game and sends the player's actions. The rules live in
 // frontier-core.js. Singleplayer runs them here; multiplayer receives them from the server.
 const { fmt, esc, within, BUILD, BUILD_ORDER, NUKE, TERR, DEFENSE_RANGE, SAM_RANGE, TICK_MS, IMMUNITY_TICKS } = FrontierCore;
@@ -918,7 +938,7 @@ const VIEWS = { political: 'Political', terrain: 'Terrain', relations: 'Relation
 let view = 'political';
 const LEGENDS = {
   relations: [['You', [70, 140, 255]], ['Allies', [46, 204, 113]], ['At war', [231, 76, 60]], ['Friendly', [140, 220, 120]], ['Neutral', [215, 200, 120]], ['Unfriendly', [240, 150, 60]], ['Hostile', [190, 60, 50]], ['Players', [160, 160, 200]], ['Tribes', [120, 120, 120]]],
-  trade: [['Ports', [245, 197, 24]], ['Trade ships', [242, 230, 184]]],
+  trade: [['Ports', [245, 197, 24]], ['Trade ships', [242, 230, 184]], ['Trade routes (yours are brighter)', [200, 200, 230]]],
 };
 function setView(v) {
   view = v;
@@ -988,6 +1008,7 @@ function initGame(game, myId, m) {
   paintReady = true;
   for (let t = 0; t < G.N; t++) paint(t);
   paused = false; speed = 1; buildMode = null; endShown = false; effects = []; trails.clear(); selShip = -1; shipOrders.clear();
+  routes.clear(); pickPort = -1; $('econ').classList.add('hidden'); $('navy').classList.add('hidden');
   $('speedBtn').innerHTML = '1&times;'; $('pauseBtn').innerHTML = '&#10074;&#10074;'; $('paused').classList.add('hidden');
   $('pauseBtn').classList.toggle('hidden', m === 'mp'); $('speedBtn').classList.toggle('hidden', m === 'mp');
   $('feedWrap').innerHTML = '';
@@ -1059,7 +1080,7 @@ function drawStruct(s, k) {
   }
   ctx.fill(); ctx.stroke();
   if (s.type === 'port') { ctx.fillStyle = '#fff'; ctx.fillRect(x - r * 0.12, y - r * 0.6, r * 0.24, r * 1.2); ctx.fillRect(x - r * 0.45, y - r * 0.2, r * 0.9, r * 0.2); }
-  if (s.type === 'city' && s.level > 1 && r * cam.s > 6) {
+  if (FrontierCore.STACKS.has(s.type) && s.level > 1 && r * cam.s > 6) {
     ctx.fillStyle = '#fff'; ctx.font = `900 ${r * 1.1}px Segoe UI`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(s.level, x, y + r * 0.25);
   }
@@ -1201,7 +1222,8 @@ function render(now, alpha) {
   for (const s of G.structs) if (s.alive) drawStruct(s, k);
   drawTrails(k, alpha);
   if (view === 'trade') {
-    // Ports glow, sized by the jobs they give; trade ships are drawn bigger
+    drawRoutes(k);
+    // Ports glow; trade ships are drawn bigger
     for (const s of G.structs) if (s.alive && s.type === 'port') {
       const g = ctx.createRadialGradient(s.x + 0.5, s.y + 0.5, 0, s.x + 0.5, s.y + 0.5, 9);
       g.addColorStop(0, 'rgba(245,197,24,0.55)'); g.addColorStop(1, 'rgba(245,197,24,0)');
@@ -1329,6 +1351,13 @@ function updateHUD() {
   $('sCivs').textContent = `${fmt(p.civs || 0)} · ${fmt(G.workersOf(p))}/${fmt(G.jobsOf(p))} jobs`;
   $('sCivGold').textContent = play && p.alive && G.workersOf(p) >= 1 ? '+' + fmt(G.civGold(p) * 10) + '/s' : '';
   updateFair();
+  updateNavy();
+  updateEcon();
+  // Keep floating panels just above the bottom bar, whatever its height
+  const above = $('bottom').offsetHeight + 18 + 'px';
+  for (const id of ['navy', 'econ', 'attacks']) $(id).style.bottom = above;
+  if ($('autoStaff').checked && G.state === 'play') $('share').value = Math.round(p.share * 100);
+  $('share').disabled = $('autoStaff').checked;
   if (view === 'relations' && ++relTick % 5 === 0) setView('relations');
   const sh = +$('share').value;
   $('shareVal').textContent = sh + '% troops · ' + (100 - sh) + '% civilians';
@@ -1403,6 +1432,13 @@ function addEvent(html, cls, extra) {
   setTimeout(() => d.remove(), (extra && extra.ttl) || 7000);
 }
 
+// The build bar scrolls sideways with the mouse wheel
+$('builds').addEventListener('wheel', e => {
+  const el = $('builds');
+  if (el.scrollWidth <= el.clientWidth) return;
+  el.scrollLeft += Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+  e.preventDefault();
+}, { passive: false });
 function buildButtons() {
   $('builds').innerHTML = `<button class="bb abil" id="abilBtn"><span class="k">F</span><img id="abilImg" alt=""><span class="n" id="abilName"></span><span class="c" id="abilCd"></span><div class="cdfill" id="abilFill"></div></button>` +
     BUILD_ORDER.map(t => `<button class="bb" data-t="${t}" title="${BUILD[t].name}: ${BUILD[t].tip}"><span class="k">${BUILD[t].key}</span>${ICON_SVG[t]}<span class="n">${BUILD[t].name}</span><span class="c">0</span></button>`).join('');
@@ -1442,7 +1478,9 @@ function updateTip() {
   if (!G || !p || !mouse.inside || hoverTile < 0 || !$('ctx').classList.contains('hidden')) { tip.classList.add('hidden'); return; }
   const t = hoverTile, o = G.owner[t];
   let html;
-  if (!G.terrain[t]) html = '<b>Ocean</b>';
+  const st = structNear(t);
+  if (st && !buildMode) html = structInfo(st);
+  else if (!G.terrain[t]) html = '<b>Ocean</b>';
   else if (!o) html = `<b>Unclaimed ${TERR[G.terrain[t]].name.toLowerCase()}</b>${G.falloutUntil[t] > G.tick ? '<br><span style="color:#9be36b">Nuclear fallout</span>' : ''}`;
   else {
     const q = G.players[o];
@@ -1522,10 +1560,11 @@ function primaryAction(t, multi, sx, sy) {
     const id = shipAt(sx, sy);
     if (id >= 0) {
       selShip = selShip === id ? -1 : id;
-      if (selShip >= 0) addEvent('Ship selected. Click water to send it there, Esc to cancel.', 'info', { ttl: 2500 });
+      updateNavy();
       return;
     }
   }
+  if (pickPort >= 0) { pickEscortPort(t); updateNavy(); return; }
   if (selShip >= 0) {
     const w = nearestTile(t, u => !G.terrain[u]);
     if (w >= 0) {
@@ -1535,7 +1574,7 @@ function primaryAction(t, multi, sx, sy) {
       shipOrders.set(selShip, { t: w, until: G.tick + Math.ceil(d * 2.2) + 20 });
     }
     else addEvent('Click on water to move your ship', 'warn', { ttl: 2000 });
-    selShip = -1;
+    selShip = -1; updateNavy();
     return;
   }
   t = snapTarget(t);
@@ -1601,6 +1640,130 @@ function openCtxAt(t, sx, sy) {
   updateTip();
 }
 function hideCtx() { $('ctx').classList.add('hidden'); }
+
+// ════════════════ Ship orders ════════════════
+// Shown while one of your warships or cruisers is selected.
+const MODE_INFO = {
+  patrol: ['&#9875; Patrol', 'Cruises around the spot you send it to.'],
+  hold: ['&#9940; Hold', 'Stays exactly where it is.'],
+  hunt: ['&#127919; Hunt', 'Heads straight for incoming enemy boats, then other enemy ships, anywhere in its sea.'],
+  escort: ['&#128737; Escort', 'Guards one of your trade routes: shadows the trade ships leaving a port. Pick the port next.'],
+  siege: ['&#128163; Siege', 'Sails to the nearest enemy port and shells it.'],
+};
+let pickPort = -1;   // ship waiting for the player to click the port it should escort
+function updateNavy() {
+  const s = selShip >= 0 && G.ships.find(x => x.id === selShip), panel = $('navy');
+  panel.classList.toggle('hidden', !s);
+  if (!s) { pickPort = -1; return; }
+  const modes = FrontierCore.SHIP_MODES[s.kind], port = s.mode === 'escort' && G.structs.find(x => x.id === (s.port ? s.port.id : s.portId));
+  const help = pickPort === s.id ? '<b style="color:#f5c518">Click one of your ports to escort its trade ships.</b>' : esc(MODE_INFO[s.mode] ? MODE_INFO[s.mode][1].replace(' Pick the port next.', '') : '');
+  setHTML(panel, `<h4><span>Your ${s.kind} · ${port ? 'escorting a port' : esc(s.mode)}</span><span>Esc to close</span></h4>
+    <div class="navyModes">${modes.map(m => `<button data-mode="${m}" class="${s.mode === m ? 'on' : ''}" title="${esc(MODE_INFO[m][1])}">${MODE_INFO[m][0]}</button>`).join('')}</div>
+    <p class="dnote">${help} It only fires at nations you are at war with. Click water to send it somewhere.</p>`);
+}
+$('navy').addEventListener('click', e => {
+  const b = e.target.closest('[data-mode]');
+  if (!b || selShip < 0) return;
+  const mode = b.dataset.mode;
+  if (mode === 'escort') { pickPort = selShip; addEvent('Click one of your ports for this warship to escort', 'info', { ttl: 3000 }); }
+  else { pickPort = -1; sendAct({ a: 'navy', id: selShip, mode }); }
+  updateNavy();
+});
+// The click after choosing Escort picks the port (the nearest of yours within a few tiles)
+function pickEscortPort(t) {
+  const x = t % G.W, y = (t / G.W) | 0;
+  let best = null, bd = 64;
+  for (const s of G.structs) {
+    if (!s.alive || s.type !== 'port' || s.owner !== meId) continue;
+    const d = (s.x - x) ** 2 + (s.y - y) ** 2;
+    if (d < bd) { bd = d; best = s; }
+  }
+  if (best) sendAct({ a: 'navy', id: pickPort, mode: 'escort', port: best.id });
+  else addEvent('Click closer to one of your ports', 'warn', { ttl: 2500 });
+  pickPort = -1;
+}
+
+// ════════════════ Income ════════════════
+function updateEcon() {
+  const p = me(), el = $('econ');
+  if (el.classList.contains('hidden') || !p) return;
+  const inc = G.incomeOf(p), ps = v => '+' + fmt(v * 10) + '/s';
+  const rows = [
+    ['Land', inc.land, ''],
+    ['Workers', inc.workers, `${fmt(G.workersOf(p))} of ${fmt(G.jobsOf(p))} jobs filled`],
+    ['Factories', inc.factories, `${p.factories} level${p.factories === 1 ? '' : 's'}`],
+    ['Ports', inc.ports, `${p.ports} level${p.ports === 1 ? '' : 's'}`],
+    ['Trade ships', inc.trade, 'average over the last minute'],
+    ['Coast', inc.coast, ''], ['Cities', inc.cities, ''], ['Allies', inc.allies, ''],
+  ].filter(([n, v]) => v > 0 || n === 'Workers' || n === 'Ports' || n === 'Factories' || n === 'Trade ships');
+  setHTML(el, `<h4><span>Income · ${ps(G.goldRate(p) + inc.trade)}</span><span>click Gold to close</span></h4>` +
+    rows.map(([n, v, note]) => `<div class="r"><span>${n}${note ? `<small>${note}</small>` : ''}</span><b>${ps(v)}</b></div>`).join('') +
+    (inc.sanctioned ? '<p class="dnote" style="color:#ff8f80">World\'s Fair sanctions cut your income by 30%.</p>' : '') +
+    (G.workersOf(p) < G.jobsOf(p) ? '<p class="dnote">Some jobs are empty. Move the troops/civilians slider toward civilians, or tick <b>Auto-staff jobs</b>.</p>' : ''));
+}
+$('goldStat').onclick = () => { $('econ').classList.toggle('hidden'); updateEcon(); };
+// What a building under the mouse does, for the tooltip
+function structInfo(s) {
+  const lv = s.level > 1 ? ` (level ${s.level})` : '', q = G.players[s.owner], mine = s.owner === meId;
+  const C = FrontierCore, gs = v => fmt(v * 10) + ' gold/s';
+  let h = `<b>${BUILD[s.type].name}${lv}</b> · ${mine ? 'yours' : esc(q.name)}`;
+  if (s.doneAt > G.tick) return h + '<br>Under construction';
+  if (s.type === 'port') {
+    h += `<br>+${gs(C.PORT_GOLD * s.level)} and ${fmt(C.PORT_JOBS * s.level)} jobs`;
+    if (mine && q.ports) h += `<br>Your trade ships earn about ${gs(q.tradeIn)} across ${q.ports} port level${q.ports === 1 ? '' : 's'}`;
+  }
+  if (s.type === 'factory') h += `<br>+${gs(C.FACTORY_GOLD * s.level * q.m.factoryGold)} and ${fmt(C.FACTORY_JOBS * s.level)} jobs`;
+  if (mine && C.STACKS.has(s.type)) h += '<br><span style="color:rgba(255,255,255,.5)">Build on it again to raise its level</span>';
+  return h;
+}
+function structNear(t) {
+  const x = t % G.W, y = (t / G.W) | 0;
+  let best = null, bd = 2.3 * 2.3;
+  for (const s of G.structs) { if (!s.alive) continue; const d = (s.x - x) ** 2 + (s.y - y) ** 2; if (d <= bd) { bd = d; best = s; } }
+  return best;
+}
+
+// ════════════════ Trade routes (trade view) ════════════════
+// Sea routes between ports that trade ships are sailing, worked out once per pair of ports.
+const routes = new Map();   // "src>dest" -> { pts, owner, seen }
+let routesNew = 0;
+function drawRoutes(k) {
+  const byId = new Map(G.structs.map(s => [s.id, s]));
+  routesNew = 0;
+  for (const s of G.ships) {
+    if (s.kind !== 'trade') continue;
+    const a = s.src ? s.src.id : s.srcId, b = s.dest ? s.dest.id : s.destId, key = a + '>' + b;
+    let r = routes.get(key);
+    if (!r) {
+      const A = byId.get(a), B = byId.get(b);
+      if (!A || !B || routesNew >= 2) continue;   // a couple of new routes a frame keeps it smooth
+      routesNew++;
+      const path = G.seaPath(A.dock, B.dock);
+      if (!path) continue;
+      // Ships steer along a grid path; average it out so the line reads as a smooth course
+      const raw = path.map(t => [t % G.W + 0.5, ((t / G.W) | 0) + 0.5]), pts = [], R = 4;
+      for (let i = 0; i < raw.length; i += 3) {
+        let x = 0, y = 0, n = 0;
+        for (let j = Math.max(0, i - R); j <= Math.min(raw.length - 1, i + R); j++) { x += raw[j][0]; y += raw[j][1]; n++; }
+        pts.push(x / n, y / n);
+      }
+      const last = raw[raw.length - 1];
+      pts.push(last[0], last[1]);
+      routes.set(key, r = { pts, owner: s.owner });
+    }
+    r.seen = G.tick;
+  }
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const [key, r] of routes) {
+    if (G.tick - r.seen > 600) { routes.delete(key); continue; }
+    const c = G.players[r.owner].color.map(v => (v + 255) / 2 | 0), mine = r.owner === meId;
+    ctx.strokeStyle = `rgba(${c[0]},${c[1]},${c[2]},${mine ? 0.9 : 0.55})`;
+    ctx.lineWidth = (mine ? 2.2 : 1.4) * k;
+    ctx.beginPath();
+    for (let i = 0; i < r.pts.length; i += 2) if (i) ctx.lineTo(r.pts[i], r.pts[i + 1]); else ctx.moveTo(r.pts[i], r.pts[i + 1]);
+    ctx.stroke();
+  }
+}
 
 // ════════════════ War declarations ════════════════
 // Attacking a nation or player needs a declared war, so ask first. run(declare) does the action.
@@ -2015,7 +2178,7 @@ addEventListener('keydown', e => {
     if (!$('askOv').classList.contains('hidden')) { closeAsk(false); return; }
     if (!$('fairOv').classList.contains('hidden')) { closeFair(); return; }
     if (dipId) { closeDip(); return; }
-    buildMode = null; selShip = -1; hideCtx(); updateHUD();
+    buildMode = null; selShip = -1; pickPort = -1; hideCtx(); $('econ').classList.add('hidden'); updateHUD();
   }
   else if (dipId) return;   // the diplomacy screen is open: keys don't reach the map
   else if (k === 'p') togglePause();
@@ -2050,7 +2213,8 @@ $('viewBtn').onclick = cycleView;
 $('ratio').oninput = updateHUD;
 // Troops vs civilians: tell the game, at most every 150 ms while dragging
 let shareT = null;
-function sendShare() { clearTimeout(shareT); shareT = null; if (G) sendAct({ a: 'share', v: +$('share').value / 100 }); }
+function sendShare() { clearTimeout(shareT); shareT = null; if (G) sendAct({ a: 'share', v: +$('share').value / 100, auto: $('autoStaff').checked }); }
+$('autoStaff').onchange = () => { sendShare(); updateHUD(); };
 $('share').oninput = () => { updateHUD(); if (!shareT) shareT = setTimeout(sendShare, 150); };
 $('share').onchange = sendShare;
 $('boardHd').onclick = () => { $('board').classList.toggle('collapsed'); $('boardTog').innerHTML = $('board').classList.contains('collapsed') ? '&#9656;' : '&#9662;'; };
@@ -2200,6 +2364,28 @@ $('watchBtn').onclick = () => $('endOv').classList.add('hidden');
 
 // ════════════════ Multiplayer ════════════════
 let ws = null, netOpen = false, netLost = false, retryMs = 1000, retryT = null, room = null;
+// The server's rules must match this page's or games would go out of sync (for example while the
+// server is still redeploying after an update). Both sides fingerprint the same three files.
+let pageRules = null, serverRules = null;
+(async () => {
+  if (location.protocol === 'file:') return;   // opened from disk: browsers won't let the page read its own files
+  try {
+    const parts = await Promise.all(['frontier-core.js', 'frontier-leaders.js', 'frontier-maps.js'].map(f =>
+      fetch(f + '?v=' + RULES_V).then(r => { if (!r.ok) throw new Error(f); return r.arrayBuffer(); })));
+    const all = new Uint8Array(parts.reduce((n, b) => n + b.byteLength, 0));
+    let o = 0;
+    for (const b of parts) { all.set(new Uint8Array(b), o); o += b.byteLength; }
+    const h = new Uint8Array(await crypto.subtle.digest('SHA-1', all));
+    pageRules = [...h].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 8);
+  } catch (e) { pageRules = null; }   // opened from a file: can't check
+  checkRules();
+})();
+const rulesMismatch = () => !!(pageRules && serverRules && pageRules !== serverRules);
+function checkRules() {
+  const bad = rulesMismatch();
+  for (const id of ['mpCreate', 'mpJoin', 'roomStart']) $(id).disabled = bad;
+  if (bad) setStatus('wait', 'The game server is still updating to this version of Frontier. Multiplayer will be ready in a few minutes; reload the page then.');
+}
 function setStatus(cls, text) { $('mpDot').className = 'dot ' + cls; $('mpStatus').textContent = text; }
 function netSend(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
 function netConnect() {
@@ -2230,10 +2416,12 @@ function onNet(m) {
       try { sessionStorage.setItem('frontier-token', m.token); } catch (e) { }
       netLost = false;
       setStatus('on', 'Connected');
+      serverRules = m.core || 'older';   // servers from before this check don't say, so they are out of date
+      checkRules();
       if (chatOn) netSend({ t: 'chatOn', on: true });
       break;
     case 'lobbies':
-      setStatus('on', `Online · ${m.online} connected · ${m.games} game${m.games === 1 ? '' : 's'} running`);
+      if (!rulesMismatch()) setStatus('on', `Online · ${m.online} connected · ${m.games} game${m.games === 1 ? '' : 's'} running`);
       if (!room) renderLobbies(m.list);
       break;
     case 'room':
@@ -2276,6 +2464,7 @@ function renderLobbies(list) {
 }
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-joinpub]');
+  if (b && rulesMismatch()) { checkRules(); return; }
   if (b) { $('mpErr').textContent = ''; netSend({ t: 'name', name: playerName() }); netSend({ t: 'joinPublic', id: b.dataset.joinpub }); }
 });
 $('mpCreate').onclick = () => {

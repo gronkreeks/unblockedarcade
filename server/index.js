@@ -13,7 +13,8 @@ const Core = require('../frontier-core.js');
 // Render only redeploys when something in server/ changes, but the game rules live in
 // ../frontier-core.js (with ../frontier-leaders.js and ../frontier-maps.js). After changing them,
 // touch this file (or deploy by hand) or the live server keeps running the old rules. /status
-// reports the rules it loaded so you can check. Last rules change: navy rework, jobs, World's Fair.
+// reports the rules it loaded so you can check, and players get it on connecting: the page compares it
+// with its own copy of the rules and won't start a game against a server running different ones.
 const CORE_HASH = (() => {
   const h = crypto.createHash('sha1');
   for (const f of ['../frontier-core.js', '../frontier-leaders.js', '../frontier-maps.js']) h.update(fs.readFileSync(require.resolve(f)));
@@ -222,7 +223,7 @@ function onMessage(ws, raw) {
       if (old.ws && old.ws !== ws) old.ws.session = null;
       old.ws = ws; ws.session = old;
       const g = old.room.game;
-      send(ws, { t: 'welcome', token: old.token });
+      send(ws, { t: 'welcome', token: old.token, core: CORE_HASH });
       send(ws, { t: 'start', ...g.startInfo(), me: old.pid, rejoin: true });
       send(ws, { t: 'tick', ...g.full() });
       return;
@@ -230,7 +231,7 @@ function onMessage(ws, raw) {
     const s = { token: crypto.randomBytes(16).toString('hex'), name: cleanName(m.name), leader: cleanLeader(m.leader), ws, room: null, pid: 0, chatOn: false, chatRate: newRate() };
     sessions.set(s.token, s);
     ws.session = s;
-    send(ws, { t: 'welcome', token: s.token });
+    send(ws, { t: 'welcome', token: s.token, core: CORE_HASH });
     return;
   }
   const s = ws.session;
