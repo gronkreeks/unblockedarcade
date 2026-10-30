@@ -382,6 +382,27 @@
     .wrow .dbtn { padding: 0.35rem 0.8rem; font-size: 0.68rem; flex-shrink: 0; }
     .wrow img { width: 26px; height: 26px; border-radius: 50%; border: 2px solid; flex-shrink: 0; background: #16294d; }
 
+    #legend { position: fixed; top: 58px; left: 50%; transform: translateX(-50%); z-index: 10; padding: 0.3rem 0.7rem; display: flex; gap: 0.7rem; flex-wrap: wrap; justify-content: center; font-size: 0.68rem; font-weight: 700; max-width: calc(100% - 20px); }
+    #legend span { display: flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
+    #legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+    /* War confirmation and World's Fair */
+    #askOv, #fairOv { position: fixed; inset: 0; z-index: 32; background: rgba(5,10,25,0.6); display: flex; align-items: center; justify-content: center; padding: 16px; }
+    #ask { width: min(460px, 100%); padding: 1rem 1.1rem; background: rgba(10,20,45,0.97); }
+    #askBody { display: flex; gap: 0.9rem; align-items: flex-start; margin-bottom: 0.9rem; font-size: 0.8rem; line-height: 1.5; color: rgba(255,255,255,0.8); }
+    #askBody img { width: 64px; height: 64px; border-radius: 50%; border: 3px solid; flex-shrink: 0; background: #16294d; }
+    #askBody b { display: block; font-size: 1rem; color: #fff; margin-bottom: 0.25rem; }
+    #fair { width: min(620px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; padding: 1rem 1.1rem; background: rgba(10,20,45,0.97); }
+    #fair h4 { font-size: 0.6rem; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.45); margin: 0.9rem 0 0.4rem; }
+    .fairWhy { font-size: 0.8rem; line-height: 1.5; color: rgba(255,255,255,0.78); margin-bottom: 0.6rem; }
+    .resRow { display: flex; align-items: center; gap: 0.7rem; padding: 0.55rem 0.7rem; border-radius: 10px; background: rgba(0,0,0,0.25); margin-bottom: 0.4rem; }
+    .resRow > div:first-child { flex: 1; min-width: 0; font-size: 0.82rem; }
+    .resRow small { display: block; color: rgba(255,255,255,0.6); font-size: 0.72rem; margin-top: 2px; line-height: 1.4; }
+    .resRow .vote { display: flex; gap: 0.3rem; flex-shrink: 0; }
+    .resRow .left { font-size: 0.72rem; font-weight: 800; color: #f7d46a; font-variant-numeric: tabular-nums; }
+    #fairBtn.hot { background: rgba(245,197,24,0.3); border-color: #f5c518; animation: pulse 1.2s ease-in-out infinite; }
+    @keyframes pulse { 50% { box-shadow: 0 0 14px rgba(245,197,24,0.8); } }
+
     /* Leader picker (menu) */
     .leaderPick {
       width: 100%; display: flex; align-items: center; gap: 0.7rem; text-align: left; cursor: pointer; font-family: inherit; color: #fff;
@@ -473,7 +494,10 @@
     <button class="pill" id="pauseBtn" title="Pause (P)">&#10074;&#10074;</button>
     <button class="pill" id="speedBtn" title="Game speed">1&times;</button>
     <button class="pill" id="homeBtn" title="Center on your land (C)">&#9678;</button>
+    <button class="pill" id="viewBtn" title="Map view (V)">Political</button>
+    <button class="pill hidden" id="fairBtn" title="World's Fair">&#127963;</button>
   </div>
+  <div id="legend" class="panel hidden"></div>
 
   <div id="board" class="panel">
     <h3 id="boardHd">Leaderboard <span id="boardTog">&#9662;</span></h3>
@@ -490,7 +514,7 @@
     <div id="stats">
       <div class="stat"><span class="lbl">Troops</span><span id="sTroops">0</span><span class="rate" id="sTroopRate"></span></div>
       <div class="bar"><div id="troopBar"></div></div>
-      <div class="stat"><span class="lbl">Civs</span><span id="sCivs">0</span><span class="rate" id="sCivGold" style="color:#f5c518"></span></div>
+      <div class="stat" title="Civilians only earn gold while working: each port has 15K jobs and each factory 25K"><span class="lbl">Civs</span><span id="sCivs">0</span><span class="rate" id="sCivGold" style="color:#f5c518"></span></div>
       <div class="stat"><span class="lbl">Gold</span><span id="sGold" style="color:#f5c518">0</span><span class="rate" id="sGoldRate"></span></div>
       <div class="stat"><span class="lbl">Land</span><span id="sLand">0%</span></div>
     </div>
@@ -507,6 +531,20 @@
 
   <div id="tip" class="panel hidden"></div>
   <div id="ctx" class="panel hidden"></div>
+
+  <div id="askOv" class="hidden">
+    <div id="ask" class="panel">
+      <div id="askBody"></div>
+      <div class="dacts" style="justify-content:flex-end"><button class="dbtn alt" id="askNo">Cancel</button><button class="dbtn red" id="askYes">&#9876;&#65039; Declare war</button></div>
+    </div>
+  </div>
+
+  <div id="fairOv" class="hidden">
+    <div id="fair" class="panel">
+      <div class="pickHd"><b>&#127963; The World's Fair</b><button class="pill" id="fairClose">&#10005;</button></div>
+      <div id="fairBody"></div>
+    </div>
+  </div>
 
   <div id="dipOv" class="hidden">
     <div id="dip" class="panel">
@@ -595,13 +633,16 @@
         <li><b>Pick a spawn</b> by clicking land at the start. Every player is protected for the first 30 seconds.</li>
         <li><b>Click land next to you</b> to attack it. The <b>attack ratio</b> sets how many of your troops go. Click land across the water to send a boat.</li>
         <li><b>Your population regrows fastest at about half your cap.</b> Sitting at the cap wastes growth, and sending everything leaves you open.</li>
-        <li><b>Troops or civilians?</b> The second slider splits your population. Civilians earn gold but don't fight, so more civilians means a richer nation that's easier to invade.</li>
+        <li><b>Troops or civilians?</b> The second slider splits your population. Civilians only earn gold while they work in a <b>port</b> (15K jobs) or <b>factory</b> (25K jobs), so build those first, then move people into the jobs. Idle civilians earn nothing.</li>
         <li><b>Spend gold on buildings</b>: Cities raise your population cap, Ports earn trade gold, Factories produce gold every second, Defense Posts make nearby land 5&times; harder to take, and Silos and SAMs are for nukes.</li>
         <li><b>Every leader has a playstyle</b>: an always-on bonus and a power you trigger with the &#9889; button or <b>F</b> (raiders plunder gold, island leaders get fast boats, Leonidas has fewer but far stronger troops...). Pick yours with <b>Your leader</b>, and choose who the computer plays with <b>Choose leaders</b>.</li>
         <li><b>Every nation has a leader</b> from history with their own personality. Click a leader's portrait on the map or in the leaderboard (or right-click their land) to open diplomacy: see how they feel about you and why, ally with them, trade gold and troops, and ask them to join a war. Gandhi is peaceful... until he isn't.</li>
         <li><b>Right-click</b> (or long-press) any nation to ally, break an alliance, or send troops. Breaking an alliance marks you as a traitor.</li>
         <li><b>On Earth and Europe</b>, nations start at their real capitals.</li>
-        <li><b>Warships</b> patrol near their port and sink enemy boats. Click one, then click water, to send it somewhere else.</li>
+        <li><b>Warships</b> fire their cannon at enemy boats and trade ships in range. <b>Cruisers</b> shell enemy ports, buildings and coastal troops. Click one, then click water, to send it somewhere else.</li>
+        <li><b>Attacking a nation declares war</b> (you'll be asked first). Tribes can be attacked freely. Breaking an alliance makes you a traitor: your troops fight and defend 20% worse for 2 minutes.</li>
+        <li><b>The World's Fair</b> meets when the first missile silo is built, and again as nations fall. Vote on resolutions like Nuclear Non-Proliferation. Diplomatic leaders have extra votes.</li>
+        <li><b>Map views</b>: press <b>V</b> to switch between political, terrain, relations and trade views.</li>
         <li><b>Win</b> by owning 100% of the land. Scroll or pinch to zoom, drag to pan, and press P to pause.</li>
       </ul>
     </div>
@@ -689,9 +730,9 @@
 </div>
 
 <!-- ?v= makes browsers fetch the matching rules after an update -->
-<script src="frontier-maps.js?v=3"></script>
-<script src="frontier-leaders.js?v=3"></script>
-<script src="frontier-core.js?v=3"></script>
+<script src="frontier-maps.js?v=4"></script>
+<script src="frontier-leaders.js?v=4"></script>
+<script src="frontier-core.js?v=4"></script>
 <script src="chat-alerts.js"></script>
 <script>
 'use strict';
@@ -710,6 +751,7 @@ const ICON_SVG = {
   silo: '<svg viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="18" rx="4" fill="#fff"/><circle cx="12" cy="8" r="1.8" fill="#0f1e3d"/></svg>',
   sam: '<svg viewBox="0 0 24 24"><path d="M12 3 21 20H3z" fill="#fff"/><path d="M12 9v6" stroke="#0f1e3d" stroke-width="2"/></svg>',
   warship: '<svg viewBox="0 0 24 24"><path d="M2 14h20l-3 5H5z" fill="#fff"/><rect x="9" y="8" width="6" height="5" fill="#fff"/><rect x="11" y="4" width="2" height="4" fill="#fff"/></svg>',
+  cruiser: '<svg viewBox="0 0 24 24"><path d="M1 13h22l-3 6H4z" fill="#fff"/><rect x="5" y="9" width="5" height="4" fill="#fff"/><rect x="14" y="9" width="5" height="4" fill="#fff"/><path d="M10 10.5h4M19 10.5h3" stroke="#fff" stroke-width="1.6"/></svg>',
   atom: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="#f5c518"/><path d="M12 9 9 3a10 10 0 0 1 6 0zM14.6 13.5l6.4.5a10 10 0 0 1-3 5.2zM9.4 13.5 6 19.2A10 10 0 0 1 3 14z" fill="#f5c518"/></svg>',
   hydrogen: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.4" fill="#e74c3c"/><path d="M12 8.6 8.5 2a11 11 0 0 1 7 0zM15 13.7l7.4.6a11 11 0 0 1-3.5 6zM9 13.7 5.1 20.3A11 11 0 0 1 1.6 14.3z" fill="#e74c3c"/></svg>',
 };
@@ -870,11 +912,46 @@ const cam = { s: 1, ox: 0, oy: 0 };
 const mouse = { x: -1, y: -1, inside: false };
 const me = () => G && G.players[meId];
 
+// Map views: political (nation colours), terrain (land and height, faint borders), relations
+// (how each nation stands with you) and trade (dimmed map; ports and trade ships stand out).
+const VIEWS = { political: 'Political', terrain: 'Terrain', relations: 'Relations', trade: 'Trade' };
+let view = 'political';
+const LEGENDS = {
+  relations: [['You', [70, 140, 255]], ['Allies', [46, 204, 113]], ['At war', [231, 76, 60]], ['Friendly', [140, 220, 120]], ['Neutral', [215, 200, 120]], ['Unfriendly', [240, 150, 60]], ['Hostile', [190, 60, 50]], ['Players', [160, 160, 200]], ['Tribes', [120, 120, 120]]],
+  trade: [['Ports', [245, 197, 24]], ['Trade ships', [242, 230, 184]]],
+};
+function setView(v) {
+  view = v;
+  $('viewBtn').textContent = VIEWS[v];
+  $('legend').classList.toggle('hidden', !LEGENDS[v]);
+  if (LEGENDS[v]) $('legend').innerHTML = LEGENDS[v].map(([n, c]) => `<span><i style="background:${rgb(c)}"></i>${n}</span>`).join('');
+  if (paintReady) for (let t = 0; t < G.N; t++) paint(t);
+}
+function relColor(o) {
+  const q = G.players[o];
+  if (o === meId) return [70, 140, 255];
+  if (G.allied(meId, o)) return [46, 204, 113];
+  if (G.atWar(meId, o)) return [231, 76, 60];
+  if (q.type === 'bot') return [120, 120, 120];
+  if (q.type === 'human') return [160, 160, 200];
+  return { Friendly: [140, 220, 120], Neutral: [215, 200, 120], Unfriendly: [240, 150, 60], Hostile: [190, 60, 50] }[attitude(G.opinion(q, me()))];
+}
 function paint(t) {
   if (!paintReady) return;
   const i = t * 4, j = t * 3, bc = G.baseCol;
   let r = bc[j], g = bc[j + 1], b = bc[j + 2];
   const o = G.owner[t];
+  if (view !== 'political') {
+    if (view === 'trade') { const v = (r + g + b) / 3; r = g = b = v * 0.45 + 15; if (!G.terrain[t]) { r = 18; g = 34; b = 60; } }
+    if (o && G.terrain[t]) {
+      const c = view === 'relations' ? relColor(o) : G.players[o].color, edge = G.players[o].border.has(t);
+      const w = view === 'relations' ? (edge ? 0.95 : 0.7) : view === 'trade' ? (edge ? 0.5 : 0.18) : (edge ? 0.55 : 0);
+      r = r * (1 - w) + c[0] * w; g = g * (1 - w) + c[1] * w; b = b * (1 - w) + c[2] * w;
+    }
+    pix[i] = r; pix[i + 1] = g; pix[i + 2] = b; pix[i + 3] = 255;
+    mapDirty = true;
+    return;
+  }
   if (o) {
     const p = G.players[o], c = p.color, mine = o === meId;
     if (p.border.has(t)) {
@@ -902,6 +979,8 @@ const hooks = {
 };
 function initGame(game, myId, m) {
   closeDip();
+  $('askOv').classList.add('hidden'); $('fairOv').classList.add('hidden');
+  view = 'political'; $('viewBtn').textContent = VIEWS[view]; $('legend').classList.add('hidden'); fairSeen = 0;
   G = game; meId = myId; mode = m;
   mapCv = document.createElement('canvas'); mapCv.width = G.W; mapCv.height = G.H;
   mapCtx = mapCv.getContext('2d');
@@ -998,6 +1077,13 @@ function drawShip(s, k, alpha) {
   ctx.beginPath();
   if (s.kind === 'transport') { const r = Math.max(1.3, 6 * k); ctx.moveTo(r * 1.3, 0); ctx.lineTo(-r, r * 0.8); ctx.lineTo(-r, -r * 0.8); ctx.closePath(); }
   else if (s.kind === 'trade') { const r = Math.max(0.9, 4 * k); ctx.fillStyle = '#f2e6b8'; ctx.strokeStyle = rgb(p.color); ctx.moveTo(r, 0); ctx.lineTo(0, r * 0.7); ctx.lineTo(-r, 0); ctx.lineTo(0, -r * 0.7); ctx.closePath(); }
+  else if (s.kind === 'cruiser') {
+    // Longer hull with a gun turret fore and aft
+    const r = Math.max(2, 9 * k);
+    ctx.moveTo(r * 1.5, 0); ctx.lineTo(r * 0.8, r * 0.5); ctx.lineTo(-r * 1.1, r * 0.5); ctx.lineTo(-r * 1.1, -r * 0.5); ctx.lineTo(r * 0.8, -r * 0.5); ctx.closePath();
+    ctx.fill(); ctx.stroke(); ctx.beginPath();
+    ctx.fillStyle = '#fff'; ctx.arc(r * 0.6, 0, r * 0.25, 0, Math.PI * 2); ctx.arc(-r * 0.6, 0, r * 0.25, 0, Math.PI * 2);
+  }
   else { const r = Math.max(1.6, 7 * k); ctx.moveTo(r * 1.4, 0); ctx.lineTo(r * 0.6, r * 0.6); ctx.lineTo(-r, r * 0.6); ctx.lineTo(-r, -r * 0.6); ctx.lineTo(r * 0.6, -r * 0.6); ctx.closePath(); }
   ctx.fill(); ctx.stroke();
   ctx.restore();
@@ -1009,7 +1095,7 @@ function drawTrails(k, alpha) {
   const seen = new Set();
   ctx.lineCap = 'round';
   for (const s of G.ships) {
-    if (s.kind !== 'transport') continue;
+    if (s.kind !== 'transport' && !(view === 'trade' && s.kind === 'trade')) continue;
     seen.add(s.id);
     const x = s.px + (s.x - s.px) * alpha, y = s.py + (s.y - s.py) * alpha;
     let tr = trails.get(s.id);
@@ -1038,7 +1124,8 @@ function iconAt(sx, sy) {
   return 0;
 }
 
-// ── Warship orders: click your warship, then click water ──
+// ── Warship and cruiser orders: click your ship, then click water ──
+const isNavy = s => s.kind === 'warship' || s.kind === 'cruiser';
 let selShip = -1;
 const shipOrders = new Map();   // ship id -> tile it was sent to
 function shipAt(sx, sy) {
@@ -1046,7 +1133,7 @@ function shipAt(sx, sy) {
   const px = lastPointer === 'touch' ? 26 : 16;
   let best = -1, bd = px * px;
   for (const s of G.ships) {
-    if (s.kind !== 'warship' || s.owner !== meId) continue;
+    if (!isNavy(s) || s.owner !== meId) continue;
     const dx = cam.ox + s.x * cam.s - sx, dy = cam.oy + s.y * cam.s - sy, d = dx * dx + dy * dy;
     if (d < bd) { bd = d; best = s.id; }
   }
@@ -1055,7 +1142,7 @@ function shipAt(sx, sy) {
 function drawWarshipOrders(k, alpha) {
   if (selShip >= 0 && !G.ships.some(s => s.id === selShip)) selShip = -1;
   for (const s of G.ships) {
-    if (s.kind !== 'warship' || s.owner !== meId) continue;
+    if (!isNavy(s) || s.owner !== meId) continue;
     const x = s.px + (s.x - s.px) * alpha, y = s.py + (s.y - s.py) * alpha;
     const order = shipOrders.get(s.id);
     if (order) {
@@ -1072,6 +1159,9 @@ function drawWarshipOrders(k, alpha) {
       const r = (12 + Math.sin(performance.now() / 160) * 2) * k;
       ctx.strokeStyle = '#f5c518'; ctx.lineWidth = 2 * k;
       ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+      // Gun range
+      ctx.setLineDash([4 * k, 4 * k]); ctx.strokeStyle = 'rgba(245,197,24,0.5)'; ctx.lineWidth = 1.2 * k;
+      ctx.beginPath(); ctx.arc(x, y, s.kind === 'cruiser' ? FrontierCore.CRUISER_RANGE : FrontierCore.CANNON_RANGE, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
     }
   }
   for (const id of shipOrders.keys()) if (!G.ships.some(s => s.id === id)) shipOrders.delete(id);
@@ -1110,7 +1200,15 @@ function render(now, alpha) {
   }
   for (const s of G.structs) if (s.alive) drawStruct(s, k);
   drawTrails(k, alpha);
-  for (const s of G.ships) drawShip(s, k, alpha);
+  if (view === 'trade') {
+    // Ports glow, sized by the jobs they give; trade ships are drawn bigger
+    for (const s of G.structs) if (s.alive && s.type === 'port') {
+      const g = ctx.createRadialGradient(s.x + 0.5, s.y + 0.5, 0, s.x + 0.5, s.y + 0.5, 9);
+      g.addColorStop(0, 'rgba(245,197,24,0.55)'); g.addColorStop(1, 'rgba(245,197,24,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(s.x + 0.5, s.y + 0.5, 9, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  for (const s of G.ships) drawShip(s, k * (view === 'trade' && s.kind === 'trade' ? 1.8 : 1), alpha);
   drawWarshipOrders(k, alpha);
 
   for (const nk of G.nukes) {
@@ -1214,6 +1312,7 @@ function relation(o) {
   if (p.traitorUntil > G.tick) tags.push('<span style="color:#e74c3c">Traitor</span>');
   return tags.join(' · ');
 }
+let relTick = 0;
 function updateHUD() {
   const p = me();
   if (!G || !p || $('hud').classList.contains('hidden')) return;
@@ -1226,8 +1325,11 @@ function updateHUD() {
   const pop = (p.troops + (p.civs || 0)) / max;
   $('troopBar').style.width = within(pop * 100, 0, 100) + '%';
   $('troopBar').style.background = pop > 0.35 && pop < 0.7 ? 'linear-gradient(90deg,#27ae60,#2ecc71)' : '';
-  $('sCivs').textContent = fmt(p.civs || 0);
-  $('sCivGold').textContent = play && p.alive && p.civs >= 1 ? '+' + fmt(G.civGold(p) * 10) + '/s' : '';
+  // Civilians only earn while they have a job in a port or factory
+  $('sCivs').textContent = `${fmt(p.civs || 0)} · ${fmt(G.workersOf(p))}/${fmt(G.jobsOf(p))} jobs`;
+  $('sCivGold').textContent = play && p.alive && G.workersOf(p) >= 1 ? '+' + fmt(G.civGold(p) * 10) + '/s' : '';
+  updateFair();
+  if (view === 'relations' && ++relTick % 5 === 0) setView('relations');
   const sh = +$('share').value;
   $('shareVal').textContent = sh + '% troops · ' + (100 - sh) + '% civilians';
   $('sGold').textContent = fmt(p.gold);
@@ -1250,7 +1352,7 @@ function updateHUD() {
   const boats = G.ships.filter(s => s.kind === 'transport' && s.owner === meId);
   const inc = G.attacks.filter(a => a.target === meId).sort((a, b) => b.troops - a.troops);
   let html = '';
-  for (const a of mine) html += `<div class="atk panel" style="border-left:3px solid #e67e22">&#9876; ${a.target ? esc(G.players[a.target].name) : 'Unclaimed land'} · ${fmt(a.troops)}<button class="x" data-retreat="${a.target}" title="Retreat (lose 25%)">RETREAT</button></div>`;
+  for (const a of mine) html += `<div class="atk panel" style="border-left:3px solid #e67e22">&#9876;&#65039; ${a.target ? esc(G.players[a.target].name) : 'Unclaimed land'} · ${fmt(a.troops)}<button class="x" data-retreat="${a.target}" title="Retreat (lose 25%)">RETREAT</button></div>`;
   for (const s of boats) html += `<div class="atk panel" style="border-left:3px solid #3498db">&#9973; Boat · ${fmt(s.troops)}</div>`;
   for (const a of inc.slice(0, 3)) html += `<div class="atk panel" style="border-left:3px solid #e74c3c">&#9888; ${esc(G.players[a.p].name)} attacking · ${fmt(a.troops)}</div>`;
   if (inc.length > 3) html += `<div class="atk panel" style="border-left:3px solid #e74c3c">&#9888; +${inc.length - 3} more attacks</div>`;
@@ -1353,8 +1455,9 @@ function updateTip() {
     }
     if (G.hasDefensePost(t, o)) html += '<br><span style="color:#f5c518">Protected by a defense post</span>';
   }
-  if (!buildMode && shipAt(mouse.x, mouse.y) >= 0) html = '<b>Your warship</b><br>Click it, then click water to send it there';
-  else if (selShip >= 0) html += '<br><span style="color:#f5c518">Click water to send your warship here</span>';
+  const hs = !buildMode && shipAt(mouse.x, mouse.y);
+  if (hs >= 0) html = `<b>Your ${G.ships.find(s => s.id === hs).kind}</b><br>Click it, then click water to send it there`;
+  else if (selShip >= 0) html += '<br><span style="color:#f5c518">Click water to send your ship here</span>';
   if (buildMode && G.state === 'play') {
     const err = G.placeError(p, buildMode, snapTarget(t)), c = G.costOf(p, buildMode);
     html += `<br><span style="color:${err || p.gold < c ? '#e74c3c' : '#2ecc71'}">${err || (p.gold < c ? 'Need ' + fmt(c) + ' gold' : 'Click to build ' + BUILD[buildMode].name)}</span>`;
@@ -1393,7 +1496,7 @@ function snapTarget(t) {
   const p = me();
   if (t < 0 || !p) return t;
   if (buildMode === 'port') { const u = nearestTile(t, u => !G.placeError(p, 'port', u)); return u >= 0 ? u : t; }
-  if (buildMode === 'warship') { const u = nearestTile(t, u => !G.terrain[u]); return u >= 0 ? u : t; }
+  if (buildMode === 'warship' || buildMode === 'cruiser') { const u = nearestTile(t, u => !G.terrain[u]); return u >= 0 ? u : t; }
   if (buildMode) return t;
   if (!G.terrain[t]) {
     // Tapped the water: aim at the nearest coast that isn't ours
@@ -1419,7 +1522,7 @@ function primaryAction(t, multi, sx, sy) {
     const id = shipAt(sx, sy);
     if (id >= 0) {
       selShip = selShip === id ? -1 : id;
-      if (selShip >= 0) addEvent('Warship selected. Click water to send it there, Esc to cancel.', 'info', { ttl: 2500 });
+      if (selShip >= 0) addEvent('Ship selected. Click water to send it there, Esc to cancel.', 'info', { ttl: 2500 });
       return;
     }
   }
@@ -1431,18 +1534,20 @@ function primaryAction(t, multi, sx, sy) {
       const s = G.ships.find(x => x.id === selShip), d = s ? Math.hypot(w % G.W - s.x, ((w / G.W) | 0) - s.y) : 0;
       shipOrders.set(selShip, { t: w, until: G.tick + Math.ceil(d * 2.2) + 20 });
     }
-    else addEvent('Click on water to move your warship', 'warn', { ttl: 2000 });
+    else addEvent('Click on water to move your ship', 'warn', { ttl: 2000 });
     selShip = -1;
     return;
   }
   t = snapTarget(t);
   if (buildMode) {
-    sendAct({ a: 'build', k: buildMode, t });
+    const k = buildMode;
+    if (NUKE[k] && G.owner[t] && G.owner[t] !== meId) withWar(G.owner[t], d => sendAct({ a: 'build', k, t, declare: d }));
+    else sendAct({ a: 'build', k, t });
     if (!multi) buildMode = null;   // hold Shift to keep placing the same building
     updateHUD(); updateTip();
     return;
   }
-  if (G.terrain[t] && G.owner[t] !== meId) sendAct({ a: 'click', t, r: ratio() });
+  if (G.terrain[t] && G.owner[t] !== meId) { const r = ratio(); withWar(G.owner[t], d => sendAct({ a: 'click', t, r, declare: d })); }
 }
 function openCtx(sx, sy) { openCtxAt(screenToTile(sx, sy), sx, sy); }
 function openCtxAt(t, sx, sy) {
@@ -1452,13 +1557,14 @@ function openCtxAt(t, sx, sy) {
   const items = [];
   const buildItem = (b, label) => {
     const c = G.costOf(p, b);
-    items.push([`${label || BUILD[b].name} · <span style="color:#f5c518">${fmt(c)}</span>`, () => sendAct({ a: 'build', k: b, t }), !!G.placeError(p, b, t) || p.gold < c]);
+    const go = NUKE[b] && G.owner[t] && G.owner[t] !== meId ? () => withWar(G.owner[t], d => sendAct({ a: 'build', k: b, t, declare: d })) : () => sendAct({ a: 'build', k: b, t });
+    items.push([`${label || BUILD[b].name} · <span style="color:#f5c518">${fmt(c)}</span>`, go, !!G.placeError(p, b, t) || p.gold < c]);
   };
   let head;
   if (!G.terrain[t]) {
     const c = nearestTile(t, u => G.coastal[u] && G.terrain[u] && G.owner[u] !== meId);
     if (c >= 0) { openCtxAt(c, sx, sy); return; }   // tapped just off someone's coast
-    head = 'Ocean'; buildItem('warship', '&#9875; Build warship here');
+    head = 'Ocean'; buildItem('warship', '&#9875; Build warship here'); buildItem('cruiser', '&#9875; Build cruiser here');
   }
   else if (o === meId) {
     head = 'Your land';
@@ -1469,9 +1575,10 @@ function openCtxAt(t, sx, sy) {
     const q = o ? G.players[o] : null, ally = o && G.allied(meId, o);
     head = q ? esc(q.name) + ' · ' + relation(o) : 'Unclaimed land';
     if (q) items.push([`&#128081; Diplomacy${q.leader >= 0 ? ' with ' + esc(LEADERS[q.leader].name) : ''}`, () => openDip(o), false]);
-    items.push([`&#9876; Attack (${fmt(p.troops * r)})`, () => sendAct({ a: 'click', t, r }), ally]);
+    const war = q && G.needsWar(p, o) ? ' (declares war)' : '';
+    items.push([`&#9876;&#65039; Attack (${fmt(p.troops * r)})${war}`, () => withWar(o, d => sendAct({ a: 'click', t, r, declare: d })), ally]);
     const bt = G.coastal[t] ? t : nearestTile(t, u => G.coastal[u] && G.owner[u] === o && G.landBody[u] === G.landBody[t]);
-    if (bt >= 0) items.push(['&#9973; Send boat here', () => sendAct({ a: 'boat', t: bt, r }), ally]);
+    if (bt >= 0) items.push([`&#9973; Send boat here${war}`, () => withWar(o, d => sendAct({ a: 'boat', t: bt, r, declare: d })), ally]);
     if (q) {
       if (ally) {
         items.push([`&#10148; Send ${fmt(p.troops * r)} troops`, () => sendAct({ a: 'donate', target: o, r }), false]);
@@ -1494,6 +1601,87 @@ function openCtxAt(t, sx, sy) {
   updateTip();
 }
 function hideCtx() { $('ctx').classList.add('hidden'); }
+
+// ════════════════ War declarations ════════════════
+// Attacking a nation or player needs a declared war, so ask first. run(declare) does the action.
+function withWar(o, run) {
+  const p = me(), q = o ? G.players[o] : null;
+  if (!q || !G.needsWar(p, o)) { run(false); return; }
+  const block = G.declareBlocker(p, q);
+  if (block) { addEvent(esc(block), 'warn', { ttl: 3000 }); return; }
+  askWar(q, () => run(true));
+}
+let warYes = null;
+function askWar(q, yes) {
+  const L = q.leader >= 0 ? LEADERS[q.leader] : null;
+  warYes = yes;
+  $('askBody').innerHTML = `<img src="${picURL(q)}" alt="" style="border-color:${rgb(q.color)}"><div>
+    <b>Declare war on ${esc(q.name)}?</b>
+    <p>${L ? esc(L.name) + ' will be' : 'They will be'} at war with you until you make peace, or until 5 minutes pass without fighting.
+    Their friends will trust you less, and peaceful leaders dislike warmongers.</p></div>`;
+  $('askOv').classList.remove('hidden');
+}
+function closeAsk(go) {
+  $('askOv').classList.add('hidden');
+  const f = warYes; warYes = null;
+  if (go && f) f();
+}
+$('askYes').onclick = () => closeAsk(true);
+$('askNo').onclick = () => closeAsk(false);
+$('askOv').addEventListener('pointerdown', e => { if (e.target === $('askOv')) closeAsk(false); });
+
+// ════════════════ World's Fair ════════════════
+// A vote window opens on its own when a session starts. The game pauses in singleplayer.
+let fairSeen = 0, fairWasPaused = false;
+const myVotes = {};   // session number -> [true/false/null per item]
+const RES = FrontierCore.RESOLUTIONS;
+const resName = r => RES[r.id].name + (r.target && G.players[r.target] ? ` on ${G.players[r.target].name}` : '');
+function openFair() {
+  if (!$('fairOv').classList.contains('hidden')) return;
+  if (mode === 'sp' && G.state === 'play') { fairWasPaused = paused; if (!paused) togglePause(); }
+  $('fairOv').classList.remove('hidden');
+  renderFair();
+}
+function closeFair() {
+  if ($('fairOv').classList.contains('hidden')) return;
+  $('fairOv').classList.add('hidden');
+  if (mode === 'sp' && paused && !fairWasPaused && !dipId) togglePause();
+}
+function renderFair() {
+  const f = G.fair, s = f.session, p = me();
+  let h = '';
+  if (s) {
+    const mine = myVotes[s.n] || [];
+    h += `<p class="fairWhy">The World's Fair convenes ${esc(s.why)}. Each nation has one vote, diplomats have more, and ballots are secret.
+      <b>${fmtTime(s.ends - G.tick)}</b> left to vote.</p>`;
+    h += s.items.map((it, k) => `<div class="resRow"><div><b>${esc(resName(it))}</b><small>${esc(it.target && G.players[it.target] ? RES[it.id].desc.replace('The largest nation', G.players[it.target].name) : RES[it.id].desc)}</small></div>
+      <div class="vote"><button class="dbtn ${mine[k] === true ? '' : 'alt'}" data-vote="${k}:1" ${p.alive ? '' : 'disabled'}>Yes</button><button class="dbtn ${mine[k] === false ? 'red' : 'alt'}" data-vote="${k}:0" ${p.alive ? '' : 'disabled'}>No</button></div></div>`).join('');
+  } else h += '<p class="fairWhy">The World\'s Fair is not in session.</p>';
+  const act = f.active.filter(r => r.until > G.tick);
+  h += `<h4>Resolutions in force</h4>` + (act.length ? act.map(r => `<div class="resRow"><div><b>${esc(resName(r))}</b><small>${esc(RES[r.id].desc)}</small></div><span class="left">${fmtTime(r.until - G.tick)}</span></div>`).join('') : '<p class="dnote">None yet.</p>');
+  setHTML($('fairBody'), h);
+}
+$('fairBody').addEventListener('click', e => {
+  const b = e.target.closest('[data-vote]');
+  if (!b || b.disabled) return;
+  const [k, y] = b.dataset.vote.split(':').map(Number), s = G.fair.session;
+  if (!s) return;
+  (myVotes[s.n] = myVotes[s.n] || [])[k] = !!y;
+  sendAct({ a: 'vote', k, yes: !!y });
+  renderFair();
+});
+$('fairClose').onclick = closeFair;
+$('fairOv').addEventListener('pointerdown', e => { if (e.target === $('fairOv')) closeFair(); });
+$('fairBtn').onclick = openFair;
+// Topbar badge, and opening the vote window when a new session starts
+function updateFair() {
+  const f = G.fair, s = f.session, act = f.active.filter(r => r.until > G.tick).length, btn = $('fairBtn');
+  btn.classList.toggle('hidden', !s && !act);
+  btn.classList.toggle('hot', !!s);
+  btn.innerHTML = s ? '&#127963; VOTE' : '&#127963; ' + act;
+  if (s && s.n !== fairSeen) { fairSeen = s.n; if (me() && me().alive) openFair(); }
+  if (!$('fairOv').classList.contains('hidden')) renderFair();
+}
 
 // ════════════════ Diplomacy screen ════════════════
 // Opened by clicking a leader's portrait (on the map or the leaderboard) or from the right-click
@@ -1624,7 +1812,7 @@ function relHTML(q) {
     else if (ally) a = `<div class="dacts"><button class="dbtn" data-dip="donate">&#10148; Send ${fmt(p.troops * ratio())} troops</button><button class="dbtn red" data-dip="break">Break alliance (traitor!)</button></div>
         <p class="dnote">The alliance ends in ${fmtTime(p.allies.get(q.id) - G.tick)}. Sending troops uses your attack ratio.</p>`;
     else if (war) a = `<div class="dacts"><button class="dbtn blue" data-dip="peace">&#128330; Offer peace</button></div>${verdictHTML(G.peaceVerdict(q, p))}`;
-    else a = `<div class="dacts"><button class="dbtn" data-dip="ally">&#129309; Request alliance</button></div>${verdictHTML(G.allianceVerdict(q, p))}`;
+    else a = `<div class="dacts"><button class="dbtn" data-dip="ally">&#129309; Request alliance</button>${q.type !== 'bot' ? '<button class="dbtn red" data-dip="declare">&#9876;&#65039; Declare war</button>' : ''}</div>${verdictHTML(G.allianceVerdict(q, p))}`;
     h += `<div class="dsec"><h4>Diplomacy</h4>${a}</div>`;
   }
   if (mode === 'sp' && G.state === 'play') h += '<p class="dnote">The game is paused while you talk.</p>';
@@ -1706,6 +1894,12 @@ $('dip').addEventListener('click', e => {
       if (q.leader >= 0 && q.type === 'nation') dipReply = { text: LEADERS[q.leader].angry, until: performance.now() + 6000 };
       break;
     case 'donate': sendAct({ a: 'donate', target: q.id, r: ratio() }); break;
+    case 'declare': {
+      const block = G.declareBlocker(p, q);
+      if (block) { addEvent(esc(block), 'warn', { ttl: 3000 }); return; }
+      askWar(q, () => { sendAct({ a: 'declare', target: q.id }); if (q.leader >= 0 && q.type === 'nation') dipReply = { text: LEADERS[q.leader].angry, until: performance.now() + 6000 }; renderDip(true); });
+      return;
+    }
     case 'peace': dipAnswer(G.peaceVerdict(q, p), 'peace'); sendAct({ a: 'peace', target: q.id }); break;
     case 'trade': {
       const { give, get } = dealNow(q), v = G.tradeVerdict(q, p, give, get);
@@ -1817,11 +2011,17 @@ addEventListener('keydown', e => {
   if (!G || $('hud').classList.contains('hidden') || e.target.tagName === 'INPUT') return;
   const k = e.key.toLowerCase();
   keys.add(k);
-  if (k === 'escape') { if (dipId) { closeDip(); return; } buildMode = null; selShip = -1; hideCtx(); updateHUD(); }
+  if (k === 'escape') {
+    if (!$('askOv').classList.contains('hidden')) { closeAsk(false); return; }
+    if (!$('fairOv').classList.contains('hidden')) { closeFair(); return; }
+    if (dipId) { closeDip(); return; }
+    buildMode = null; selShip = -1; hideCtx(); updateHUD();
+  }
   else if (dipId) return;   // the diplomacy screen is open: keys don't reach the map
   else if (k === 'p') togglePause();
   else if (k === 'c') centerOnMe();
   else if (k === 'f') usePower();
+  else if (k === 'v') cycleView();
   else if (k === '=' || k === '+') zoomAt(VW / 2, VH / 2, 1.25);
   else if (k === '-') zoomAt(VW / 2, VH / 2, 0.8);
   else if (k === 'q' || k === 'e') { const r = $('ratio'); r.value = within(+r.value + (k === 'e' ? 5 : -5), 1, 100); updateHUD(); }
@@ -1845,6 +2045,8 @@ function togglePause() {
 $('pauseBtn').onclick = togglePause;
 $('speedBtn').onclick = () => { speed = speed === 1 ? 2 : speed === 2 ? 4 : 1; $('speedBtn').innerHTML = speed + '&times;'; };
 $('homeBtn').onclick = centerOnMe;
+const cycleView = () => { const ks = Object.keys(VIEWS); setView(ks[(ks.indexOf(view) + 1) % ks.length]); };
+$('viewBtn').onclick = cycleView;
 $('ratio').oninput = updateHUD;
 // Troops vs civilians: tell the game, at most every 150 ms while dragging
 let shareT = null;

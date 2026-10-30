@@ -13,7 +13,7 @@ const Core = require('../frontier-core.js');
 // Render only redeploys when something in server/ changes, but the game rules live in
 // ../frontier-core.js (with ../frontier-leaders.js and ../frontier-maps.js). After changing them,
 // touch this file (or deploy by hand) or the live server keeps running the old rules. /status
-// reports the rules it loaded so you can check.
+// reports the rules it loaded so you can check. Last rules change: navy rework, jobs, World's Fair.
 const CORE_HASH = (() => {
   const h = crypto.createHash('sha1');
   for (const f of ['../frontier-core.js', '../frontier-leaders.js', '../frontier-maps.js']) h.update(fs.readFileSync(require.resolve(f)));
