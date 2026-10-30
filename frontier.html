@@ -411,7 +411,6 @@
       color: rgba(255,255,255,0.75); background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15);
     }
     .styleBar button.on { color: #fff; border-color: #f5c518; background: rgba(245,197,24,0.16); }
-    .pcard .sty { font-size: 0.58rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: #f7d46a; }
     .pickInfo { display: flex; gap: 0.9rem; align-items: flex-start; background: rgba(0,0,0,0.25); border-radius: 12px; padding: 0.75rem 0.9rem; margin-bottom: 0.8rem; }
     .pickInfo img { width: 76px; height: 76px; border-radius: 50%; flex-shrink: 0; background: #16294d; }
     .pickInfo .tx { flex: 1; min-width: 0; font-size: 0.78rem; line-height: 1.5; color: rgba(255,255,255,0.8); }
@@ -1913,7 +1912,7 @@ function renderPicker() {
     `</div><button class="dbtn" id="pickGo">PLAY AS ${esc(L ? L.name.toUpperCase() : 'RANDOM')}</button>`;
   const cards = LEADERS.map((L, i) => [L, i]).filter(([L]) => pickStyle === 'All' || L.style === pickStyle);
   $('pickGrid').innerHTML = (pickStyle === 'All' ? `<button class="pcard ${pickSel < 0 ? 'on' : ''}" data-l="-1"><img src="${picURL(null, -1)}" alt=""><b>Random</b><small>Surprise me</small></button>` : '') +
-    cards.map(([L, i]) => `<button class="pcard ${pickSel === i ? 'on' : ''}" data-l="${i}"><img src="${picURL(null, i)}" alt=""><b>${esc(L.name)}</b><small>${esc(L.civ)}</small><span class="sty">${esc(L.style)}</span></button>`).join('');
+    cards.map(([L, i]) => `<button class="pcard ${pickSel === i ? 'on' : ''}" data-l="${i}"><img src="${picURL(null, i)}" alt=""><b>${esc(L.name)}</b><small>${esc(L.civ)}</small></button>`).join('');
 }
 $('leaderBtn').onclick = () => { pickSel = myLeader; renderPicker(); $('pickOv').classList.remove('hidden'); };
 $('pick').onclick = e => {
