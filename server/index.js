@@ -15,6 +15,7 @@ const Core = require('../frontier-core.js');
 // touch this file (or deploy by hand) or the live server keeps running the old rules. /status
 // reports the rules it loaded so you can check, and players get it on connecting: the page compares it
 // with its own copy of the rules and won't start a game against a server running different ones.
+// Rules version: Frontier v6 (jobs economy removed).
 const CORE_HASH = (() => {
   const h = crypto.createHash('sha1');
   for (const f of ['../frontier-core.js', '../frontier-leaders.js', '../frontier-maps.js']) h.update(fs.readFileSync(require.resolve(f)));

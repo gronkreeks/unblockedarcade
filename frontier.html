@@ -530,7 +530,7 @@
     <div id="stats">
       <div class="stat"><span class="lbl">Troops</span><span id="sTroops">0</span><span class="rate" id="sTroopRate"></span></div>
       <div class="bar"><div id="troopBar"></div></div>
-      <div class="stat" title="Civilians only earn gold while working: each port has 15K jobs and each factory 25K"><span class="lbl">Civs</span><span id="sCivs">0</span><span class="rate" id="sCivGold" style="color:#f5c518"></span></div>
+      <div class="stat" title="Civilians earn gold but don't fight"><span class="lbl">Civs</span><span id="sCivs">0</span><span class="rate" id="sCivGold" style="color:#f5c518"></span></div>
       <div class="stat clickable" id="goldStat" title="Click to see where your gold comes from"><span class="lbl">Gold</span><span id="sGold" style="color:#f5c518">0</span><span class="rate" id="sGoldRate"></span></div>
       <div class="stat"><span class="lbl">Land</span><span id="sLand">0%</span></div>
     </div>
@@ -541,7 +541,6 @@
       <span class="lbl" style="margin-top:0.25rem" title="Civilians earn gold but don't fight. Troops attack and defend your land.">Troops / civilians</span>
       <input type="range" id="share" min="10" max="100" value="80" class="share">
       <span id="shareVal">80% troops</span>
-      <label class="auto" title="Keep just enough civilians to fill every job in your ports and factories"><input type="checkbox" id="autoStaff"> Auto-staff jobs</label>
     </div>
     <div id="builds"></div>
   </div>
@@ -652,7 +651,7 @@
         <li><b>Pick a spawn</b> by clicking land at the start. Every player is protected for the first 30 seconds.</li>
         <li><b>Click land next to you</b> to attack it. The <b>attack ratio</b> sets how many of your troops go. Click land across the water to send a boat.</li>
         <li><b>Your population regrows fastest at about half your cap.</b> Sitting at the cap wastes growth, and sending everything leaves you open.</li>
-        <li><b>Troops or civilians?</b> The second slider splits your population. Civilians only earn gold while they work in a <b>port</b> (15K jobs) or <b>factory</b> (25K jobs), so build those first, then move people into the jobs. Idle civilians earn nothing.</li>
+        <li><b>Troops or civilians?</b> The second slider splits your population. Civilians earn gold but don't fight, so more civilians means a richer nation that's easier to invade.</li>
         <li><b>Spend gold on buildings</b>: Cities raise your population cap, Ports earn trade gold, Factories produce gold every second, Defense Posts make nearby land 5&times; harder to take, and Silos and SAMs are for nukes.</li>
         <li><b>Every leader has a playstyle</b>: an always-on bonus and a power you trigger with the &#9889; button or <b>F</b> (raiders plunder gold, island leaders get fast boats, Leonidas has fewer but far stronger troops...). Pick yours with <b>Your leader</b>, and choose who the computer plays with <b>Choose leaders</b>.</li>
         <li><b>Every nation has a leader</b> from history with their own personality. Click a leader's portrait on the map or in the leaderboard (or right-click their land) to open diplomacy: see how they feel about you and why, ally with them, trade gold and troops, and ask them to join a war. Gandhi is peaceful... until he isn't.</li>
@@ -749,13 +748,13 @@
 </div>
 
 <!-- ?v= makes browsers fetch the matching rules after an update -->
-<script src="frontier-maps.js?v=5"></script>
-<script src="frontier-leaders.js?v=5"></script>
-<script src="frontier-core.js?v=5"></script>
+<script src="frontier-maps.js?v=6"></script>
+<script src="frontier-leaders.js?v=6"></script>
+<script src="frontier-core.js?v=6"></script>
 <script src="chat-alerts.js"></script>
 <script>
 'use strict';
-const RULES_V = 5;   // keep in step with the ?v= on the rules scripts above
+const RULES_V = 6;   // keep in step with the ?v= on the rules scripts above
 // Frontier client: renders the game and sends the player's actions. The rules live in
 // frontier-core.js. Singleplayer runs them here; multiplayer receives them from the server.
 const { fmt, esc, within, BUILD, BUILD_ORDER, NUKE, TERR, DEFENSE_RANGE, SAM_RANGE, TICK_MS, IMMUNITY_TICKS } = FrontierCore;
@@ -1347,17 +1346,14 @@ function updateHUD() {
   const pop = (p.troops + (p.civs || 0)) / max;
   $('troopBar').style.width = within(pop * 100, 0, 100) + '%';
   $('troopBar').style.background = pop > 0.35 && pop < 0.7 ? 'linear-gradient(90deg,#27ae60,#2ecc71)' : '';
-  // Civilians only earn while they have a job in a port or factory
-  $('sCivs').textContent = `${fmt(p.civs || 0)} · ${fmt(G.workersOf(p))}/${fmt(G.jobsOf(p))} jobs`;
-  $('sCivGold').textContent = play && p.alive && G.workersOf(p) >= 1 ? '+' + fmt(G.civGold(p) * 10) + '/s' : '';
+  $('sCivs').textContent = fmt(p.civs || 0);
+  $('sCivGold').textContent = play && p.alive && p.civs >= 1 ? '+' + fmt(G.civGold(p) * 10) + '/s' : '';
   updateFair();
   updateNavy();
   updateEcon();
   // Keep floating panels just above the bottom bar, whatever its height
   const above = $('bottom').offsetHeight + 18 + 'px';
   for (const id of ['navy', 'econ', 'attacks']) $(id).style.bottom = above;
-  if ($('autoStaff').checked && G.state === 'play') $('share').value = Math.round(p.share * 100);
-  $('share').disabled = $('autoStaff').checked;
   if (view === 'relations' && ++relTick % 5 === 0) setView('relations');
   const sh = +$('share').value;
   $('shareVal').textContent = sh + '% troops · ' + (100 - sh) + '% civilians';
@@ -1690,16 +1686,14 @@ function updateEcon() {
   const inc = G.incomeOf(p), ps = v => '+' + fmt(v * 10) + '/s';
   const rows = [
     ['Land', inc.land, ''],
-    ['Workers', inc.workers, `${fmt(G.workersOf(p))} of ${fmt(G.jobsOf(p))} jobs filled`],
+    ['Civilians', inc.civilians, `${fmt(p.civs || 0)} people`],
     ['Factories', inc.factories, `${p.factories} level${p.factories === 1 ? '' : 's'}`],
-    ['Ports', inc.ports, `${p.ports} level${p.ports === 1 ? '' : 's'}`],
     ['Trade ships', inc.trade, 'average over the last minute'],
     ['Coast', inc.coast, ''], ['Cities', inc.cities, ''], ['Allies', inc.allies, ''],
-  ].filter(([n, v]) => v > 0 || n === 'Workers' || n === 'Ports' || n === 'Factories' || n === 'Trade ships');
+  ].filter(([n, v]) => v > 0 || n === 'Civilians' || n === 'Factories' || n === 'Trade ships');
   setHTML(el, `<h4><span>Income · ${ps(G.goldRate(p) + inc.trade)}</span><span>click Gold to close</span></h4>` +
     rows.map(([n, v, note]) => `<div class="r"><span>${n}${note ? `<small>${note}</small>` : ''}</span><b>${ps(v)}</b></div>`).join('') +
-    (inc.sanctioned ? '<p class="dnote" style="color:#ff8f80">World\'s Fair sanctions cut your income by 30%.</p>' : '') +
-    (G.workersOf(p) < G.jobsOf(p) ? '<p class="dnote">Some jobs are empty. Move the troops/civilians slider toward civilians, or tick <b>Auto-staff jobs</b>.</p>' : ''));
+    (inc.sanctioned ? '<p class="dnote" style="color:#ff8f80">World\'s Fair sanctions cut your income by 30%.</p>' : ''));
 }
 $('goldStat').onclick = () => { $('econ').classList.toggle('hidden'); updateEcon(); };
 // What a building under the mouse does, for the tooltip
@@ -1708,11 +1702,8 @@ function structInfo(s) {
   const C = FrontierCore, gs = v => fmt(v * 10) + ' gold/s';
   let h = `<b>${BUILD[s.type].name}${lv}</b> · ${mine ? 'yours' : esc(q.name)}`;
   if (s.doneAt > G.tick) return h + '<br>Under construction';
-  if (s.type === 'port') {
-    h += `<br>+${gs(C.PORT_GOLD * s.level)} and ${fmt(C.PORT_JOBS * s.level)} jobs`;
-    if (mine && q.ports) h += `<br>Your trade ships earn about ${gs(q.tradeIn)} across ${q.ports} port level${q.ports === 1 ? '' : 's'}`;
-  }
-  if (s.type === 'factory') h += `<br>+${gs(C.FACTORY_GOLD * s.level * q.m.factoryGold)} and ${fmt(C.FACTORY_JOBS * s.level)} jobs`;
+  if (s.type === 'port' && mine && q.ports) h += `<br>Your trade ships earn about ${gs(q.tradeIn)} across ${q.ports} port level${q.ports === 1 ? '' : 's'}`;
+  if (s.type === 'factory') h += `<br>+${gs(C.FACTORY_GOLD * s.level * q.m.factoryGold)}`;
   if (mine && C.STACKS.has(s.type)) h += '<br><span style="color:rgba(255,255,255,.5)">Build on it again to raise its level</span>';
   return h;
 }
@@ -2213,8 +2204,7 @@ $('viewBtn').onclick = cycleView;
 $('ratio').oninput = updateHUD;
 // Troops vs civilians: tell the game, at most every 150 ms while dragging
 let shareT = null;
-function sendShare() { clearTimeout(shareT); shareT = null; if (G) sendAct({ a: 'share', v: +$('share').value / 100, auto: $('autoStaff').checked }); }
-$('autoStaff').onchange = () => { sendShare(); updateHUD(); };
+function sendShare() { clearTimeout(shareT); shareT = null; if (G) sendAct({ a: 'share', v: +$('share').value / 100 }); }
 $('share').oninput = () => { updateHUD(); if (!shareT) shareT = setTimeout(sendShare, 150); };
 $('share').onchange = sendShare;
 $('boardHd').onclick = () => { $('board').classList.toggle('collapsed'); $('boardTog').innerHTML = $('board').classList.contains('collapsed') ? '&#9656;' : '&#9662;'; };

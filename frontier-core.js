@@ -114,7 +114,7 @@ const RESOLUTIONS = {
   nonprolif: { name: 'Nuclear Non-Proliferation', desc: 'No one may build missile silos or launch nuclear weapons.' },
   atomic: { name: 'Atomic Age', desc: 'Missile silos and nuclear weapons cost 40% less.' },
   freetrade: { name: 'Free Trade Agreement', desc: 'Trade ships earn 50% more gold.' },
-  workers: { name: "Workers' Charter", desc: 'Port and factory workers earn 30% more gold.' },
+  workers: { name: "Workers' Charter", desc: 'Civilians earn 30% more gold.' },
   ceasefire: { name: 'Global Ceasefire', desc: 'Every war ends, and no one may declare war for 3 minutes.', dur: 1800 },
   sanctions: { name: 'Sanctions', desc: 'The largest nation earns 30% less gold.', target: true },
 };
@@ -140,11 +140,8 @@ const DIFF = {
   impossible: { start: 18750, grow: 0.95, thr: 0.55, ratio: 0.25, acc: 0.55, defense: true,  nukes: true,  factories: true,  every: 10, aggr: 0.8,  powerCd: 1.6 },
 };
 // Population is split between troops (fight and defend) and civilians (earn gold).
-// Civilians only earn gold while working in a port or factory, and each has limited jobs.
-const WORKER_GOLD = 0.006;         // gold per working civilian per tick
-const PORT_JOBS = 15000, FACTORY_JOBS = 25000;
-const PORT_GOLD = 60;              // gold per finished port per tick, on top of its trade ships
-const FACTORY_GOLD = 250;          // gold per finished factory per tick, on top of its workers
+const CIV_GOLD = 0.004;            // gold per civilian per tick
+const FACTORY_GOLD = 250;          // gold per finished factory per tick
 const SHARE_SHIFT = 0.005;         // share of population that can switch role each tick
 const DEFAULT_SHARE = 0.8;         // humans start with 80% troops
 const TRAITOR_TICKS = 1200;        // breaking an alliance weakens your troops by 20% for 2 minutes
@@ -152,8 +149,8 @@ const TRUCE_TICKS = 1200;          // computer nations keep a peace treaty for a
 
 const BUILD = {
   city:     { name: 'City',      key: '1', time: 50,  tip: '+250K troop cap. Build on a city to raise its level.' },
-  port:     { name: 'Port',      key: '2', time: 50,  tip: 'Sends trade ships that earn gold, plus +600 gold/s and 15K jobs for civilians. Must be on the coast. Build on a port to raise its level.' },
-  factory:  { name: 'Factory',   key: '3', time: 60,  tip: '+2.5K gold/s and 25K jobs for civilians. Build on a factory to raise its level.' },
+  port:     { name: 'Port',      key: '2', time: 50,  tip: 'Trade ships earn gold. Must be on the coast. Build on a port to raise its level.' },
+  factory:  { name: 'Factory',   key: '3', time: 60,  tip: '+2.5K gold per second. Build on a factory to raise its level.' },
   defense:  { name: 'Defense',   key: '4', time: 40,  tip: 'Land within 10 tiles is 5× harder to take' },
   silo:     { name: 'Silo',      key: '5', time: 100, tip: 'Launches nukes' },
   sam:      { name: 'SAM',       key: '6', time: 80,  tip: 'Shoots down nukes aimed within 24 tiles' },
@@ -480,7 +477,6 @@ function createGame(opt) {
       troops: type === 'bot' ? 10000 : type === 'nation' ? D.start : 25000,
       gold: 0, tiles: 0, border: new Set(), alive: true, spawned: false,
       civs: 0, share: type === 'human' ? DEFAULT_SHARE : 1, factories: 0, ports: 0,
-      autoStaff: false,    // keep just enough civilians to fill every job
       freePorts: 0,        // free ports still owed (placed on the first coast the nation owns)
       tradeIn: 0, tradeNow: 0,   // gold per tick from trade ships (about a minute's average)
       allies: new Map(), traitorUntil: 0, hate: new Map(), cityLevels: 0,
@@ -533,25 +529,22 @@ function createGame(opt) {
   }
   const underFire = p => p.wars.size > 0 || attacks.some(a => a.target === p.id && players[a.p].type !== 'bot');
   function troopRate(p) { return popRate(p) * (p.share == null ? 1 : p.share); }
-  // Base income from land: small, so most gold comes from ports and factories
   function landGold(p) {
-    const g = ((p.type === 'bot' ? 50 : 100) + 2 * Math.sqrt(p.tiles)) * p.m.gold;
+    const g = ((p.type === 'bot' ? 50 : 100) + 5 * Math.sqrt(p.tiles)) * p.m.gold;
     return p.m.peaceGold !== 1 && !p.wars.size && !attacks.some(a => a.p === p.id && a.target && players[a.target].type !== 'bot') ? g * p.m.peaceGold : g;
   }
-  const jobsOf = p => p.ports * PORT_JOBS + p.factories * FACTORY_JOBS;
-  const workersOf = p => Math.min(p.civs || 0, jobsOf(p));
-  const workerGold = p => workersOf(p) * WORKER_GOLD * p.m.civGold * (resActive('workers') ? 1.3 : 1);
+  const civGold = p => (p.civs || 0) * CIV_GOLD * p.m.civGold * (resActive('workers') ? 1.3 : 1);
   // Where the gold comes from, per tick (the parts add up to goldRate before sanctions)
   function incomeOf(p) {
     let allies = 0;
     if (p.m.allyGold) for (const [id] of p.allies) if (players[id].alive) allies += landGold(players[id]) * p.m.allyGold;
     return {
-      land: landGold(p), workers: workerGold(p), factories: p.factories * FACTORY_GOLD * p.m.factoryGold, ports: p.ports * PORT_GOLD,
+      land: landGold(p), civilians: civGold(p), factories: p.factories * FACTORY_GOLD * p.m.factoryGold,
       coast: p.coast * p.m.coastGold, cities: p.cityLevels * p.m.cityGold, allies, trade: p.tradeIn, sanctioned: resActive('sanctions', p.id),
     };
   }
   function goldRate(p) {
-    let g = landGold(p) + workerGold(p) + p.factories * FACTORY_GOLD * p.m.factoryGold + p.ports * PORT_GOLD
+    let g = landGold(p) + civGold(p) + p.factories * FACTORY_GOLD * p.m.factoryGold
       + p.coast * p.m.coastGold + p.cityLevels * p.m.cityGold;
     if (p.m.allyGold) for (const [id] of p.allies) if (players[id].alive) g += landGold(players[id]) * p.m.allyGold;
     return resActive('sanctions', p.id) ? g * 0.7 : g;
@@ -1006,11 +999,10 @@ function createGame(opt) {
     // unitCost() in OpenFront
     const n = countUnits(p, type), m = p.m['c_' + type], atomic = resActive('atomic') ? 0.6 : 1;
     switch (type) {
-      case 'city': return Math.min(2e6, 2 ** n * 125000) * m;
-      case 'port': return Math.min(5e6, 2 ** n * 125000) * m;
-      case 'factory': return Math.min(5e6, 2 ** n * 200000) * m;
+      case 'city': case 'port': return Math.min(1e6, 2 ** n * 125000) * m;
+      case 'factory': return Math.min(2e6, 2 ** n * 200000) * m;
       case 'defense': return Math.min(250000, (n + 1) * 50000) * m;
-      case 'sam': return Math.min(2e6, 1e6 + n * 250000) * m;
+      case 'sam': return Math.min(3e6, (n + 1) * 1.5e6) * m;
       case 'silo': return 1e6 * m * atomic;
       case 'warship': return Math.min(1e6, (n + 1) * 250000) * m;
       case 'cruiser': return Math.min(1.6e6, (n + 1) * 400000) * m;
@@ -1083,9 +1075,13 @@ function createGame(opt) {
     return null;
   }
   function addWarship(p, dock, home, kind = 'warship') {
-    // Players' ships start on patrol; computer nations hunt with warships and besiege with cruisers
-    const mode = p.type === 'human' ? 'patrol' : kind === 'cruiser' ? 'siege' : 'hunt';
-    return addShip({ kind, owner: p.id, x: dock % W + 0.5, y: ((dock / W) | 0) + 0.5, hp: (kind === 'cruiser' ? 1500 : 1000) * p.m.warshipHp, home, path: null, i: 0, cd: 0, mode, port: null });
+    // Players' ships sail to the spot they were placed on and wait there for orders (their guns
+    // still fire); computer nations hunt with warships and besiege with cruisers
+    const human = p.type === 'human';
+    const mode = human ? 'hold' : kind === 'cruiser' ? 'siege' : 'hunt';
+    const s = addShip({ kind, owner: p.id, x: dock % W + 0.5, y: ((dock / W) | 0) + 0.5, hp: (kind === 'cruiser' ? 1500 : 1000) * p.m.warshipHp, home: human ? dock : home, path: null, i: 0, cd: 0, mode, port: null });
+    if (human && home !== dock) orderShip(s, home);
+    return s;
   }
   // Put up a building (or raise a city's level) without paying for it
   function placeStruct(p, type, t) {
@@ -1573,7 +1569,7 @@ function createGame(opt) {
       case 'nonprolif': return stance === 'anti' ? true : stance === 'pro' || T.nuke >= 0.8 ? false : !silos;
       case 'atomic': return stance === 'pro' || T.nuke >= 0.8 ? true : stance === 'anti' ? false : silos;
       case 'freetrade': return p.ports > 0 || T.econ >= 0.7;
-      case 'workers': return p.ports + p.factories > 0;
+      case 'workers': return p.civs > p.troops * 0.1 || T.econ >= 0.6;
       case 'ceasefire': return T.aggr < 0.5 || [...p.wars].some(([id]) => players[id].troops > p.troops);
       case 'sanctions': {
         const t = players[it.target];
@@ -1806,8 +1802,6 @@ function createGame(opt) {
   // leader who loves nukes builds silos whatever the difficulty.
   function aiTick(p) {
     const info = neighbors(p), max = maxTroops(p), imm = tick < immunityUntil, T = traitsOf(p);
-    // Keep just enough civilians to fill the jobs in ports and factories
-    p.share = within(1 - jobsOf(p) / Math.max(1, p.troops + p.civs), 0.6, 1);
     aiPower(p, info);
     aiBuild(p, info);
     aiDiplomacy(p, info);
@@ -2128,7 +2122,6 @@ function createGame(opt) {
     for (const p of players) {
       if (!p || !p.alive) continue;
       if (p.powerOn && tick >= p.powerUntil) refreshMods(p);
-      if (p.autoStaff && tick % 10 === 0) p.share = within(1 - jobsOf(p) / Math.max(1, p.troops + p.civs), 0.1, 1);
       growPopulation(p);
       p.gold += goldRate(p);
     }
@@ -2302,12 +2295,7 @@ function createGame(opt) {
       return spawnHuman(p, t) ? null : "You can't spawn there. Pick open land away from other nations.";
     }
     if (i.a === 'startNow') { if (state === 'spawn' && opt.allowStartNow && p.spawned) spawnLeft = 1; return null; }
-    if (i.a === 'share') {
-      if (p.type !== 'human') return null;
-      p.autoStaff = !!i.auto;
-      if (!p.autoStaff) p.share = within(+i.v || DEFAULT_SHARE, 0.1, 1);
-      return null;
-    }
+    if (i.a === 'share') { if (p.type === 'human') p.share = within(+i.v || DEFAULT_SHARE, 0.1, 1); return null; }
     if (state !== 'play' || !p.alive || ended && winner) return null;
     const r = within(+i.r || 0.2, 0.01, 1);
     const q = players[target];
@@ -2353,7 +2341,7 @@ function createGame(opt) {
       k: tick, st: state, sl: spawnLeft, im: immunityUntil,
       p: players.map(p => p ? [Math.floor(p.troops), Math.floor(p.gold), p.tiles, p.alive ? 1 : 0, p.traitorUntil, p.cityLevels, p.spawned ? 1 : 0,
         Math.floor(p.civs), Math.round(p.share * 100), p.factories, p.kills, p.powerReady, p.powerUntil, p.freeNukes, p.nukes, p.ports,
-        Math.round(p.tradeIn), p.autoStaff ? 1 : 0] : null),
+        Math.round(p.tradeIn)] : null),
       sh: ships.map(s => [s.id, SHIP_KINDS.indexOf(s.kind), s.owner, r1(s.x), r1(s.y), r1(s.ang), Math.floor(s.troops || 0),
         s.kind === 'trade' ? s.src.id : NAVY_MODES.indexOf(s.mode), s.kind === 'trade' ? s.dest.id : s.port ? s.port.id : -1]),
       n: nukes.map(n => [n.owner, n.type === 'atom' ? 0 : 1, n.x0, n.y0, n.tx, n.ty, n.t, n.start, n.dur, n.intercept]),
@@ -2446,7 +2434,7 @@ function createGame(opt) {
       p.alive = !!p.alive; p.spawned = !!p.spawned;
       p.civs = d[7] || 0; p.share = d[8] == null ? 1 : d[8] / 100; p.factories = d[9] || 0; p.kills = d[10] || 0;
       p.powerReady = d[11] || 0; p.powerUntil = d[12] || 0; p.freeNukes = d[13] || 0; p.nukes = d[14] || 0; p.ports = d[15] || 0;
-      p.tradeIn = d[16] || 0; p.autoStaff = !!d[17];
+      p.tradeIn = d[16] || 0;
       if ((p.powerUntil > tick) !== p.powerOn) refreshMods(p);
     });
     if (m.al) m.al.forEach((list, id) => { if (players[id] && list) players[id].allies = new Map(list); });
@@ -2540,7 +2528,7 @@ function createGame(opt) {
     get immunityUntil() { return immunityUntil; }, get ended() { return ended; }, get winner() { return winner; },
     cfg, D,
     step: gameTick, act, delta, full, startInfo, apply,
-    maxTroops, troopRate, goldRate, costOf, placeError, hasDefensePost, allied, nukePos, civGold: workerGold, jobsOf, workersOf,
+    maxTroops, troopRate, goldRate, costOf, placeError, hasDefensePost, allied, nukePos, civGold,
     atWar, countUnits, traitsOf, leaderOf, opinionMods, opinion, touches, resActive, needsWar, declareBlocker, incomeOf,
     // Sea route between two water tiles (for drawing trade routes), or null
     seaPath(a, b) { const g = waterBFS([b], u => u === a, 250000); return g < 0 ? null : tracePath(g); },
@@ -2552,7 +2540,7 @@ function createGame(opt) {
 const api = {
   createGame, fmt, esc, within, TICK_MS, SPAWN_TICKS, IMMUNITY_TICKS, WIN_SHARE, DEFENSE_RANGE, SAM_RANGE,
   NUKE, TERR, DIFF, BUILD, BUILD_ORDER, MAP_SIZES, MAP_NAMES, MAP_KINDS, DEFAULT_SHARE, LEADERS, STYLES, attitude, ALLIANCE_TICKS, WAR_TICKS, MAX_NATIONS,
-  RESOLUTIONS, CANNON_RANGE, CRUISER_RANGE, STACKS, SHIP_MODES, PORT_JOBS, FACTORY_JOBS, PORT_GOLD, FACTORY_GOLD, WORKER_GOLD,
+  RESOLUTIONS, CANNON_RANGE, CRUISER_RANGE, STACKS, SHIP_MODES, FACTORY_GOLD, CIV_GOLD,
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.FrontierCore = api;
