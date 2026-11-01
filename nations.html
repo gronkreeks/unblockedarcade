@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9603713606760464"
+     crossorigin="anonymous"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="favicon.ico">
+  <title>Nations</title>
+  <meta name="description" content="A turn-based empire game. Found cities, research from the Bronze Age to the atomic era, and lead your civilization to victory against history's leaders.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root { --navy: #0f1e3d; --panel: rgba(12,22,44,0.92); --line: rgba(255,255,255,0.13); --gold: #f5c518; --muted: rgba(255,255,255,0.6);
+      --food: #7ed957; --prod: #f0a04b; --goldc: #f5c518; --sci: #5ec8f2; --cul: #d88cf0; }
+    html, body { height: 100%; }
+    body { background: #050b18; color: #fff; font-family: 'Nunito', 'Segoe UI', system-ui, sans-serif; overflow: hidden; user-select: none; font-size: 14px; }
+    [hidden] { display: none !important; }
+    button { font-family: inherit; }
+    canvas#map { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
+    .btn { font-family: inherit; font-weight: 900; font-size: 0.82rem; letter-spacing: 0.5px; color: #fff; background: rgba(255,255,255,0.1); border: 1.5px solid rgba(255,255,255,0.22); border-radius: 9px; padding: 0.4rem 0.75rem; cursor: pointer; }
+    .btn:hover:not(:disabled) { background: rgba(255,255,255,0.2); }
+    .btn:disabled { opacity: 0.45; cursor: default; }
+    .btn.gold { background: var(--gold); color: #1a1400; border-color: var(--gold); }
+    .btn.red { background: #b3262f; border-color: #e0444d; }
+    .btn.green { background: #1f8a4c; border-color: #2fbf6c; }
+    .k { display: inline-block; font-size: 0.68rem; font-weight: 900; opacity: 0.6; margin-left: 0.3rem; }
+
+    /* top bar */
+    #top { position: fixed; top: 8px; left: 8px; right: 8px; display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0.6rem; z-index: 5; flex-wrap: wrap; }
+    #top .stat { display: flex; align-items: baseline; gap: 0.3rem; font-weight: 900; white-space: nowrap; }
+    #top .stat small { font-weight: 800; opacity: 0.75; }
+    #top .sep { width: 1px; align-self: stretch; background: var(--line); }
+    #top .grow { flex: 1; }
+    #resBox { cursor: pointer; display: flex; flex-direction: column; min-width: 170px; }
+    #resBox .bar { height: 5px; background: rgba(255,255,255,0.12); border-radius: 3px; overflow: hidden; margin-top: 2px; }
+    #resBox .bar div { height: 100%; background: var(--sci); }
+    #myPortrait { width: 34px; height: 34px; border-radius: 50%; overflow: hidden; border: 2px solid; flex: none; }
+    #myPortrait svg { width: 100%; height: 100%; display: block; }
+    a.home { color: #fff; text-decoration: none; font-weight: 900; font-size: 0.8rem; padding: 0.3rem 0.6rem; border-radius: 8px; background: rgba(255,255,255,0.1); }
+
+    /* notes */
+    #notes { position: fixed; left: 8px; top: 64px; width: 300px; max-height: 40vh; overflow: hidden; display: flex; flex-direction: column; gap: 4px; z-index: 4; pointer-events: none; }
+    .note { pointer-events: auto; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 9px; font-size: 0.8rem; font-weight: 700; background: rgba(12,22,44,0.88); border-left: 4px solid #5e8fd8; line-height: 1.35; animation: nin 0.25s; }
+    .note.good { border-color: #2fbf6c; } .note.bad { border-color: #ff4d5e; } .note.warn { border-color: #f5c518; }
+    @keyframes nin { from { opacity: 0; transform: translateX(-10px); } }
+
+    /* selection */
+    #unitBox { position: fixed; left: 8px; bottom: 8px; width: 310px; padding: 0.7rem 0.8rem; z-index: 5; }
+    #unitBox h3 { font-size: 1.05rem; font-weight: 900; display: flex; justify-content: space-between; align-items: baseline; }
+    #unitBox .meta { font-size: 0.8rem; color: var(--muted); font-weight: 700; margin: 0.15rem 0 0.4rem; }
+    .hp { height: 6px; background: rgba(255,255,255,0.15); border-radius: 3px; overflow: hidden; margin: 0.3rem 0; }
+    .hp div { height: 100%; background: #4cd964; }
+    .acts { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem; }
+    .hint { font-size: 0.75rem; color: var(--muted); font-weight: 700; margin-top: 0.45rem; line-height: 1.4; }
+
+    #cityBox { position: fixed; right: 8px; top: 64px; bottom: 250px; width: 330px; padding: 0.8rem; z-index: 5; display: flex; flex-direction: column; gap: 0.5rem; }
+    #cityBox h3 { font-size: 1.2rem; font-weight: 900; display: flex; justify-content: space-between; align-items: center; }
+    .yields { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; text-align: center; font-weight: 900; font-size: 0.85rem; }
+    .yields div { background: rgba(255,255,255,0.06); border-radius: 7px; padding: 0.25rem 0; }
+    .yields small { display: block; font-size: 0.6rem; letter-spacing: 1px; opacity: 0.7; text-transform: uppercase; }
+    .prog { font-size: 0.8rem; font-weight: 800; }
+    .prog .bar { height: 6px; background: rgba(255,255,255,0.12); border-radius: 3px; overflow: hidden; margin-top: 3px; }
+    .prog .bar div { height: 100%; }
+    #buildList { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; padding-right: 3px; }
+    #buildList .grp { font-size: 0.66rem; font-weight: 900; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin: 0.4rem 0 0.1rem; }
+    .bi { display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; padding: 0.32rem 0.5rem; border-radius: 8px; background: rgba(255,255,255,0.06); cursor: pointer; font-weight: 800; font-size: 0.82rem; border: 1.5px solid transparent; }
+    .bi:hover { background: rgba(255,255,255,0.13); }
+    .bi.on { border-color: var(--gold); background: rgba(245,197,24,0.15); }
+    .bi small { color: var(--muted); font-weight: 800; white-space: nowrap; }
+    select { font-family: inherit; font-weight: 800; background: #1a2a4a; color: #fff; border: 1px solid var(--line); border-radius: 7px; padding: 0.2rem 0.4rem; }
+
+    /* end turn + minimap */
+    #endBox { position: fixed; right: 8px; bottom: 8px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; z-index: 6; }
+    #mini { width: 220px; height: 140px; border-radius: 10px; border: 1px solid var(--line); background: #050b18; cursor: pointer; display: block; }
+    #nextChip { cursor: pointer; font-weight: 900; font-size: 0.8rem; padding: 0.3rem 0.7rem; border-radius: 20px; background: rgba(245,197,24,0.18); border: 1.5px solid var(--gold); color: var(--gold); }
+    #endBtn { font-size: 1.05rem; padding: 0.7rem 1.4rem; border-radius: 12px; }
+    #tileInfo { position: fixed; left: 50%; transform: translateX(-50%); bottom: 8px; font-size: 0.78rem; font-weight: 800; padding: 0.3rem 0.7rem; z-index: 4; white-space: nowrap; pointer-events: none; }
+    #tip { position: fixed; z-index: 30; pointer-events: none; padding: 0.45rem 0.6rem; font-size: 0.8rem; font-weight: 800; line-height: 1.4; max-width: 260px; }
+
+    /* overlays */
+    .ov { position: fixed; inset: 0; z-index: 20; background: rgba(3,8,20,0.82); display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .ov .box { width: min(980px, 100%); max-height: 100%; overflow-y: auto; padding: 1.1rem 1.2rem; }
+    .ov h2 { font-size: 1.5rem; font-weight: 900; letter-spacing: 1px; margin-bottom: 0.6rem; display: flex; justify-content: space-between; align-items: center; }
+    .lbl { font-size: 0.66rem; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin: 0.6rem 0 0.35rem; }
+    .seg { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .seg button { font-weight: 900; font-size: 0.8rem; color: #fff; padding: 0.42rem 0.8rem; border-radius: 9px; border: 1.5px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.06); cursor: pointer; }
+    .seg button.on { background: #fff; color: #10213f; border-color: #fff; }
+
+    #startOv { background: radial-gradient(ellipse at top, #1d3c6b, #0a1428 60%, #050b18); }
+    #startOv .box { width: min(900px, 100%); }
+    .title { font-size: clamp(2.4rem, 7vw, 3.8rem); font-weight: 900; letter-spacing: 6px; text-align: center; }
+    .sub { text-align: center; color: rgba(255,255,255,0.75); font-weight: 800; letter-spacing: 3px; text-transform: uppercase; font-size: 0.78rem; margin-bottom: 1rem; }
+    .leaders { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; max-height: 260px; overflow-y: auto; padding: 2px; }
+    .ld { cursor: pointer; border-radius: 10px; border: 2px solid transparent; background: rgba(255,255,255,0.05); padding: 4px; text-align: center; font-size: 0.68rem; font-weight: 800; line-height: 1.15; }
+    .ld svg { width: 100%; aspect-ratio: 1; border-radius: 8px; display: block; margin-bottom: 3px; }
+    .ld.on { border-color: var(--gold); background: rgba(245,197,24,0.15); }
+    .ld small { display: block; color: var(--muted); font-size: 0.62rem; }
+    #leaderInfo { font-size: 0.85rem; font-weight: 700; line-height: 1.5; color: rgba(255,255,255,0.85); min-height: 3em; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+    @media (max-width: 700px) { .row2 { grid-template-columns: 1fr; } }
+
+    /* tech tree */
+    .tree { display: grid; grid-template-columns: repeat(7, minmax(130px, 1fr)); gap: 8px; overflow-x: auto; }
+    .era h4 { font-size: 0.7rem; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; text-align: center; }
+    .tech { border-radius: 9px; padding: 0.4rem 0.5rem; margin-bottom: 6px; background: rgba(255,255,255,0.05); border: 1.5px solid rgba(255,255,255,0.12); cursor: pointer; font-size: 0.78rem; font-weight: 800; line-height: 1.3; }
+    .tech b { display: block; font-size: 0.82rem; }
+    .tech small { display: block; color: var(--muted); font-size: 0.68rem; }
+    .tech.known { background: rgba(47,191,108,0.18); border-color: rgba(47,191,108,0.5); cursor: default; }
+    .tech.cur { background: rgba(94,200,242,0.25); border-color: var(--sci); }
+    .tech.queued { border-color: rgba(94,200,242,0.6); border-style: dashed; }
+    .tech.locked { opacity: 0.55; }
+
+    /* diplomacy */
+    .civs { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+    .civ { display: flex; gap: 0.6rem; align-items: center; padding: 0.5rem; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1.5px solid rgba(255,255,255,0.1); cursor: pointer; }
+    .civ:hover { background: rgba(255,255,255,0.1); }
+    .civ .pt { width: 52px; height: 52px; border-radius: 10px; overflow: hidden; flex: none; border: 2px solid; }
+    .civ .pt svg { width: 100%; height: 100%; display: block; }
+    .civ b { display: block; }
+    .civ small { color: var(--muted); font-weight: 800; font-size: 0.75rem; }
+    .war { color: #ff6b78; font-weight: 900; }
+    .lead { display: grid; grid-template-columns: 170px 1fr; gap: 1rem; }
+    .lead .pt { width: 170px; height: 170px; border-radius: 14px; overflow: hidden; border: 3px solid; }
+    .lead .pt svg { width: 100%; height: 100%; display: block; }
+    .quote { font-style: italic; font-weight: 700; color: rgba(255,255,255,0.85); margin: 0.4rem 0; }
+    .ops div { display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 800; padding: 0.15rem 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .pos { color: #7ee2a0; } .neg { color: #ff8a95; }
+    @media (max-width: 640px) { .lead { grid-template-columns: 1fr; } }
+    #busy { position: fixed; left: 50%; top: 70px; transform: translateX(-50%); z-index: 25; padding: 0.5rem 1rem; font-weight: 900; }
+  </style>
+</head>
+<body>
+<canvas id="map"></canvas>
+
+<div id="top" class="panel" hidden>
+  <a class="home" href="index.html">← Arcade</a>
+  <div id="myPortrait"></div>
+  <div class="stat" id="sCiv"></div>
+  <div class="sep"></div>
+  <div class="stat" style="color:var(--goldc)" title="Gold (change per turn)">Gold <span id="sGold">0</span> <small id="sGoldRate"></small></div>
+  <div class="stat" style="color:var(--sci)" title="Science per turn">Science <small id="sSci"></small></div>
+  <div id="resBox" title="Choose research (T)"><span class="stat" style="font-size:0.8rem" id="sRes">Choose research</span><div class="bar"><div id="resBar" style="width:0"></div></div></div>
+  <div class="grow"></div>
+  <div class="stat" id="sTurn"></div>
+  <button class="btn" id="techBtn">Tech<span class="k">T</span></button>
+  <button class="btn" id="dipBtn">Leaders<span class="k">L</span></button>
+  <button class="btn" id="menuBtn">Menu</button>
+</div>
+<div id="notes"></div>
+<div id="unitBox" class="panel" hidden></div>
+<div id="cityBox" class="panel" hidden></div>
+<div id="endBox" hidden>
+  <canvas id="mini" width="440" height="280"></canvas>
+  <div id="nextChip" hidden></div>
+  <button class="btn gold" id="endBtn">End Turn</button>
+</div>
+<div id="tileInfo" class="panel" hidden></div>
+<div id="tip" class="panel" hidden></div>
+<div id="busy" class="panel" hidden>Other leaders are taking their turns…</div>
+
+<!-- Start -->
+<div class="ov" id="startOv">
+  <div class="box">
+    <div style="display:flex;justify-content:space-between"><a class="home" href="index.html">← Arcade</a><span></span></div>
+    <div class="title">NATIONS</div>
+    <p class="sub">Build an empire to stand the test of time</p>
+    <div id="contBox" hidden style="text-align:center;margin-bottom:0.8rem"><button class="btn gold" id="contBtn" style="font-size:1rem;padding:0.6rem 1.4rem">Continue saved game</button><div class="hint" id="contInfo"></div></div>
+    <div class="panel" style="padding:0.9rem 1rem">
+      <div class="lbl" style="margin-top:0">Your leader</div>
+      <div class="leaders" id="leaderGrid"></div>
+      <p id="leaderInfo" style="margin-top:0.5rem"></p>
+      <div class="lbl">Difficulty</div>
+      <div class="seg" id="diffSeg"></div>
+      <p class="hint" id="diffHint"></p>
+      <div class="row2">
+        <div><div class="lbl">Map size</div><div class="seg" data-k="size"></div></div>
+        <div><div class="lbl">Map type</div><div class="seg" data-k="type"></div></div>
+        <div><div class="lbl">Game speed</div><div class="seg" data-k="speed"></div><p class="hint" id="speedHint"></p></div>
+        <div><div class="lbl">Your name (optional)</div><input id="nameIn" maxlength="20" placeholder="Leader's name" style="font-family:inherit;font-weight:800;font-size:0.95rem;color:#fff;background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.22);border-radius:9px;padding:0.45rem 0.6rem;width:100%"></div>
+      </div>
+      <div style="margin-top:1rem;text-align:center"><button class="btn gold" id="startBtn" style="font-size:1.1rem;padding:0.75rem 2.2rem">Begin</button></div>
+    </div>
+    <div class="panel" style="padding:0.8rem 1rem;margin-top:0.8rem">
+      <div class="lbl" style="margin-top:0">How to play</div>
+      <p class="hint" style="font-size:0.82rem;color:rgba(255,255,255,0.8)">Click a unit to select it, then click (or right-click) a tile to move or an enemy to attack. Settle cities with Settlers (<b>B</b>), choose what each city builds, and pick research (<b>T</b>). Attack with several units at once: every friendly unit around a target adds flanking strength, and artillery tears down city walls. Win by capturing every original capital, completing the space program, or having the highest score when time runs out. The game saves itself every turn.</p>
+      <div class="lbl">What you'll learn</div>
+      <p class="hint" style="font-size:0.82rem;color:rgba(255,255,255,0.8)">Long-term planning and history: balance growth, science and defence, and see how technologies built on each other through the ages.</p>
+    </div>
+  </div>
+</div>
+
+<div class="ov" id="techOv" hidden><div class="box panel" style="width:min(1200px,100%)"><h2>Research <button class="btn" data-close="techOv">Close (Esc)</button></h2><p class="hint" id="techNow" style="margin:-0.3rem 0 0.7rem"></p><div class="tree" id="tree"></div></div></div>
+<div class="ov" id="dipOv" hidden><div class="box panel"><h2><span id="dipTitle">Leaders</span> <button class="btn" data-close="dipOv">Close (Esc)</button></h2><div id="dipBody"></div></div></div>
+<div class="ov" id="menuOv" hidden><div class="box panel" style="width:min(380px,100%);text-align:center"><h2 style="justify-content:center">Menu</h2>
+  <div style="display:flex;flex-direction:column;gap:0.5rem">
+    <button class="btn" data-close="menuOv">Back to the game</button>
+    <button class="btn" id="saveQuit">Save and quit to title</button>
+    <button class="btn red" id="abandon">Abandon this game</button>
+  </div></div></div>
+<div class="ov" id="askOv" hidden><div class="box panel" style="width:min(460px,100%)"><div id="askBody"></div><div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:0.9rem"><button class="btn" id="askNo">Cancel</button><button class="btn gold" id="askYes">OK</button></div></div></div>
+
+<script src="frontier-leaders.js?v=6"></script>
+<script src="leader-portraits.js?v=1"></script>
+<script src="nations-core.js?v=1"></script>
+<script>
+'use strict';
+const C = NationsCore, { UNITS, BUILDINGS, TECHS, TECH_IDS, PROJECTS, TERRAIN, RESOURCES, RES_IDS, LEADERS, DIFFS, SPEEDS, MAP_SIZES, MAP_TYPES, STYLE_BONUS, ERAS, esc } = C;
+const { portraitSVG } = LeaderPortraits;
+const $ = id => document.getElementById(id);
+const store = { get(k, d) { try { const v = localStorage.getItem('nations-' + k); return v === null ? d : v; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('nations-' + k, v); return true; } catch (e) { return false; } }, del(k) { try { localStorage.removeItem('nations-' + k); } catch (e) { } } };
+const hexRgb = h => { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
+const fmt1 = v => (Math.round(v * 10) / 10).toString();
+const plus = v => (v >= 0 ? '+' : '') + fmt1(v);
+
+let game = null, me = null, vis = null, sel = null, mode = null, noteSeen = 0;
+let dirty = true, hover = -1, reach = null, fxAnim = [];   // map redraw flag, hovered tile, where the selected unit can go, animations
+// mode: null | { k: 'strike', city } | { k: 'nuke', unit }
+
+// ════════════════ Start screen ════════════════
+const setup = { leader: +store.get('leader', -1), diff: +store.get('diff', 3), size: store.get('size', 'standard'), type: store.get('type', 'pangaea'), speed: store.get('speed', 'standard') };
+function renderStart() {
+  $('leaderGrid').innerHTML = `<div class="ld ${setup.leader < 0 ? 'on' : ''}" data-li="-1"><svg viewBox="0 0 100 100"><rect width="100" height="100" fill="#22355e"/><text x="50" y="64" font-size="46" text-anchor="middle" fill="#fff" font-weight="900">?</text></svg>Random<small>any leader</small></div>` +
+    LEADERS.map((L, i) => `<div class="ld ${setup.leader === i ? 'on' : ''}" data-li="${i}">${portraitSVG(i, [60, 90, 140])}${esc(L.name)}<small>${esc(L.civ)}</small></div>`).join('');
+  const L = LEADERS[setup.leader];
+  $('leaderInfo').innerHTML = L ? `<b>${esc(L.name)}</b>, ${esc(L.title)} · <b>${esc(L.style)}</b>: ${esc(STYLE_BONUS[L.style].desc)}` : 'A random leader from history.';
+  $('diffSeg').innerHTML = DIFFS.map((d, i) => `<button data-d="${i}" class="${setup.diff === i ? 'on' : ''}">${i + 1}. ${d.name}</button>`).join('');
+  const d = DIFFS[setup.diff];
+  $('diffHint').textContent = `Computer leaders get ${Math.round(d.ai * 100)}% production, science and gold${d.combat ? ` and ${d.combat > 0 ? '+' : ''}${d.combat} strength in every fight` : ''}${d.start.length ? `, plus ${d.start.length} extra starting units` : ''}. ${d.human > 1 ? `You get a ${Math.round((d.human - 1) * 100)}% boost. ` : ''}No wars before turn ${d.peace}.`;
+  const segs = { size: Object.fromEntries(Object.entries(MAP_SIZES).map(([k, v]) => [k, `${v.name} (${v.civs} civs)`])), type: MAP_TYPES, speed: Object.fromEntries(Object.entries(SPEEDS).map(([k, v]) => [k, v.name])) };
+  for (const el of document.querySelectorAll('.seg[data-k]')) el.innerHTML = Object.entries(segs[el.dataset.k]).map(([k, n]) => `<button data-v="${k}" class="${setup[el.dataset.k] === k ? 'on' : ''}">${esc(n)}</button>`).join('');
+  $('speedHint').textContent = `Up to ${SPEEDS[setup.speed].turns} turns. Slower speeds make everything take longer.`;
+  const saved = store.get('save', null);
+  $('contBox').hidden = !saved;
+  if (saved) { try { const s = JSON.parse(saved); const p = s.players.find(x => x.human); $('contInfo').textContent = `${p.name} of ${p.civ} · turn ${s.turn} · ${DIFFS[s.cfg.diff].name}`; } catch (e) { $('contBox').hidden = true; } }
+}
+$('leaderGrid').onclick = e => { const d = e.target.closest('[data-li]'); if (!d) return; setup.leader = +d.dataset.li; store.set('leader', setup.leader); const top = $('leaderGrid').scrollTop; renderStart(); $('leaderGrid').scrollTop = top; };
+$('diffSeg').onclick = e => { const b = e.target.closest('[data-d]'); if (!b) return; setup.diff = +b.dataset.d; store.set('diff', setup.diff); renderStart(); };
+for (const el of document.querySelectorAll('.seg[data-k]')) el.onclick = e => { const b = e.target.closest('[data-v]'); if (!b) return; setup[el.dataset.k] = b.dataset.v; store.set(el.dataset.k, b.dataset.v); renderStart(); };
+$('startBtn').onclick = () => {
+  if (store.get('save', null) && !confirm('Start a new game? Your saved game will be replaced.')) return;
+  startGame(C.newGame({ size: setup.size, type: setup.type, diff: setup.diff, speed: setup.speed, leader: setup.leader, name: $('nameIn').value.trim() }));
+};
+$('contBtn').onclick = () => { try { startGame(C.loadGame(store.get('save'))); } catch (e) { alert("That save couldn't be loaded."); } };
+
+function startGame(g) {
+  game = g; me = game.S.players.find(p => p.human); sel = null; mode = null;
+  noteSeen = Math.max(0, game.S.notes.length - 4);
+  $('startOv').hidden = true;
+  for (const id of ['top', 'endBox']) $(id).hidden = false;
+  $('myPortrait').innerHTML = portraitSVG(me.leader, hexRgb(me.color)); $('myPortrait').style.borderColor = me.color;
+  refreshVis();
+  // centre on our settler / capital
+  const cap = game.cityList(me)[0], u = game.unitList(me)[0];
+  centerOn(cap ? cap.t : u ? u.t : 0);
+  if (!game.cityList(me).length && u) select({ kind: 'unit', id: game.unitList(me).find(x => x.type === 'settler')?.id ?? u.id });
+  save();
+  updateUI();
+}
+function save() { if (game && !game.S.over) { if (!store.set('save', game.save())) addLocalNote('Your browser storage is full, so this game could not be saved.', 'bad'); } }
+
+// ════════════════ Hex geometry ════════════════
+const HS = 32, SQ3 = Math.sqrt(3);
+const cv = $('map'), ctx = cv.getContext('2d');
+let VW = 0, VH = 0, dpr = 1;
+const cam = { x: 0, y: 0, z: 1 };   // world point at the screen centre, zoom
+const hexCenter = t => { const x = t % game.W, y = (t / game.W) | 0; return [HS * SQ3 * (x + 0.5 * (y & 1)), HS * 1.5 * y]; };
+const toScreen = (wx, wy) => [(wx - cam.x) * cam.z + VW / 2, (wy - cam.y) * cam.z + VH / 2];
+const toWorld = (sx, sy) => [(sx - VW / 2) / cam.z + cam.x, (sy - VH / 2) / cam.z + cam.y];
+function tileAt(sx, sy) {
+  const [wx, wy] = toWorld(sx, sy);
+  const q = (SQ3 / 3 * wx - wy / 3) / HS, r = (2 / 3 * wy) / HS;
+  let rx = Math.round(q), rz = Math.round(r), ry = Math.round(-q - r);
+  const dx = Math.abs(rx - q), dz = Math.abs(rz - r), dy = Math.abs(ry + q + r);
+  if (dx > dy && dx > dz) rx = -ry - rz; else if (dy <= dz) rz = -rx - ry;
+  const col = rx + (rz - (rz & 1)) / 2, row = rz;
+  if (col < 0 || row < 0 || col >= game.W || row >= game.H) return -1;
+  return row * game.W + col;
+}
+const CORN = [...Array(6)].map((_, i) => { const a = Math.PI / 180 * (60 * i - 30); return [Math.cos(a), Math.sin(a)]; });
+// corners of the edge facing each neighbour direction (E, NE, NW, W, SW, SE)
+const EDGE = [[0, 1], [5, 0], [4, 5], [3, 4], [2, 3], [1, 2]];
+function hexPath(x, y, s) { ctx.beginPath(); for (let i = 0; i < 6; i++) { const [cx, cy] = CORN[i]; i ? ctx.lineTo(x + cx * s, y + cy * s) : ctx.moveTo(x + cx * s, y + cy * s); } ctx.closePath(); }
+function centerOn(t) { const [x, y] = hexCenter(t); cam.x = x; cam.y = y; dirty = true; }
+function resize() { dpr = Math.min(2, devicePixelRatio || 1); VW = innerWidth; VH = innerHeight; cv.width = VW * dpr; cv.height = VH * dpr; dirty = true; }
+addEventListener('resize', resize); resize();
+
+// ════════════════ Drawing ════════════════
+const TCOL = ['#1d4a85', '#2b67ad', '#5f9c40', '#a9a650', '#d6c07c', '#8b9a86', '#e4ebef'];
+const RES_COL = { wheat: '#f2d16b', cattle: '#c9a27a', deer: '#9c6b3f', fish: '#8fd3ff', stone: '#b5b5b5', iron: '#8a9bb0', horses: '#d9a066', gold: '#ffd700', spices: '#e05d5d', gems: '#c77dff', oasis: '#4fd1c5' };
+const ABBR = {}; for (const k of Object.keys(UNITS)) ABBR[k] = UNITS[k].name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() + (UNITS[k].name.split(' ').length === 1 ? UNITS[k].name[1] : '');
+function refreshVis() { vis = game.visible(me); computeReach(); dirty = true; }
+function computeReach() {
+  reach = null;
+  const u = selUnit();
+  if (!u || u.mv <= 0 || UNITS[u.type].cls === 'nuke') return;
+  // tiles this unit can reach this turn
+  const best = new Map([[u.t, u.mv]]), q = [u.t];
+  while (q.length) {
+    const t = q.shift(), left = best.get(t);
+    if (left <= 0) continue;
+    for (const n of game.G.nb(t)) {
+      const c = game.stepCost(u, n);
+      if (c === Infinity) continue;
+      if (game.unitsAt(n).some(x => x.owner !== me.id) || (game.cityAt(n) && game.cityAt(n).owner !== me.id)) continue;
+      const l = Math.max(0, left - c);
+      if (!best.has(n) || best.get(n) < l) { best.set(n, l); q.push(n); }
+    }
+  }
+  reach = best;
+}
+function draw() {
+  if (!game) { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.fillStyle = '#050b18'; ctx.fillRect(0, 0, VW, VH); return; }
+  const S = game.S, M = game.M, W = game.W, H = game.H, z = cam.z, s = HS * z;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#050b18'; ctx.fillRect(0, 0, VW, VH);
+  // visible tile window
+  const [wx0, wy0] = toWorld(-s * 2, -s * 2), [wx1, wy1] = toWorld(VW + s * 2, VH + s * 2);
+  const r0 = Math.max(0, Math.floor(wy0 / (HS * 1.5))), r1 = Math.min(H - 1, Math.ceil(wy1 / (HS * 1.5)));
+  const c0 = Math.max(0, Math.floor(wx0 / (HS * SQ3)) - 1), c1 = Math.min(W - 1, Math.ceil(wx1 / (HS * SQ3)) + 1);
+  const tiles = [];
+  for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) tiles.push(r * W + c);
+  const seen = me.seen;
+  // terrain
+  for (const t of tiles) {
+    if (!seen[t]) continue;
+    const [x, y] = toScreen(...hexCenter(t));
+    hexPath(x, y, s + 0.6);
+    ctx.fillStyle = TCOL[M.terr[t]]; ctx.fill();
+    if (S.fallout[t] > S.turn) { ctx.fillStyle = 'rgba(160,200,40,0.35)'; ctx.fill(); }
+    if (M.relief[t] === 1) {
+      ctx.fillStyle = 'rgba(0,0,0,0.18)';
+      for (const [dx, dy, r] of [[-0.35, 0.2, 0.32], [0.3, 0.25, 0.26]]) { ctx.beginPath(); ctx.ellipse(x + dx * s, y + dy * s, r * s, r * s * 0.6, 0, Math.PI, 0); ctx.fill(); }
+    }
+    if (M.relief[t] === 2) {
+      ctx.fillStyle = '#7d7d84'; ctx.beginPath(); ctx.moveTo(x - 0.6 * s, y + 0.45 * s); ctx.lineTo(x - 0.05 * s, y - 0.55 * s); ctx.lineTo(x + 0.55 * s, y + 0.45 * s); ctx.fill();
+      ctx.fillStyle = '#f2f4f7'; ctx.beginPath(); ctx.moveTo(x - 0.23 * s, y - 0.22 * s); ctx.lineTo(x - 0.05 * s, y - 0.55 * s); ctx.lineTo(x + 0.14 * s, y - 0.22 * s); ctx.fill();
+    }
+    if (M.forest[t]) {
+      for (const [dx, dy] of [[-0.3, -0.1], [0.25, -0.2], [0, 0.25], [0.35, 0.3]]) {
+        ctx.fillStyle = '#5b3a1e'; ctx.fillRect(x + dx * s - 0.03 * s, y + dy * s + 0.08 * s, 0.06 * s, 0.14 * s);
+        ctx.fillStyle = '#245c26'; ctx.beginPath(); ctx.arc(x + dx * s, y + dy * s, 0.17 * s, 0, 7); ctx.fill();
+      }
+    }
+    if (S.dev[t] >= C.DEVELOP_TURNS && s > 14) {
+      ctx.strokeStyle = 'rgba(255,240,180,0.55)'; ctx.lineWidth = Math.max(1, s * 0.04);
+      ctx.beginPath(); for (let i = -1; i <= 1; i++) { ctx.moveTo(x - 0.3 * s, y + (0.42 + i * 0.07) * s); ctx.lineTo(x + 0.3 * s, y + (0.42 + i * 0.07) * s); } ctx.stroke();
+    }
+    if (M.res[t] && s > 12) {
+      const k = RES_IDS[M.res[t] - 1];
+      ctx.fillStyle = RES_COL[k]; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(x + 0.42 * s, y - 0.38 * s, 0.14 * s, 0, 7); ctx.fill(); ctx.stroke();
+    }
+  }
+  // territory: tint and borders
+  for (const t of tiles) {
+    if (!seen[t] || S.owner[t] < 0) continue;
+    const o = S.owner[t], col = game.P(o).color, [x, y] = toScreen(...hexCenter(t));
+    hexPath(x, y, s); ctx.fillStyle = col + '22'; ctx.fill();
+    ctx.strokeStyle = col; ctx.lineWidth = Math.max(2, s * 0.1);
+    for (let k = 0; k < 6; k++) {
+      const n = game.G.NB[t * 6 + k];
+      if (n >= 0 && S.owner[n] === o) continue;
+      const [a, b] = EDGE[k], i = 0.92;
+      ctx.beginPath(); ctx.moveTo(x + CORN[a][0] * s * i, y + CORN[a][1] * s * i); ctx.lineTo(x + CORN[b][0] * s * i, y + CORN[b][1] * s * i); ctx.stroke();
+    }
+  }
+  // fog over tiles seen before but not visible now
+  for (const t of tiles) {
+    if (!seen[t] || vis[t]) continue;
+    const [x, y] = toScreen(...hexCenter(t));
+    hexPath(x, y, s + 0.6); ctx.fillStyle = 'rgba(5,11,24,0.45)'; ctx.fill();
+  }
+  // reachable tiles and the planned path
+  const u = selUnit();
+  if (reach && u) {
+    ctx.fillStyle = 'rgba(255,255,255,0.13)';
+    for (const [t] of reach) { if (t === u.t) continue; const [x, y] = toScreen(...hexCenter(t)); hexPath(x, y, s * 0.92); ctx.fill(); }
+  }
+  if (u && hover >= 0 && hover !== u.t && seen[hover]) drawPath(u, hover);
+  if (mode && (mode.k === 'strike' || mode.k === 'nuke')) {
+    const from = mode.k === 'strike' ? mode.city.t : mode.unit.t, R = mode.k === 'strike' ? 2 : C.NUKE_RANGE;
+    ctx.strokeStyle = mode.k === 'nuke' ? 'rgba(255,90,40,0.7)' : 'rgba(255,80,80,0.7)'; ctx.lineWidth = 2;
+    for (const t of game.G.ring(from, R)) { const [x, y] = toScreen(...hexCenter(t)); hexPath(x, y, s * 0.85); ctx.stroke(); }
+  }
+  // cities
+  for (const c of S.cities) if (c.alive && seen[c.t]) drawCity(c, s);
+  // units (only those we can see)
+  for (const x of S.units) if (!x.dead && vis[x.t]) drawUnit(x, s);
+  // selection ring
+  if (sel) {
+    const t = sel.kind === 'unit' ? (u ? u.t : -1) : game.S.cities[sel.id].t;
+    if (t >= 0) { const [x, y] = toScreen(...hexCenter(t)); hexPath(x, y, s * 0.95); ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 3; ctx.stroke(); }
+  }
+  if (hover >= 0 && seen[hover]) { const [x, y] = toScreen(...hexCenter(hover)); hexPath(x, y, s * 0.95); ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1.5; ctx.stroke(); }
+  drawFx();
+  drawMini();
+}
+function drawPath(u, goal) {
+  const pv = attackPreviewAt(u, goal);
+  if (pv) return;
+  const path = game.findPath(u, goal);
+  if (!path) return;
+  let left = u.mv, turns = 1;
+  const max = UNITS[u.type].mv;
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  let prev = toScreen(...hexCenter(u.t));
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 2.5; ctx.setLineDash([6, 5]);
+  ctx.beginPath(); ctx.moveTo(...prev);
+  for (const t of path) { const p = toScreen(...hexCenter(t)); ctx.lineTo(...p); }
+  ctx.stroke(); ctx.setLineDash([]);
+  for (const t of path) { const c = game.stepCost(u, t); if (left <= 0) { turns++; left = max; } left -= c; }
+  const [x, y] = toScreen(...hexCenter(goal));
+  ctx.font = `900 ${Math.max(11, HS * cam.z * 0.4)}px Nunito`; ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillText(turns > 1 ? turns + ' turns' : '', x + 1, y + 1);
+  ctx.fillStyle = '#fff'; ctx.fillText(turns > 1 ? turns + ' turns' : '', x, y);
+}
+function drawCity(c, s) {
+  const p = game.P(c.owner), [x, y] = toScreen(...hexCenter(c.t));
+  // walls & houses
+  ctx.fillStyle = '#d8cdb5'; ctx.strokeStyle = '#4a3f30'; ctx.lineWidth = 1.5;
+  for (const [dx, dy, w] of [[-0.32, 0.05, 0.28], [0.05, -0.12, 0.34], [0.22, 0.18, 0.26]]) { ctx.fillRect(x + dx * s, y + dy * s, w * s, w * s * 0.8); ctx.strokeRect(x + dx * s, y + dy * s, w * s, w * s * 0.8); }
+  ctx.fillStyle = p.color; ctx.beginPath(); ctx.moveTo(x + 0.05 * s, y - 0.12 * s); ctx.lineTo(x + 0.22 * s, y - 0.32 * s); ctx.lineTo(x + 0.39 * s, y - 0.12 * s); ctx.fill();
+  if (game.wallTier(c)) { ctx.strokeStyle = '#8a8170'; ctx.lineWidth = Math.max(2, s * 0.08); hexPath(x, y, s * 0.62); ctx.stroke(); }
+  // banner
+  const fs = Math.max(10, s * 0.38);
+  ctx.font = `900 ${fs}px Nunito`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const label = `${c.pop}  ${c.name}${c.capital ? ' ★' : ''}`, w = ctx.measureText(label).width + fs * 1.1, by = y - s * 0.95;
+  ctx.fillStyle = p.color; ctx.globalAlpha = 0.95;
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x - w / 2, by - fs * 0.75, w, fs * 1.5, fs * 0.4) : ctx.rect(x - w / 2, by - fs * 0.75, w, fs * 1.5); ctx.fill();
+  ctx.globalAlpha = 1; ctx.fillStyle = '#fff'; ctx.fillText(label, x, by + 1);
+  const mh = game.maxHP(c);
+  if (c.hp < mh) { ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - w / 2, by + fs * 0.8, w, 4); ctx.fillStyle = c.hp / mh > 0.5 ? '#4cd964' : c.hp / mh > 0.25 ? '#f5c518' : '#ff4d5e'; ctx.fillRect(x - w / 2, by + fs * 0.8, w * c.hp / mh, 4); }
+  ctx.textBaseline = 'alphabetic';
+  if (c.owner === me.id && !c.building) { ctx.fillStyle = '#f5c518'; ctx.font = `900 ${fs}px Nunito`; ctx.fillText('?', x + w / 2 + fs * 0.4, by + fs * 0.35); }
+}
+function drawUnit(u, s) {
+  const p = game.P(u.owner), U = UNITS[u.type], mil = game.isMil(u) || U.cls === 'nuke';
+  let [x, y] = toScreen(...hexCenter(u.t));
+  const civShare = !mil && game.unitsAt(u.t).some(o => o !== u && (game.isMil(o)));
+  const r = s * (mil ? 0.4 : 0.3);
+  if (civShare) { x += s * 0.38; y += s * 0.3; }
+  if (game.cityAt(u.t) && mil) { y += s * 0.28; }
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.arc(x + 2, y + 3, r, 0, 7); ctx.fill();
+  ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+  ctx.lineWidth = Math.max(1.5, s * 0.07); ctx.strokeStyle = u.owner === me.id ? '#fff' : '#111'; ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = `900 ${Math.max(8, r * 0.85)}px Nunito`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(U.cls === 'nuke' ? '☢' : ABBR[u.type], x, y + 1);
+  ctx.textBaseline = 'alphabetic';
+  if (u.hp < 100) { ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(x - r, y + r + 2, r * 2, 4); ctx.fillStyle = u.hp > 50 ? '#4cd964' : u.hp > 25 ? '#f5c518' : '#ff4d5e'; ctx.fillRect(x - r, y + r + 2, r * 2 * u.hp / 100, 4); }
+  if (u.owner === me.id && (u.sleep || u.fort > 0) && mil) { ctx.fillStyle = '#9ad1ff'; ctx.font = `900 ${Math.max(8, r * 0.6)}px Nunito`; ctx.fillText(u.sleep ? 'F' : '', x + r, y - r * 0.6); }
+  if (u.owner === me.id && u.mv > 0 && !u.sleep && u.dest < 0 && game.S.turn !== u.skipTurn) { ctx.fillStyle = '#ffe066'; ctx.beginPath(); ctx.arc(x - r * 0.8, y - r * 0.8, Math.max(2.5, r * 0.18), 0, 7); ctx.fill(); }
+}
+function drawFx() {
+  const now = performance.now();
+  fxAnim = fxAnim.filter(f => now - f.t0 < f.dur);
+  for (const f of fxAnim) {
+    const k = (now - f.t0) / f.dur;
+    const [x0, y0] = toScreen(...hexCenter(f.from)), [x1, y1] = toScreen(...hexCenter(f.to));
+    if (f.k === 'shot') {
+      const e = Math.min(1, k * 2.5);
+      ctx.strokeStyle = `rgba(255,220,120,${1 - k})`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo((x0 + x1) / 2, Math.min(y0, y1) - 40 * cam.z, x0 + (x1 - x0) * e, y0 + (y1 - y0) * e); ctx.stroke();
+    }
+    if (f.k === 'nuke') {
+      const r = HS * cam.z * (1 + k * 3);
+      ctx.fillStyle = `rgba(255,${180 - k * 150 | 0},60,${0.8 * (1 - k)})`; ctx.beginPath(); ctx.arc(x1, y1, r, 0, 7); ctx.fill();
+    }
+    if (f.n != null) {
+      ctx.font = `900 ${Math.max(13, HS * cam.z * 0.5)}px Nunito`; ctx.textAlign = 'center';
+      ctx.fillStyle = `rgba(0,0,0,${1 - k})`; ctx.fillText('-' + f.n, x1 + 1, y1 - 20 * k - HS * cam.z * 0.5 + 1);
+      ctx.fillStyle = `rgba(255,90,90,${1 - k})`; ctx.fillText('-' + f.n, x1, y1 - 20 * k - HS * cam.z * 0.5);
+    }
+  }
+}
+function drawMini() {
+  const m = $('mini'), g = m.getContext('2d'), W = game.W, H = game.H, S = game.S;
+  const sx = m.width / (W + 0.5), sy = m.height / H;
+  g.fillStyle = '#050b18'; g.fillRect(0, 0, m.width, m.height);
+  for (let t = 0; t < W * H; t++) {
+    if (!me.seen[t]) continue;
+    const x = t % W, y = (t / W) | 0;
+    g.fillStyle = S.owner[t] >= 0 ? game.P(S.owner[t]).color : TCOL[game.M.terr[t]];
+    g.fillRect((x + 0.5 * (y & 1)) * sx, y * sy, sx + 0.6, sy + 0.6);
+  }
+  for (const c of S.cities) if (c.alive && me.seen[c.t]) { const x = c.t % W, y = (c.t / W) | 0; g.fillStyle = '#fff'; g.fillRect((x + 0.5 * (y & 1)) * sx - 2, y * sy - 2, 5, 5); }
+  // viewport
+  const [a, b] = toWorld(0, 0), [c2, d] = toWorld(VW, VH), kx = sx / (HS * SQ3), ky = sy / (HS * 1.5);
+  g.strokeStyle = '#fff'; g.lineWidth = 2; g.strokeRect(a * kx, b * ky, (c2 - a) * kx, (d - b) * ky);
+}
+function loop() {
+  requestAnimationFrame(loop);
+  if (dirty || fxAnim.length) { dirty = false; draw(); }
+  const v = 14 / cam.z;
+  if (keys.size && game) { if (keys.has('w') || keys.has('arrowup')) cam.y -= v; if (keys.has('s') || keys.has('arrowdown')) cam.y += v; if (keys.has('a') || keys.has('arrowleft')) cam.x -= v; if (keys.has('d') || keys.has('arrowright')) cam.x += v; dirty = true; }
+}
+requestAnimationFrame(loop);
+function pullFx() { for (const f of game.S.fx.splice(0)) fxAnim.push({ ...f, t0: performance.now(), dur: f.k === 'nuke' ? 1600 : 700 }); }
+
+// ════════════════ Selection & actions ════════════════
+const selUnit = () => sel && sel.kind === 'unit' ? game.S.units.find(u => u.id === sel.id && !u.dead) || null : null;
+const selCity = () => sel && sel.kind === 'city' ? game.S.cities[sel.id] : null;
+function select(s) { sel = s; mode = null; computeReach(); updateUI(); dirty = true; }
+function after(err) {
+  if (err) toast(err);
+  pullFx();
+  refreshVis();
+  if (selUnit() == null && sel && sel.kind === 'unit') sel = null;
+  updateUI();
+  checkOver();
+}
+function attackPreviewAt(u, t) {
+  if (!u || !game.isMil(u) || u.acted) return null;
+  const c = game.cityAt(t), xs = game.unitsAt(t).filter(x => x.owner !== me.id);
+  if (!(c && c.owner !== me.id) && !xs.length) return null;
+  if (!vis[t]) return null;
+  return game.preview(u, t);
+}
+// What happens when the player clicks tile t with the current selection
+function actOn(t) {
+  if (t < 0) return;
+  if (mode && mode.k === 'strike') { const e = game.cityStrike(mode.city, t); mode = null; after(e); return; }
+  if (mode && mode.k === 'nuke') {
+    const u = mode.unit; mode = null;
+    ask(`<h2 style="color:#ff8a40">Launch the nuclear bomb?</h2><p class="hint" style="font-size:0.9rem">Every unit within 1 tile is destroyed and nearby cities lose half their people. Every other leader will remember this.</p>`, 'Launch', () => after(game.launchNuke(u, t)));
+    return;
+  }
+  const u = selUnit();
+  if (u && u.owner === me.id) {
+    const enemy = (game.cityAt(t) && game.cityAt(t).owner !== me.id) || game.unitsAt(t).some(x => x.owner !== me.id);
+    if (enemy && game.isMil(u)) {
+      const e = game.attack(u, t, false);
+      if (e === 'war?') {
+        const o = game.cityAt(t) && game.cityAt(t).owner !== me.id ? game.cityAt(t).owner : game.unitsAt(t).find(x => x.owner !== me.id).owner;
+        const q = game.P(o);
+        ask(`<h2>Declare war on ${esc(q.civ)}?</h2><p class="hint" style="font-size:0.9rem">${esc(game.L(q).name)} will not forget a surprise attack, and other leaders may think less of you.</p>`, 'Declare war', () => after(game.attack(u, t, true)));
+        return;
+      }
+      after(e); return;
+    }
+    if (t !== u.t) { after(game.moveUnit(u, t)); return; }
+  }
+}
+function clickTile(t, right) {
+  if (t < 0 || !game) return;
+  if (game.S.over) return;
+  if (right || mode) { actOn(t); return; }
+  const u = selUnit();
+  const mine = game.unitsAt(t).filter(x => x.owner === me.id), city = game.cityAt(t);
+  // clicking an enemy or an empty tile with a unit selected acts on it
+  if (u && !mine.length && !(city && city.owner === me.id)) { actOn(t); return; }
+  if (mine.length) {
+    // cycle: military unit, civilian, then the city
+    const cur = selUnit(), order = mine.sort((a, b) => game.isMil(b) - game.isMil(a));
+    const i = cur ? order.indexOf(cur) : -1;
+    if (i >= 0 && i === order.length - 1 && city && city.owner === me.id) { select({ kind: 'city', id: city.id }); return; }
+    select({ kind: 'unit', id: order[(i + 1) % order.length].id });
+    return;
+  }
+  if (city && city.owner === me.id) { select({ kind: 'city', id: city.id }); return; }
+  if (city) { openLeader(city.owner); return; }
+  select(null);
+}
+
+// ════════════════ Panels ════════════════
+function updateUI() {
+  if (!game) return;
+  const S = game.S;
+  // top bar
+  const cities = game.cityList(me);
+  const goldIn = cities.reduce((s, c) => s + game.cityYields(c).gold, 0) - game.upkeep(me), sci = cities.reduce((s, c) => s + game.cityYields(c).sci, 0);
+  $('sCiv').innerHTML = `${esc(me.name)} <small>${esc(me.civ)}</small>`;
+  $('sGold').textContent = Math.floor(me.gold); $('sGoldRate').textContent = plus(goldIn); $('sGoldRate').style.color = goldIn < 0 ? '#ff6b78' : '';
+  $('sSci').textContent = plus(sci);
+  if (me.research) {
+    const cost = game.techCost(me, me.research), left = Math.max(0, cost - me.sciProg);
+    $('sRes').textContent = `${TECHS[me.research].name} · ${sci > 0 ? Math.ceil(left / sci) : '∞'} turns`;
+    $('resBar').style.width = Math.min(100, me.sciProg / cost * 100) + '%';
+  } else { $('sRes').innerHTML = '<span style="color:var(--gold)">Choose research</span>'; $('resBar').style.width = '0'; }
+  $('sTurn').innerHTML = `Turn ${S.turn}<small> / ${SPEEDS[S.cfg.speed].turns} · ${ERAS[game.eraOf(me)]}</small>`;
+  // notes
+  const fresh = S.notes.slice(noteSeen).filter(n => n.pid === me.id || n.pid === -1);
+  noteSeen = S.notes.length;
+  for (const n of fresh) addNote(n);
+  renderUnit(); renderCity(); renderNext();
+  dirty = true;
+}
+function addNote(n) {
+  const el = document.createElement('div');
+  el.className = 'note ' + n.kind; el.innerHTML = n.text;
+  if (n.at >= 0) el.onclick = () => centerOn(n.at);
+  $('notes').prepend(el);
+  while ($('notes').children.length > 7) $('notes').lastChild.remove();
+  setTimeout(() => { el.style.transition = 'opacity 0.6s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 700); }, 9000);
+}
+function addLocalNote(text, kind) { addNote({ text: esc(text), kind, at: -1 }); }
+function toast(msg) { addLocalNote(msg, 'warn'); }
+function renderUnit() {
+  const u = selUnit(), box = $('unitBox');
+  if (!u) { box.hidden = true; return; }
+  box.hidden = false;
+  const U = UNITS[u.type], p = game.P(u.owner), mine = u.owner === me.id;
+  const str = U.rs ? `Strength ${U.cs} · Ranged ${U.rs} (range ${U.rng})` : U.cs ? `Strength ${U.cs}` : U.cls === 'nuke' ? `Range ${C.NUKE_RANGE}` : 'Civilian';
+  let acts = '';
+  if (mine) {
+    if (u.type === 'settler') acts += `<button class="btn gold" data-a="found">Found city<span class="k">B</span></button>`;
+    if (U.cls === 'nuke') acts += `<button class="btn red" data-a="nuke">Launch</button>`;
+    if (game.isMil(u)) acts += u.sleep ? `<button class="btn" data-a="wake">Wake</button>` : `<button class="btn" data-a="fort">Fortify<span class="k">F</span></button>`;
+    acts += `<button class="btn" data-a="skip">Skip turn<span class="k">Space</span></button>`;
+    if (U.up && p.techs.includes(UNITS[U.up].tech)) acts += `<button class="btn green" data-a="up" ${me.gold >= game.upgradeCost(me, u) ? '' : 'disabled'}>Upgrade to ${esc(UNITS[U.up].name)} (${game.upgradeCost(me, u)} gold)</button>`;
+    if (u.dest >= 0) acts += `<button class="btn" data-a="stop">Cancel move</button>`;
+    acts += `<button class="btn" data-a="del" title="Disband this unit">Disband</button>`;
+  }
+  let hint = '';
+  if (mine) hint = u.type === 'settler' ? 'Pick a spot with good land, at least 3 tiles from other cities, then press Found city.' : U.cls === 'nuke' ? 'Launch it at a city of a civilization you are at war with.' :
+    game.isMil(u) ? 'Click a tile to move there, or an enemy to attack. Units around the target add +2 strength each (flanking).' : 'Click a tile to move there.';
+  if (U.desc) hint = esc(U.desc) + ' ' + hint;
+  box.innerHTML = `<h3><span>${esc(U.name)}</span><small style="font-size:0.75rem;color:${p.color}">${esc(p.civ)}</small></h3>
+    <div class="meta">${str} · Moves ${fmt1(u.mv)}/${U.mv}${u.fort ? ` · Fortified +${Math.min(2, u.fort) * 3}` : ''}${u.sleep ? ' · Holding' : ''}${u.acted ? ' · Has attacked' : ''}</div>
+    <div class="hp"><div style="width:${u.hp}%;background:${u.hp > 50 ? '#4cd964' : u.hp > 25 ? '#f5c518' : '#ff4d5e'}"></div></div>
+    <div class="acts">${acts}</div><div class="hint">${hint}</div>`;
+}
+$('unitBox').onclick = e => {
+  const b = e.target.closest('[data-a]'), u = selUnit();
+  if (!b || !u) return;
+  switch (b.dataset.a) {
+    case 'found': { const e2 = game.found(u); if (!e2) { const c = game.cityAt(u.t); select({ kind: 'city', id: c.id }); } after(e2); break; }
+    case 'fort': game.fortify(u); nextUnit(); break;
+    case 'wake': game.wake(u); after(null); break;
+    case 'skip': game.skip(u); nextUnit(); break;
+    case 'up': after(game.upgrade(u)); break;
+    case 'stop': u.dest = -1; after(null); break;
+    case 'del': ask(`<h2>Disband this ${esc(UNITS[u.type].name)}?</h2>`, 'Disband', () => { game.disband(u); sel = null; after(null); }); break;
+    case 'nuke': mode = { k: 'nuke', unit: u }; toast('Click a target within 12 tiles'); dirty = true; break;
+  }
+};
+function turnsFor(cost, done, rate) { return rate > 0 ? Math.max(1, Math.ceil((cost - done) / rate)) : '∞'; }
+function renderCity() {
+  const c = selCity(), box = $('cityBox');
+  if (!c || !c.alive || c.owner !== me.id) { box.hidden = true; return; }
+  box.hidden = false;
+  const y = game.cityYields(c), grow = game.growCost(c), cap = game.housing(c);
+  const cur = c.building, cost = cur ? game.itemCost(me, cur) : 0;
+  const curName = cur ? (cur[0] === 'u' ? UNITS : cur[0] === 'b' ? BUILDINGS : PROJECTS)[cur.slice(2)].name : 'Nothing';
+  const growTxt = y.food > 0 ? (c.pop >= cap ? `at its cap of ${cap}` : `grows in ${Math.ceil((grow - c.food) / y.food)} turns`) : y.food < 0 ? 'starving!' : 'not growing';
+  const enemies = game.G.ring(c.t, 2).some(t => vis[t] && game.unitsAt(t).some(x => x.owner !== me.id && game.atWar(me.id, x.owner)));
+  const opts = game.buildable(c);
+  const row = o => `<div class="bi ${cur === o.item ? 'on' : ''}" data-item="${o.item}" title="${esc(itemDesc(o.item))}"><span>${esc(o.name)}</span><small>${o.cost} · ${turnsFor(o.cost, cur === o.item ? c.prod : 0, y.prod)} t</small></div>`;
+  const groups = [['Units', opts.filter(o => o.item[0] === 'u')], ['Buildings', opts.filter(o => o.item[0] === 'b')], ['Space program', opts.filter(o => o.item[0] === 'p')]];
+  box.innerHTML = `<h3><span>${esc(c.name)}${c.capital ? ' ★' : ''}</span><button class="btn" data-a="close">✕</button></h3>
+    <div class="hint" style="margin:-0.3rem 0 0">Population ${c.pop}/${cap} · ${growTxt} · Defence ${game.cityStrength(c)} · HP ${c.hp}/${game.maxHP(c)}</div>
+    <div class="yields"><div style="color:var(--food)">${plus(y.food)}<small>Food</small></div><div style="color:var(--prod)">${fmt1(y.prod)}<small>Prod</small></div><div style="color:var(--goldc)">${fmt1(y.gold)}<small>Gold</small></div><div style="color:var(--sci)">${fmt1(y.sci)}<small>Science</small></div><div style="color:var(--cul)">${fmt1(y.cul)}<small>Culture</small></div></div>
+    <div class="prog">Building: ${esc(curName)}${cur ? ` · ${turnsFor(cost, c.prod, y.prod)} turns` : ''}<div class="bar"><div style="width:${cur ? Math.min(100, c.prod / cost * 100) : 0}%;background:var(--prod)"></div></div></div>
+    <div style="display:flex;gap:0.4rem;flex-wrap:wrap;align-items:center">
+      ${cur && cur[0] !== 'p' ? `<button class="btn" data-a="buy" ${me.gold >= game.buyCost(me, c) ? '' : 'disabled'}>Buy (${game.buyCost(me, c)} gold)</button>` : ''}
+      ${enemies && !c.struck ? `<button class="btn red" data-a="strike">City attack</button>` : ''}
+      <span style="font-size:0.75rem;font-weight:800;color:var(--muted)">Focus</span>
+      <select data-a="focus">${['balanced', 'food', 'production', 'gold'].map(f => `<option value="${f}" ${c.focus === f ? 'selected' : ''}>${f[0].toUpperCase() + f.slice(1)}</option>`).join('')}</select>
+    </div>
+    <div id="buildList">${groups.filter(g => g[1].length).map(([n, list]) => `<div class="grp">${n}</div>` + list.map(row).join('')).join('')}
+      <div class="grp">Built here</div><div class="hint" style="margin:0">${c.buildings.length ? c.buildings.map(b => BUILDINGS[b].name).join(', ') : 'Nothing yet'}${c.capital ? ' · Palace' : ''}</div></div>`;
+}
+function itemDesc(item) {
+  const [k, id] = [item[0], item.slice(2)];
+  if (k === 'u') { const U = UNITS[id]; return U.desc || `${U.name}: strength ${U.cs}${U.rs ? `, ranged ${U.rs} (range ${U.rng})` : ''}, ${U.mv} moves.${U.cls === 'anti' ? ' +10 against mounted units.' : ''}${U.cls === 'siege' ? ' Strong against cities.' : ''}`; }
+  if (k === 'b') return BUILDINGS[id].desc + (BUILDINGS[id].up ? ` Upkeep ${BUILDINGS[id].up} gold.` : '');
+  return PROJECTS[id].desc;
+}
+$('cityBox').onclick = e => {
+  const c = selCity(); if (!c) return;
+  const it = e.target.closest('[data-item]');
+  if (it) { const err = game.setProduction(c, it.dataset.item); after(err); return; }
+  const b = e.target.closest('[data-a]'); if (!b) return;
+  if (b.dataset.a === 'close') select(null);
+  if (b.dataset.a === 'buy') after(game.buy(c));
+  if (b.dataset.a === 'strike') { mode = { k: 'strike', city: c }; toast('Click an enemy unit within 2 tiles'); dirty = true; }
+};
+$('cityBox').onchange = e => { const c = selCity(); if (c && e.target.dataset.a === 'focus') { game.setFocus(c, e.target.value); after(null); } };
+
+// What still needs the player's attention this turn
+function pending() {
+  if (!me.research && TECH_IDS.some(k => game.canResearch(me, k))) return { k: 'research', text: 'Choose research' };
+  const c = game.cityList(me).find(c => !c.building);
+  if (c) return { k: 'city', c, text: `${c.name} needs production` };
+  const u = game.unitList(me).find(u => u.mv > 0 && !u.sleep && u.dest < 0 && u.skipTurn !== game.S.turn && !u.acted && UNITS[u.type].cls !== 'nuke');
+  if (u) return { k: 'unit', u, text: 'A unit needs orders' };
+  return null;
+}
+function renderNext() { const n = pending(); $('nextChip').hidden = !n; if (n) $('nextChip').textContent = n.text + ' ›'; }
+function goPending() {
+  const n = pending();
+  if (!n) return false;
+  if (n.k === 'research') openTech();
+  else if (n.k === 'city') { select({ kind: 'city', id: n.c.id }); centerOn(n.c.t); }
+  else { select({ kind: 'unit', id: n.u.id }); centerOn(n.u.t); }
+  return true;
+}
+function nextUnit() {
+  const n = pending();
+  if (n && n.k === 'unit') { select({ kind: 'unit', id: n.u.id }); centerOn(n.u.t); } else { sel = null; after(null); }
+}
+$('nextChip').onclick = goPending;
+$('endBtn').onclick = endTurn;
+function endTurn() {
+  if (!game || game.S.over) return;
+  $('busy').hidden = false;
+  setTimeout(() => {
+    game.endTurn();
+    $('busy').hidden = true;
+    pullFx();
+    refreshVis();
+    save();
+    if (sel && sel.kind === 'unit' && !selUnit()) sel = null;
+    updateUI();
+    // peace offers from computer leaders
+    for (const o of (game.S.offers || []).filter(o => o.to === me.id)) {
+      const q = game.P(o.from);
+      ask(`<div style="display:flex;gap:0.8rem;align-items:center"><div style="width:90px;height:90px;border-radius:12px;overflow:hidden;flex:none;border:3px solid ${q.color}">${portraitSVG(q.leader, hexRgb(q.color))}</div>
+        <div><h2 style="margin:0">${esc(game.L(q).name)} offers peace</h2><p class="hint" style="font-size:0.9rem">${esc(q.civ)} wants to end the war with you. Peace lasts at least 10 turns.</p></div></div>`, 'Accept peace', () => { game.acceptPeace(me, q.id); after(null); }, () => { game.declinePeace(me, q.id); }, 'Refuse');
+      break;
+    }
+    checkOver();
+  }, 30);
+}
+function checkOver() {
+  const o = game.S.over;
+  if (!o || $('askOv').dataset.over) return;
+  store.del('save');
+  const w = o.winner >= 0 ? game.P(o.winner) : null, won = w === me;
+  const how = { domination: 'domination', space: 'science', score: 'score', defeat: '' }[o.how];
+  $('askOv').dataset.over = '1';
+  ask(`<h2>${won ? 'Victory!' : 'Defeat'}</h2><p style="font-weight:800;line-height:1.5">${won ? `You won a ${how} victory on turn ${o.turn}.` : o.how === 'defeat' ? 'Your last city has fallen.' : `${esc(game.civName(w))} won a ${how} victory on turn ${o.turn}.`}</p>
+    <p class="hint">Score: ${game.scoreOf(me)} · Difficulty: ${DIFFS[game.S.cfg.diff].name}</p>`, 'Back to title', () => { location.reload(); }, null, 'Look at the map');
+}
+
+// ════════════════ Tech tree ════════════════
+function openTech() {
+  const sci = game.cityList(me).reduce((s, c) => s + game.cityYields(c).sci, 0);
+  const unlocks = k => [...Object.entries(UNITS).filter(([, U]) => U.tech === k).map(([, U]) => U.name), ...Object.entries(BUILDINGS).filter(([, B]) => B.tech === k).map(([, B]) => B.name), ...Object.entries(PROJECTS).filter(([, P]) => P.tech === k).map(([, P]) => P.name)];
+  const extra = { industrialization: 'Mines and lumber mills +1 production', chemistry: 'Farms +1 food' };
+  $('tree').innerHTML = ERAS.map((era, e) => `<div class="era"><h4>${era}</h4>` + TECH_IDS.filter(k => TECHS[k].era === e).map(k => {
+    const T = TECHS[k], known = me.techs.includes(k), cur = me.research === k, q = me.queue.includes(k), can = game.canResearch(me, k);
+    const cost = game.techCost(me, k), turns = sci > 0 ? Math.ceil((cost - (cur ? me.sciProg : 0)) / sci) : '∞';
+    const u = unlocks(k).concat(extra[k] ? [extra[k]] : []);
+    return `<div class="tech ${known ? 'known' : cur ? 'cur' : q ? 'queued' : can ? '' : 'locked'}" data-tech="${k}"><b>${T.name}</b><small>${known ? 'Known' : `${cost} science · ${turns} turns`}</small>${u.length ? `<small style="color:rgba(255,255,255,0.75)">${u.map(esc).join(', ')}</small>` : ''}${!known && T.req.length ? `<small>Needs ${T.req.map(r => TECHS[r].name).join(', ')}</small>` : ''}</div>`;
+  }).join('') + '</div>').join('');
+  $('techNow').textContent = me.research ? `Researching ${TECHS[me.research].name}${me.queue.length > 1 ? `, then ${me.queue.slice(1).map(k => TECHS[k].name).join(', ')}` : ''}. Click any technology to head for it.` : 'Click a technology to research it. Anything it needs is researched first.';
+  $('techOv').hidden = false;
+}
+$('tree').onclick = e => { const d = e.target.closest('[data-tech]'); if (!d) return; game.setResearch(me, d.dataset.tech); openTech(); updateUI(); };
+$('resBox').onclick = openTech; $('techBtn').onclick = openTech;
+
+// ════════════════ Diplomacy ════════════════
+function openDip() {
+  const list = me.met.map(id => game.P(id)).filter(q => q.alive);
+  $('dipTitle').textContent = 'Leaders';
+  $('dipBody').innerHTML = list.length ? `<div class="civs">${list.map(q => {
+    const op = game.opinion(q, me), war = game.atWar(me.id, q.id);
+    return `<div class="civ" data-civ="${q.id}"><div class="pt" style="border-color:${q.color}">${portraitSVG(q.leader, hexRgb(q.color))}</div><div><b>${esc(game.L(q).name)}</b><small>${esc(q.civ)} · ${game.cityList(q).length} cities</small><br><small class="${war ? 'war' : op >= 0 ? 'pos' : 'neg'}">${war ? 'At war' : game.mood(op)}</small></div></div>`;
+  }).join('')}</div>` : '<p class="hint">You have not met anyone yet. Explore with your Scout.</p>';
+  $('dipOv').hidden = false;
+}
+function openLeader(id) {
+  const q = game.P(id), Lq = game.L(q), war = game.atWar(me.id, q.id), ops = game.opinionOf(q, me), op = game.opinion(q, me);
+  if (!me.met.includes(id)) return;
+  $('dipTitle').textContent = Lq.name;
+  const B = STYLE_BONUS[Lq.style];
+  $('dipBody').innerHTML = `<div class="lead"><div class="pt" style="border-color:${q.color}">${portraitSVG(q.leader, hexRgb(q.color))}</div><div>
+    <div style="font-weight:900;font-size:1.05rem">${esc(Lq.title)} · <span style="color:${q.color}">${esc(q.civ)}</span></div>
+    <p class="quote">“${esc(war ? Lq.angry : Lq.quote)}”</p>
+    <p class="hint" style="margin:0">Agenda: <b>${esc(Lq.agendaName)}</b>. ${esc(Lq.agendaDesc)}<br>Playstyle: <b>${esc(Lq.style)}</b>. ${esc(B.desc)}</p>
+    <div class="lbl">How they feel about you: <span class="${op >= 0 ? 'pos' : 'neg'}">${game.mood(op)} (${op > 0 ? '+' : ''}${op})</span></div>
+    <div class="ops">${ops.map(([r, v]) => `<div><span>${esc(r)}</span><span class="${v >= 0 ? 'pos' : 'neg'}">${v > 0 ? '+' : ''}${v}</span></div>`).join('') || '<div><span>No strong feelings</span><span>0</span></div>'}</div>
+    <div class="hint">${game.cityList(q).length} cities · army strength ${Math.round(game.armyPower(q))} (yours ${Math.round(game.armyPower(me))}) · ${q.techs.length} technologies (yours ${me.techs.length})</div>
+    <div class="acts" style="margin-top:0.7rem">${war ? `<button class="btn green" data-dip="peace">Propose peace</button>` : `<button class="btn red" data-dip="war">Declare war</button>`}<button class="btn" data-dip="back">All leaders</button></div>
+    <p class="hint" id="dipMsg"></p></div></div>`;
+  $('dipBody').dataset.civ = id;
+  $('dipOv').hidden = false;
+}
+$('dipBody').onclick = e => {
+  const c = e.target.closest('[data-civ]'); if (c && c.classList.contains('civ')) { openLeader(+c.dataset.civ); return; }
+  const b = e.target.closest('[data-dip]'); if (!b) return;
+  const id = +$('dipBody').dataset.civ, q = game.P(id);
+  if (b.dataset.dip === 'back') openDip();
+  if (b.dataset.dip === 'war') ask(`<h2>Declare war on ${esc(q.civ)}?</h2><p class="hint" style="font-size:0.9rem">You can't make peace for at least 8 turns.</p>`, 'Declare war', () => { const err = game.declareWar(me.id, id); after(err); openLeader(id); });
+  if (b.dataset.dip === 'peace') { const r = game.proposePeace(me, q); after(null); openLeader(id); $('dipMsg').innerHTML = r.ok ? '<span class="pos">They accepted. The war is over.</span>' : `<span class="neg">“${esc(r.why)}”</span>`; }
+};
+$('dipBtn').onclick = openDip;
+
+// ════════════════ Dialogs ════════════════
+let askYes = null, askNo = null;
+function ask(html, yes, onYes, onNo, noLabel) {
+  $('askBody').innerHTML = html; $('askYes').textContent = yes; $('askNo').textContent = noLabel || 'Cancel';
+  askYes = onYes; askNo = onNo || null; $('askOv').hidden = false;
+}
+$('askYes').onclick = () => { $('askOv').hidden = true; const f = askYes; askYes = null; if (f) f(); };
+$('askNo').onclick = () => { $('askOv').hidden = true; const f = askNo; askNo = null; if (f) f(); };
+for (const b of document.querySelectorAll('[data-close]')) b.onclick = () => { $(b.dataset.close).hidden = true; };
+$('menuBtn').onclick = () => { $('menuOv').hidden = false; };
+$('saveQuit').onclick = () => { save(); location.reload(); };
+$('abandon').onclick = () => ask('<h2>Abandon this game?</h2><p class="hint">The saved game will be deleted.</p>', 'Abandon', () => { store.del('save'); location.reload(); });
+
+// ════════════════ Mouse & keys ════════════════
+let drag = null;
+cv.addEventListener('mousedown', e => { drag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y, moved: false, btn: e.button }; });
+addEventListener('mousemove', e => {
+  if (!game) return;
+  if (drag && drag.btn === 0) {
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 6) drag.moved = true;
+    if (drag.moved) { cam.x = drag.cx - dx / cam.z; cam.y = drag.cy - dy / cam.z; dirty = true; }
+  }
+  if (e.target !== cv) { $('tip').hidden = true; return; }
+  const t = tileAt(e.clientX, e.clientY);
+  if (t !== hover) { hover = t; dirty = true; showTileInfo(t); }
+  showTip(t, e.clientX, e.clientY);
+});
+addEventListener('mouseup', e => {
+  if (!drag) return;
+  const d = drag; drag = null;
+  if (e.target !== cv || d.moved) return;
+  clickTile(tileAt(e.clientX, e.clientY), e.button === 2);
+});
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const [wx, wy] = toWorld(e.clientX, e.clientY);
+  cam.z = C.clamp(cam.z * Math.exp(-e.deltaY * 0.0012), 0.35, 2.2);
+  const [nx, ny] = toWorld(e.clientX, e.clientY);
+  cam.x += wx - nx; cam.y += wy - ny; dirty = true;
+}, { passive: false });
+$('mini').onclick = e => {
+  const r = $('mini').getBoundingClientRect(), fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
+  cam.x = fx * (game.W + 0.5) * HS * SQ3; cam.y = fy * game.H * HS * 1.5; dirty = true;
+};
+function showTileInfo(t) {
+  const el = $('tileInfo');
+  if (t < 0 || !me.seen[t]) { el.hidden = true; return; }
+  const M = game.M, y = game.tileYield(t, me);
+  const parts = [TERRAIN[M.terr[t]].name + (M.relief[t] === 1 ? ' hills' : M.relief[t] === 2 ? ' mountains' : '') + (M.forest[t] ? ', forest' : '')];
+  if (M.res[t]) parts.push(RESOURCES[RES_IDS[M.res[t] - 1]].name);
+  if (M.relief[t] !== 2) parts.push(`${y[0]} food · ${y[1]} prod · ${y[2]} gold`);
+  if (game.S.dev[t] >= C.DEVELOP_TURNS) parts.push('developed');
+  if (game.S.owner[t] >= 0) parts.push(game.P(game.S.owner[t]).civ);
+  el.textContent = parts.join(' · '); el.hidden = false;
+}
+function showTip(t, mx, my) {
+  const el = $('tip'), u = selUnit();
+  let html = '';
+  if (u && u.owner === me.id && t >= 0) {
+    const pv = attackPreviewAt(u, t);
+    if (pv) {
+      const tgt = pv.vs === 'city' ? pv.city.name : UNITS[pv.unit.type].name;
+      html = pv.vs === 'civ' ? `Capture the ${esc(tgt)}` : `<b>Attack ${esc(tgt)}</b><br>Your strength ${pv.A} vs ${pv.D}<br><span class="pos">They lose ~${pv.toThem} HP</span>${pv.ranged ? '' : `<br><span class="neg">You lose ~${pv.toMe} HP</span>`}${pv.vs === 'city' && !pv.ranged && pv.city.hp <= pv.toThem && UNITS[u.type].cls !== 'siege' ? '<br><b class="pos">Captures the city!</b>' : ''}`;
+      const o = pv.vs === 'city' ? pv.city.owner : pv.unit.owner;
+      if (!game.atWar(me.id, o)) html += `<br><span style="color:#f5c518">This declares war on ${esc(game.P(o).civ)}</span>`;
+    }
+  }
+  if (!html && t >= 0 && vis && vis[t]) {
+    const xs = game.unitsAt(t).filter(x => x.owner !== me.id);
+    if (xs.length) html = xs.map(x => `<b>${esc(UNITS[x.type].name)}</b> (${esc(game.P(x.owner).civ)}) · ${x.hp} HP · strength ${UNITS[x.type].cs}`).join('<br>');
+    const c = game.cityAt(t);
+    if (c && c.owner !== me.id) html += (html ? '<br>' : '') + `<b>${esc(c.name)}</b> (${esc(game.P(c.owner).civ)}) · pop ${c.pop} · defence ${game.cityStrength(c)} · ${c.hp} HP`;
+  }
+  if (!html) { el.hidden = true; return; }
+  el.innerHTML = html; el.hidden = false;
+  el.style.left = Math.min(VW - 270, mx + 16) + 'px'; el.style.top = Math.min(VH - 120, my + 16) + 'px';
+}
+const keys = new Set();
+addEventListener('keydown', e => {
+  if (!game || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  const k = e.key.toLowerCase();
+  if (k === 'escape') {
+    for (const id of ['askOv', 'techOv', 'dipOv', 'menuOv']) if (!$(id).hidden) { if (id === 'askOv') $('askNo').click(); else $(id).hidden = true; return; }
+    if (mode) { mode = null; dirty = true; return; }
+    select(null); return;
+  }
+  if (!$('askOv').hidden) { if (k === 'enter') $('askYes').click(); return; }
+  if (!$('techOv').hidden || !$('dipOv').hidden || !$('menuOv').hidden) return;
+  if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { keys.add(k); e.preventDefault(); return; }
+  const u = selUnit();
+  if (k === 'enter') { e.preventDefault(); if (e.shiftKey || !goPending()) endTurn(); }
+  else if (k === 't') openTech();
+  else if (k === 'l') openDip();
+  else if (k === ' ' && u) { e.preventDefault(); game.skip(u); nextUnit(); }
+  else if (k === 'f' && u && game.isMil(u)) { game.fortify(u); nextUnit(); }
+  else if (k === 'b' && u && u.type === 'settler') $('unitBox').querySelector('[data-a=found]')?.click();
+  else if (k === 'c') { const cap = game.cityList(me)[0]; if (cap) centerOn(cap.t); }
+});
+addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+addEventListener('blur', () => keys.clear());
+
+renderStart();
+if (matchMedia('(hover: none)').matches) addLocalNote('Nations plays best with a mouse and keyboard.', 'warn');
+</script>
+</body>
+</html>
