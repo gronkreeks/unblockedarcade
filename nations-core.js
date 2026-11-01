@@ -673,6 +673,34 @@ function makeGame(S) {
     if (u.t === goal) u.dest = -1;
     return null;
   }
+  // Auto-explore: the closest reachable spot that would uncover unseen tiles, favouring big reveals
+  function exploreTarget(u) {
+    const p = P(u.owner), sr = sightOf(u), dist = new Map([[u.t, 0]]), q = [u.t];
+    let best = -1, bs = 0;
+    for (let i = 0; i < q.length; i++) {
+      const t = q[i], d = dist.get(t);
+      if (d > 0 && canStop(u, t)) {
+        let n = 0;
+        for (const x of G.ring(t, sr)) if (!p.seen[x]) n++;
+        if (n && n / (d + 2) > bs) { bs = n / (d + 2); best = t; }
+      }
+      if (d >= 40) continue;
+      for (const nx of G.nb(t)) if (!dist.has(nx) && p.seen[nx] && stepCost(u, nx) < Infinity && !hostileAt(u, nx)) { dist.set(nx, d + 1); q.push(nx); }
+    }
+    return best;
+  }
+  function exploreStep(u) {
+    const p = P(u.owner), name = UNITS[u.type].name;
+    if (u.hp < 50) { u.explore = false; if (p.human) note(p.id, `Your ${name} stopped exploring: it is wounded`, 'warn', u.t); return; }
+    for (let k = 0; k < 6 && u.mv > 0 && !u.dead; k++) {
+      const t = exploreTarget(u);
+      if (t < 0) { u.explore = false; if (p.human) note(p.id, `Your ${name} has nothing left to explore`, 'warn', u.t); break; }
+      const at = u.t, mv = u.mv;
+      moveUnit(u, t);
+      if (u.t === at && u.mv === mv) break;
+    }
+    u.dest = -1;
+  }
 
   // ──────────── Combat ────────────
   // Strength of u in a fight. ranged: using its ranged strength; att: u is attacking
@@ -1061,7 +1089,10 @@ function makeGame(S) {
       endGame(best.id, 'score');
     }
     // the human's units keep walking toward where they were sent
-    for (const p of S.players) if (p.human && p.alive) for (const u of unitList(p)) if (u.dest >= 0 && !u.sleep) { const e = moveUnit(u, u.dest); if (e) u.dest = -1; }
+    for (const p of S.players) if (p.human && p.alive) for (const u of unitList(p)) {
+      if (u.explore) exploreStep(u);
+      else if (u.dest >= 0 && !u.sleep) { const e = moveUnit(u, u.dest); if (e) u.dest = -1; }
+    }
     S.units = S.units.filter(u => !u.dead);
     S.rngState = rs;
   }
@@ -1387,11 +1418,23 @@ function makeGame(S) {
     buildable, itemCost, unitCost, buildingCost, techCost, buyCost, upkeep, canResearch, canFound, findPath, stepCost, preview, strength,
     visible, opinionOf, opinion, mood, armyPower, peaceVerdict, warScore, atWar, eraOf, civName, isMil, upgradeCost, scoreOf, isCoastal, passable, sightOf,
     // actions (all return an error string or null)
-    moveUnit, attack, found, upgrade, buy, cityStrike, launchNuke,
+    found, upgrade, buy, cityStrike, launchNuke,
+    // giving a unit an order by hand takes it off auto-explore
+    moveUnit(u, t) { u.explore = false; return moveUnit(u, t); },
+    attack(u, t, declare) { u.explore = false; return attack(u, t, declare); },
+    canExplore: u => !u.dead && UNITS[u.type].cls !== 'civ' && UNITS[u.type].cls !== 'nuke',
+    explore(u) {
+      if (UNITS[u.type].cls === 'civ' || UNITS[u.type].cls === 'nuke') return 'This unit cannot explore';
+      if (exploreTarget(u) < 0) return 'Nothing left to explore from here';
+      u.explore = true; u.sleep = false; u.fort = 0; u.dest = -1;
+      if (u.mv > 0) exploreStep(u);
+      return null;
+    },
+    stopExplore(u) { u.explore = false; },
     setProduction: (c, item) => setProduction(c, item),
     setResearch: (p, k) => setResearch(p, k),
     setFocus(c, f) { if (['balanced', 'food', 'production', 'gold'].includes(f)) { c.focus = f; assignTiles(c); } },
-    fortify(u) { u.sleep = true; u.dest = -1; },
+    fortify(u) { u.sleep = true; u.dest = -1; u.explore = false; },
     wake(u) { u.sleep = false; },
     skip(u) { u.skipTurn = S.turn; },
     disband(u) { u.dead = true; },

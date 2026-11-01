@@ -50,7 +50,7 @@
 
     /* selection */
     #unitBox { position: fixed; left: 8px; bottom: 8px; width: 310px; padding: 0.7rem 0.8rem; z-index: 5; }
-    #unitBox h3 { font-size: 1.05rem; font-weight: 900; display: flex; justify-content: space-between; align-items: baseline; }
+    #unitBox h3 { font-size: 1.05rem; font-weight: 900; display: flex; justify-content: space-between; align-items: center; }
     #unitBox .meta { font-size: 0.8rem; color: var(--muted); font-weight: 700; margin: 0.15rem 0 0.4rem; }
     .hp { height: 6px; background: rgba(255,255,255,0.15); border-radius: 3px; overflow: hidden; margin: 0.3rem 0; }
     .hp div { height: 100%; background: #4cd964; }
@@ -71,6 +71,14 @@
     .bi:hover { background: rgba(255,255,255,0.13); }
     .bi.on { border-color: var(--gold); background: rgba(245,197,24,0.15); }
     .bi small { color: var(--muted); font-weight: 800; white-space: nowrap; }
+    .bi > span { display: flex; align-items: center; gap: 0.45rem; }
+    .ico { width: 18px; height: 18px; flex: none; display: inline-block; vertical-align: middle; }
+    .uIco { width: 34px; height: 34px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; border: 2px solid #fff; flex: none; color: #fff; }
+    .uIco .ico { width: 24px; height: 24px; }
+    #unitBox h3 > div { display: flex; align-items: center; gap: 0.55rem; }
+    #unitBox h3 > div > span { display: flex; flex-direction: column; line-height: 1.15; }
+    .unl { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
+    .unl .ico { width: 16px; height: 16px; color: rgba(255,255,255,0.85); }
     select { font-family: inherit; font-weight: 800; background: #1a2a4a; color: #fff; border: 1px solid var(--line); border-radius: 7px; padding: 0.2rem 0.4rem; }
 
     /* end turn + minimap */
@@ -205,7 +213,8 @@
 
 <script src="frontier-leaders.js?v=6"></script>
 <script src="leader-portraits.js?v=1"></script>
-<script src="nations-core.js?v=1"></script>
+<script src="nations-core.js?v=2"></script>
+<script src="nations-icons.js?v=1"></script>
 <script>
 'use strict';
 const C = NationsCore, { UNITS, BUILDINGS, TECHS, TECH_IDS, PROJECTS, TERRAIN, RESOURCES, RES_IDS, LEADERS, DIFFS, SPEEDS, MAP_SIZES, MAP_TYPES, STYLE_BONUS, ERAS, esc } = C;
@@ -291,7 +300,6 @@ addEventListener('resize', resize); resize();
 // ════════════════ Drawing ════════════════
 const TCOL = ['#1d4a85', '#2b67ad', '#5f9c40', '#a9a650', '#d6c07c', '#8b9a86', '#e4ebef'];
 const RES_COL = { wheat: '#f2d16b', cattle: '#c9a27a', deer: '#9c6b3f', fish: '#8fd3ff', stone: '#b5b5b5', iron: '#8a9bb0', horses: '#d9a066', gold: '#ffd700', spices: '#e05d5d', gems: '#c77dff', oasis: '#4fd1c5' };
-const ABBR = {}; for (const k of Object.keys(UNITS)) ABBR[k] = UNITS[k].name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() + (UNITS[k].name.split(' ').length === 1 ? UNITS[k].name[1] : '');
 function refreshVis() { vis = game.visible(me); computeReach(); dirty = true; }
 function computeReach() {
   reach = null;
@@ -447,12 +455,15 @@ function drawUnit(u, s) {
   ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.arc(x + 2, y + 3, r, 0, 7); ctx.fill();
   ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
   ctx.lineWidth = Math.max(1.5, s * 0.07); ctx.strokeStyle = u.owner === me.id ? '#fff' : '#111'; ctx.stroke();
-  ctx.fillStyle = '#fff'; ctx.font = `900 ${Math.max(8, r * 0.85)}px Nunito`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(U.cls === 'nuke' ? '☢' : ABBR[u.type], x, y + 1);
-  ctx.textBaseline = 'alphabetic';
+  NationsIcons.draw(ctx, u.type, x, y, r * 1.55, '#fff', p.color);
   if (u.hp < 100) { ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(x - r, y + r + 2, r * 2, 4); ctx.fillStyle = u.hp > 50 ? '#4cd964' : u.hp > 25 ? '#f5c518' : '#ff4d5e'; ctx.fillRect(x - r, y + r + 2, r * 2 * u.hp / 100, 4); }
-  if (u.owner === me.id && (u.sleep || u.fort > 0) && mil) { ctx.fillStyle = '#9ad1ff'; ctx.font = `900 ${Math.max(8, r * 0.6)}px Nunito`; ctx.fillText(u.sleep ? 'F' : '', x + r, y - r * 0.6); }
-  if (u.owner === me.id && u.mv > 0 && !u.sleep && u.dest < 0 && game.S.turn !== u.skipTurn) { ctx.fillStyle = '#ffe066'; ctx.beginPath(); ctx.arc(x - r * 0.8, y - r * 0.8, Math.max(2.5, r * 0.18), 0, 7); ctx.fill(); }
+  if (u.owner === me.id && (u.sleep || u.fort > 0) && mil) { ctx.fillStyle = '#9ad1ff'; ctx.font = `900 ${Math.max(8, r * 0.6)}px Nunito`; ctx.textAlign = 'center'; ctx.fillText(u.sleep ? 'F' : '', x + r, y - r * 0.6); }
+  if (u.owner === me.id && u.explore) {
+    const b = Math.max(6, r * 0.42), bx = x + r * 0.85, by = y - r * 0.85;
+    ctx.fillStyle = '#1d4f9c'; ctx.beginPath(); ctx.arc(bx, by, b, 0, 7); ctx.fill();
+    NationsIcons.draw(ctx, 'explore', bx, by, b * 1.7, '#fff', '#1d4f9c');
+  }
+  if (u.owner === me.id && u.mv > 0 && !u.sleep && !u.explore && u.dest < 0 && game.S.turn !== u.skipTurn) { ctx.fillStyle = '#ffe066'; ctx.beginPath(); ctx.arc(x - r * 0.8, y - r * 0.8, Math.max(2.5, r * 0.18), 0, 7); ctx.fill(); }
 }
 function drawFx() {
   const now = performance.now();
@@ -609,6 +620,7 @@ function renderUnit() {
     if (u.type === 'settler') acts += `<button class="btn gold" data-a="found">Found city<span class="k">B</span></button>`;
     if (U.cls === 'nuke') acts += `<button class="btn red" data-a="nuke">Launch</button>`;
     if (game.isMil(u)) acts += u.sleep ? `<button class="btn" data-a="wake">Wake</button>` : `<button class="btn" data-a="fort">Fortify<span class="k">F</span></button>`;
+    if (game.canExplore(u)) acts += u.explore ? `<button class="btn" data-a="unexplore">Stop exploring</button>` : `<button class="btn" data-a="explore">Explore<span class="k">E</span></button>`;
     acts += `<button class="btn" data-a="skip">Skip turn<span class="k">Space</span></button>`;
     if (U.up && p.techs.includes(UNITS[U.up].tech)) acts += `<button class="btn green" data-a="up" ${me.gold >= game.upgradeCost(me, u) ? '' : 'disabled'}>Upgrade to ${esc(UNITS[U.up].name)} (${game.upgradeCost(me, u)} gold)</button>`;
     if (u.dest >= 0) acts += `<button class="btn" data-a="stop">Cancel move</button>`;
@@ -616,10 +628,11 @@ function renderUnit() {
   }
   let hint = '';
   if (mine) hint = u.type === 'settler' ? 'Pick a spot with good land, at least 3 tiles from other cities, then press Found city.' : U.cls === 'nuke' ? 'Launch it at a city of a civilization you are at war with.' :
+    u.explore ? 'Exploring on its own every turn. Give it any order to take control again.' :
     game.isMil(u) ? 'Click a tile to move there, or an enemy to attack. Units around the target add +2 strength each (flanking).' : 'Click a tile to move there.';
   if (U.desc) hint = esc(U.desc) + ' ' + hint;
-  box.innerHTML = `<h3><span>${esc(U.name)}</span><small style="font-size:0.75rem;color:${p.color}">${esc(p.civ)}</small></h3>
-    <div class="meta">${str} · Moves ${fmt1(u.mv)}/${U.mv}${u.fort ? ` · Fortified +${Math.min(2, u.fort) * 3}` : ''}${u.sleep ? ' · Holding' : ''}${u.acted ? ' · Has attacked' : ''}</div>
+  box.innerHTML = `<h3><div><span class="uIco" style="background:${p.color};--cut:${p.color}">${NationsIcons.svg(u.type)}</span><span>${esc(U.name)}<small style="font-size:0.75rem;color:${p.color}">${esc(p.civ)}</small></span></div><button class="btn" data-a="close" title="Deselect (Esc)">✕</button></h3>
+    <div class="meta">${str} · Moves ${fmt1(u.mv)}/${U.mv}${u.fort ? ` · Fortified +${Math.min(2, u.fort) * 3}` : ''}${u.sleep ? ' · Holding' : ''}${u.explore ? ' · Exploring' : ''}${u.acted ? ' · Has attacked' : ''}</div>
     <div class="hp"><div style="width:${u.hp}%;background:${u.hp > 50 ? '#4cd964' : u.hp > 25 ? '#f5c518' : '#ff4d5e'}"></div></div>
     <div class="acts">${acts}</div><div class="hint">${hint}</div>`;
 }
@@ -627,6 +640,9 @@ $('unitBox').onclick = e => {
   const b = e.target.closest('[data-a]'), u = selUnit();
   if (!b || !u) return;
   switch (b.dataset.a) {
+    case 'close': select(null); break;
+    case 'explore': { const err = game.explore(u); after(err); if (!err) nextUnit(); break; }
+    case 'unexplore': game.stopExplore(u); after(null); break;
     case 'found': { const e2 = game.found(u); if (!e2) { const c = game.cityAt(u.t); select({ kind: 'city', id: c.id }); } after(e2); break; }
     case 'fort': game.fortify(u); nextUnit(); break;
     case 'wake': game.wake(u); after(null); break;
@@ -648,7 +664,7 @@ function renderCity() {
   const growTxt = y.food > 0 ? (c.pop >= cap ? `at its cap of ${cap}` : `grows in ${Math.ceil((grow - c.food) / y.food)} turns`) : y.food < 0 ? 'starving!' : 'not growing';
   const enemies = game.G.ring(c.t, 2).some(t => vis[t] && game.unitsAt(t).some(x => x.owner !== me.id && game.atWar(me.id, x.owner)));
   const opts = game.buildable(c);
-  const row = o => `<div class="bi ${cur === o.item ? 'on' : ''}" data-item="${o.item}" title="${esc(itemDesc(o.item))}"><span>${esc(o.name)}</span><small>${o.cost} · ${turnsFor(o.cost, cur === o.item ? c.prod : 0, y.prod)} t</small></div>`;
+  const row = o => `<div class="bi ${cur === o.item ? 'on' : ''}" data-item="${o.item}" title="${esc(itemDesc(o.item))}"><span>${NationsIcons.svg(o.item.slice(2))}${esc(o.name)}</span><small>${o.cost} · ${turnsFor(o.cost, cur === o.item ? c.prod : 0, y.prod)} t</small></div>`;
   const groups = [['Units', opts.filter(o => o.item[0] === 'u')], ['Buildings', opts.filter(o => o.item[0] === 'b')], ['Space program', opts.filter(o => o.item[0] === 'p')]];
   box.innerHTML = `<h3><span>${esc(c.name)}${c.capital ? ' ★' : ''}</span><button class="btn" data-a="close">✕</button></h3>
     <div class="hint" style="margin:-0.3rem 0 0">Population ${c.pop}/${cap} · ${growTxt} · Defence ${game.cityStrength(c)} · HP ${c.hp}/${game.maxHP(c)}</div>
@@ -685,7 +701,7 @@ function pending() {
   if (!me.research && TECH_IDS.some(k => game.canResearch(me, k))) return { k: 'research', text: 'Choose research' };
   const c = game.cityList(me).find(c => !c.building);
   if (c) return { k: 'city', c, text: `${c.name} needs production` };
-  const u = game.unitList(me).find(u => u.mv > 0 && !u.sleep && u.dest < 0 && u.skipTurn !== game.S.turn && !u.acted && UNITS[u.type].cls !== 'nuke');
+  const u = game.unitList(me).find(u => u.mv > 0 && !u.sleep && !u.explore && u.dest < 0 && u.skipTurn !== game.S.turn && !u.acted && UNITS[u.type].cls !== 'nuke');
   if (u) return { k: 'unit', u, text: 'A unit needs orders' };
   return null;
 }
@@ -740,12 +756,13 @@ function checkOver() {
 function openTech() {
   const sci = game.cityList(me).reduce((s, c) => s + game.cityYields(c).sci, 0);
   const unlocks = k => [...Object.entries(UNITS).filter(([, U]) => U.tech === k).map(([, U]) => U.name), ...Object.entries(BUILDINGS).filter(([, B]) => B.tech === k).map(([, B]) => B.name), ...Object.entries(PROJECTS).filter(([, P]) => P.tech === k).map(([, P]) => P.name)];
+  const unlockIds = k => [UNITS, BUILDINGS, PROJECTS].flatMap(D => Object.keys(D).filter(id => D[id].tech === k));
   const extra = { industrialization: 'Mines and lumber mills +1 production', chemistry: 'Farms +1 food' };
   $('tree').innerHTML = ERAS.map((era, e) => `<div class="era"><h4>${era}</h4>` + TECH_IDS.filter(k => TECHS[k].era === e).map(k => {
     const T = TECHS[k], known = me.techs.includes(k), cur = me.research === k, q = me.queue.includes(k), can = game.canResearch(me, k);
     const cost = game.techCost(me, k), turns = sci > 0 ? Math.ceil((cost - (cur ? me.sciProg : 0)) / sci) : '∞';
     const u = unlocks(k).concat(extra[k] ? [extra[k]] : []);
-    return `<div class="tech ${known ? 'known' : cur ? 'cur' : q ? 'queued' : can ? '' : 'locked'}" data-tech="${k}"><b>${T.name}</b><small>${known ? 'Known' : `${cost} science · ${turns} turns`}</small>${u.length ? `<small style="color:rgba(255,255,255,0.75)">${u.map(esc).join(', ')}</small>` : ''}${!known && T.req.length ? `<small>Needs ${T.req.map(r => TECHS[r].name).join(', ')}</small>` : ''}</div>`;
+    return `<div class="tech ${known ? 'known' : cur ? 'cur' : q ? 'queued' : can ? '' : 'locked'}" data-tech="${k}"><b>${T.name}</b><small>${known ? 'Known' : `${cost} science · ${turns} turns`}</small>${unlockIds(k).length ? `<div class="unl">${unlockIds(k).map(id => NationsIcons.svg(id)).join('')}</div>` : ''}${u.length ? `<small style="color:rgba(255,255,255,0.75)">${u.map(esc).join(', ')}</small>` : ''}${!known && T.req.length ? `<small>Needs ${T.req.map(r => TECHS[r].name).join(', ')}</small>` : ''}</div>`;
   }).join('') + '</div>').join('');
   $('techNow').textContent = me.research ? `Researching ${TECHS[me.research].name}${me.queue.length > 1 ? `, then ${me.queue.slice(1).map(k => TECHS[k].name).join(', ')}` : ''}. Click any technology to head for it.` : 'Click a technology to research it. Anything it needs is researched first.';
   $('techOv').hidden = false;
@@ -887,6 +904,7 @@ addEventListener('keydown', e => {
   else if (k === 'l') openDip();
   else if (k === ' ' && u) { e.preventDefault(); game.skip(u); nextUnit(); }
   else if (k === 'f' && u && game.isMil(u)) { game.fortify(u); nextUnit(); }
+  else if (k === 'e' && u && u.owner === me.id && game.canExplore(u)) $('unitBox').querySelector('[data-a=explore],[data-a=unexplore]')?.click();
   else if (k === 'b' && u && u.type === 'settler') $('unitBox').querySelector('[data-a=found]')?.click();
   else if (k === 'c') { const cap = game.cityList(me)[0]; if (cap) centerOn(cap.t); }
 });
