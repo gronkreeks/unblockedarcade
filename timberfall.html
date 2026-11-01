@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9603713606760464"
+     crossorigin="anonymous"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="favicon.ico">
+  <title>Timberfall</title>
+  <meta name="description" content="A top-down battle royale for 20 players. Loot, chop trees for wood, barricade when you're shot at and be the last team standing.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root { --navy: #0f1e3d; --navy-3: #13264b; --gold: #f5c518; --green: #27ae60; --muted: rgba(255,255,255,0.62); --line: rgba(255,255,255,0.12); }
+    html, body { height: 100%; }
+    body { background: var(--navy); color: #fff; font-family: 'Nunito', 'Segoe UI', system-ui, sans-serif; overflow: hidden; user-select: none; }
+    [hidden] { display: none !important; }
+    canvas#cv { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; cursor: none; }
+
+    .screen { position: fixed; inset: 0; overflow-y: auto; z-index: 10; display: flex; justify-content: center; align-items: flex-start; padding: 1.2rem 1rem 2rem;
+      background: radial-gradient(ellipse at top, #1f4d2e 0%, #10301e 45%, #0b1f16 100%); }
+    .wrap { width: 100%; max-width: 780px; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem; }
+    .back { color: #fff; text-decoration: none; font-size: 0.8rem; font-weight: 800; background: rgba(0,0,0,0.25); padding: 0.3rem 0.8rem; border-radius: 20px; border: 1px solid rgba(255,255,255,0.3); }
+    .back:hover { background: rgba(0,0,0,0.4); }
+    h1 { font-size: clamp(2.2rem, 7vw, 3.4rem); font-weight: 900; letter-spacing: 5px; text-align: center; text-shadow: 0 4px 0 rgba(0,0,0,0.25); }
+    .sub { text-align: center; color: rgba(255,255,255,0.75); font-weight: 800; letter-spacing: 3px; text-transform: uppercase; font-size: 0.78rem; margin: 0.3rem 0 1.2rem; }
+    .card { background: rgba(0,0,0,0.28); border: 1px solid var(--line); border-radius: 16px; padding: 1rem 1.1rem; margin-bottom: 0.9rem; }
+    .lbl { font-size: 0.66rem; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.5); margin-bottom: 0.45rem; }
+    .row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
+    input[type=text] { font-family: inherit; font-size: 1rem; font-weight: 800; color: #fff; background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 0.55rem 0.8rem; outline: none; }
+    input[type=text]:focus { border-color: var(--gold); }
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 0.9rem; }
+    .tab { flex: 1; font-family: inherit; font-size: 0.9rem; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; color: #fff; padding: 0.7rem; border-radius: 14px; border: 2px solid rgba(255,255,255,0.18); background: rgba(0,0,0,0.25); cursor: pointer; }
+    .tab.on { background: var(--gold); color: #1a1400; border-color: var(--gold); }
+    .seg { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .seg button { font-family: inherit; font-size: 0.8rem; font-weight: 900; color: #fff; padding: 0.45rem 0.85rem; border-radius: 10px; border: 2px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); cursor: pointer; }
+    .seg button.on { background: #fff; color: #10301e; border-color: #fff; }
+    .seg button:disabled { cursor: default; opacity: 0.55; }
+    .seg button.on:disabled { opacity: 0.8; }
+    .seg .d-easy.on { background: #7fe0a8; border-color: #7fe0a8; } .seg .d-medium.on { background: #f5c518; border-color: #f5c518; }
+    .seg .d-hard.on { background: #ff8a3d; border-color: #ff8a3d; } .seg .d-impossible.on { background: #ff4d6d; border-color: #ff4d6d; color: #fff; }
+    .hint { font-size: 0.82rem; font-weight: 700; color: var(--muted); line-height: 1.5; margin-top: 0.45rem; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; }
+    @media (max-width: 620px) { .grid2 { grid-template-columns: 1fr; } }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; font-family: inherit; font-size: 0.95rem; font-weight: 900; letter-spacing: 1.5px; text-transform: uppercase;
+      padding: 0.8rem 1.6rem; border-radius: 50px; border: none; cursor: pointer; text-decoration: none; transition: transform 0.12s; }
+    .btn:hover:not(:disabled) { transform: translateY(-2px); }
+    .btn:disabled { opacity: 0.5; cursor: default; }
+    .btn-gold { background: var(--gold); color: #1a1400; box-shadow: 0 4px 0 #b8930c; }
+    .btn-green { background: var(--green); color: #fff; box-shadow: 0 4px 0 #1b7a43; }
+    .btn-glass { background: rgba(255,255,255,0.12); color: #fff; border: 2px solid rgba(255,255,255,0.35); }
+    .btn-big { width: 100%; font-size: 1.15rem; padding: 1rem; }
+    .check { display: flex; align-items: center; gap: 0.5rem; font-weight: 800; font-size: 0.88rem; cursor: pointer; margin-top: 0.7rem; }
+    .check input { width: 18px; height: 18px; accent-color: var(--gold); }
+    .status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 800; color: var(--muted); }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #888; flex: none; }
+    .dot.on { background: #4cd964; } .dot.wait { background: #f5c518; } .dot.off { background: #ff4d6d; }
+    .err { color: #ff8fa3; font-weight: 800; font-size: 0.85rem; min-height: 1.2em; margin-top: 0.4rem; }
+    .code { font-size: 2.6rem; font-weight: 900; letter-spacing: 10px; color: var(--gold); }
+    .plist { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.6rem 0; }
+    .plist span { padding: 0.3rem 0.75rem; border-radius: 20px; background: rgba(255,255,255,0.1); font-weight: 800; font-size: 0.85rem; }
+    .plist span.host::after { content: ' · host'; color: var(--gold); }
+    .plist span.off { opacity: 0.5; }
+    .keys { display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 0.8rem; font-size: 0.85rem; font-weight: 700; color: rgba(255,255,255,0.85); }
+    kbd { font-family: inherit; font-weight: 900; font-size: 0.75rem; background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.25); border-bottom-width: 3px; border-radius: 6px; padding: 0.05rem 0.4rem; white-space: nowrap; }
+    .learn p { font-size: 0.88rem; font-weight: 700; line-height: 1.6; color: rgba(255,255,255,0.85); }
+
+    .over { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(5,15,10,0.6); padding: 1rem; }
+    .over .box { background: var(--navy-3); border: 1px solid var(--line); border-radius: 20px; padding: 1.6rem 1.6rem 1.4rem; width: min(420px, 100%); text-align: center; box-shadow: 0 30px 80px rgba(0,0,0,0.6); }
+    .over h2 { font-size: 2rem; font-weight: 900; letter-spacing: 2px; }
+    .over .place { font-size: 3.4rem; font-weight: 900; color: var(--gold); line-height: 1.1; margin: 0.3rem 0; }
+    .over p { color: var(--muted); font-weight: 700; margin: 0.4rem 0 0.9rem; line-height: 1.5; }
+    .over .stats { display: flex; justify-content: center; gap: 1.4rem; margin: 0.6rem 0 1rem; font-weight: 900; }
+    .over .stats b { display: block; font-size: 1.6rem; }
+    .over .stats span { font-size: 0.7rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+    .over .btns { display: flex; flex-direction: column; gap: 0.55rem; }
+  </style>
+</head>
+<body>
+
+<canvas id="cv"></canvas>
+
+<!-- ── Menu ── -->
+<div class="screen" id="menu">
+  <div class="wrap">
+    <header>
+      <a class="back" href="index.html">← Back</a>
+      <span></span>
+      <button class="back" id="muteBtn" type="button" style="cursor:pointer;font-family:inherit">Sound: on</button>
+    </header>
+    <h1>TIMBERFALL</h1>
+    <p class="sub">20-player battle royale · chop · build · survive</p>
+
+    <div class="card">
+      <div class="lbl">Your name</div>
+      <input type="text" id="nameIn" maxlength="16" placeholder="Player" autocomplete="off" spellcheck="false" style="width:100%">
+    </div>
+
+    <div class="tabs">
+      <button class="tab on" id="tabSp" type="button">Play vs bots</button>
+      <button class="tab" id="tabMp" type="button">Online with friends</button>
+    </div>
+
+    <div class="card" id="setCard">
+      <div class="grid2">
+        <div>
+          <div class="lbl">Teams</div>
+          <div class="seg" data-key="mode">
+            <button type="button" data-v="solo">Solo</button><button type="button" data-v="duo">Duos</button><button type="button" data-v="squad">Squads</button>
+          </div>
+          <p class="hint" id="modeHint"></p>
+        </div>
+        <div>
+          <div class="lbl">Bot difficulty</div>
+          <div class="seg" data-key="diff">
+            <button type="button" class="d-easy" data-v="easy">Easy</button><button type="button" class="d-medium" data-v="medium">Medium</button><button type="button" class="d-hard" data-v="hard">Hard</button><button type="button" class="d-impossible" data-v="impossible">Impossible</button><button type="button" data-v="mixed">Mixed</button>
+          </div>
+          <p class="hint" id="diffHint"></p>
+        </div>
+      </div>
+      <label class="check" id="teamUpRow" hidden><input type="checkbox" id="teamUp" checked> Put friends on the same team</label>
+    </div>
+
+    <div id="spPanel">
+      <button class="btn btn-gold btn-big" id="playBtn" type="button">Play</button>
+    </div>
+
+    <div id="mpPanel" hidden>
+      <div class="card">
+        <div class="status"><span class="dot" id="mpDot"></span><span id="mpStatus">Not connected</span></div>
+        <div id="mpHome">
+          <div class="row" style="margin-top:0.8rem">
+            <button class="btn btn-green" id="mpCreate" type="button">Create lobby</button>
+            <span style="color:var(--muted);font-weight:800">or</span>
+            <input type="text" id="codeIn" maxlength="4" placeholder="CODE" style="width:7.5rem;text-transform:uppercase;letter-spacing:4px;text-align:center">
+            <button class="btn btn-glass" id="mpJoin" type="button">Join</button>
+          </div>
+          <p class="hint">Create a lobby and send the 4-letter code to your friends. Up to 8 people; bots fill the other seats so there are always 20 players.</p>
+        </div>
+        <div id="mpRoom" hidden>
+          <div class="lbl" style="margin-top:0.9rem">Lobby code</div>
+          <div class="code" id="roomCode"></div>
+          <div class="plist" id="roomPlayers"></div>
+          <p class="hint" id="roomHint"></p>
+          <div class="row" style="margin-top:0.7rem">
+            <button class="btn btn-gold" id="roomStart" type="button">Start game</button>
+            <button class="btn btn-glass" id="roomLeave" type="button">Leave</button>
+          </div>
+        </div>
+        <div class="err" id="mpErr"></div>
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-top:0.9rem">
+      <div class="card">
+        <div class="lbl">Controls</div>
+        <div class="keys">
+          <span><kbd>WASD</kbd></span><span>Move</span>
+          <span><kbd>Mouse</kbd></span><span>Aim · click to shoot / swing</span>
+          <span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></span><span>Axe · gun · gun (or scroll)</span>
+          <span><kbd>Q</kbd></span><span>Barricade (20 wood)</span>
+          <span><kbd>E</kbd></span><span>Pick up / swap gun</span>
+          <span><kbd>R</kbd></span><span>Reload</span>
+          <span><kbd>F</kbd> / <kbd>C</kbd></span><span>Heal / drink shield</span>
+          <span><kbd>M</kbd></span><span>Big map</span>
+        </div>
+      </div>
+      <div class="card learn">
+        <div class="lbl">How it works</div>
+        <p>Pick where to land, grab guns, and swing your axe at trees for wood. When someone opens fire, press <b>Q</b> to drop a barricade between you. The zone keeps shrinking, so keep moving. Last team standing wins.</p>
+        <div class="lbl" style="margin-top:0.8rem">What you'll learn</div>
+        <p>Decisions under pressure: manage resources, read the zone, and choose when to fight, build or move.</p>
+      </div>
+    </div>
+    <p class="hint" id="touchNote" hidden style="text-align:center">Timberfall needs a keyboard and mouse.</p>
+  </div>
+</div>
+
+<!-- ── Death / win / pause ── -->
+<div class="over" id="endBox" hidden>
+  <div class="box">
+    <h2 id="endTitle"></h2>
+    <div class="place" id="endPlace"></div>
+    <p id="endText"></p>
+    <div class="stats" id="endStats"></div>
+    <div class="btns">
+      <button class="btn btn-glass" id="endSpec" type="button">Spectate</button>
+      <button class="btn btn-gold" id="endAgain" type="button">Play again</button>
+      <button class="btn btn-glass" id="endMenu" type="button">Menu</button>
+    </div>
+  </div>
+</div>
+<div class="over" id="pauseBox" hidden>
+  <div class="box">
+    <h2>Paused</h2>
+    <p id="pauseText">Press Esc to keep playing.</p>
+    <div class="btns">
+      <button class="btn btn-gold" id="pauseResume" type="button">Resume</button>
+      <button class="btn btn-glass" id="pauseMute" type="button">Sound: on</button>
+      <button class="btn btn-glass" id="pauseLeave" type="button">Leave game</button>
+    </div>
+  </div>
+</div>
+
+<script src="timberfall-core.js?v=1"></script>
+<script>
+'use strict';
+const C = TimberfallCore;
+const RULES_V = 1;   // bump with the ?v= above when timberfall-core.js changes
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('timberfall-' + k); return v === null ? d : v; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('timberfall-' + k, v); } catch (e) { } },
+};
+const SERVER = (() => {
+  const p = new URLSearchParams(location.search).get('server');
+  return p && /^(wss:\/\/|ws:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$))/.test(p) ? p : 'wss://frontier-server.onrender.com';
+})();
+const esc = C.esc;
+const cv = $('cv'), ctx = cv.getContext('2d');
+let dpr = 1, cw = 0, ch = 0;   // canvas size in CSS pixels
+
+// ══════════════ Menu ══════════════
+const settings = { mode: store.get('mode', 'solo'), diff: store.get('diff', 'medium'), teamUp: store.get('teamUp', '1') === '1' };
+const DIFF_HINT = {
+  easy: 'Slow to react and sprays wildly. Good for learning the controls.',
+  medium: 'Decent aim, strafes now and then and sometimes builds when shot.',
+  hard: 'Reacts in about a quarter of a second, tracks you, strafes and barricades when shot. Plays like a strong competitive player.',
+  impossible: 'Never misses. Your only chances are cover, bushes, barricades and shooting first.',
+  mixed: 'A random mix of all four, mostly Easy and Medium.',
+};
+const MODE_HINT = { solo: '20 players, every one for themselves.', duo: '10 teams of 2. Bots fill your team if you need a partner.', squad: '5 teams of 4. Bots fill any empty seats.' };
+let room = null;   // online lobby we're in
+function renderSettings() {
+  const locked = !!room && !room.isHost;
+  const cfg = room ? room.cfg : settings;
+  for (const seg of document.querySelectorAll('.seg')) for (const b of seg.children) {
+    b.classList.toggle('on', b.dataset.v === cfg[seg.dataset.key]);
+    b.disabled = locked;
+  }
+  $('diffHint').textContent = DIFF_HINT[cfg.diff];
+  $('modeHint').textContent = MODE_HINT[cfg.mode];
+  $('teamUpRow').hidden = !(tab === 'mp' && cfg.mode !== 'solo');
+  $('teamUp').checked = cfg.teamUp; $('teamUp').disabled = locked;
+}
+for (const seg of document.querySelectorAll('.seg')) seg.addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b || b.disabled) return;
+  settings[seg.dataset.key] = b.dataset.v;
+  store.set(seg.dataset.key, b.dataset.v);
+  if (room && room.isHost) netSend({ t: 'r_cfg', cfg: { ...settings } });
+  renderSettings();
+});
+$('teamUp').onchange = () => {
+  settings.teamUp = $('teamUp').checked; store.set('teamUp', settings.teamUp ? '1' : '0');
+  if (room && room.isHost) netSend({ t: 'r_cfg', cfg: { ...settings } });
+};
+$('nameIn').value = store.get('name', '');
+$('nameIn').oninput = () => store.set('name', $('nameIn').value);
+const playerName = () => $('nameIn').value.replace(/\s+/g, ' ').trim().slice(0, 16) || 'Player';
+let tab = 'sp';
+function setTab(t) {
+  tab = t;
+  $('tabSp').classList.toggle('on', t === 'sp'); $('tabMp').classList.toggle('on', t === 'mp');
+  $('spPanel').hidden = t !== 'sp'; $('mpPanel').hidden = t !== 'mp';
+  if (t === 'mp') netConnect();
+  renderSettings();
+}
+$('tabSp').onclick = () => setTab('sp');
+$('tabMp').onclick = () => setTab('mp');
+$('playBtn').onclick = () => startSolo();
+if (matchMedia('(hover: none)').matches) $('touchNote').hidden = false;
+
+function showScreen(s) {
+  $('menu').hidden = s !== 'menu';
+  $('endBox').hidden = true; $('pauseBox').hidden = true;
+  paused = false;
+}
+
+// ══════════════ Sound ══════════════
+let muted = store.get('muted', '0') === '1';
+let actx = null;
+function renderMute() { $('muteBtn').textContent = $('pauseMute').textContent = 'Sound: ' + (muted ? 'off' : 'on'); }
+$('muteBtn').onclick = $('pauseMute').onclick = () => { muted = !muted; store.set('muted', muted ? '1' : '0'); renderMute(); };
+renderMute();
+function audio() {
+  if (muted) return null;
+  try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; }
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+let noiseBuf = null;
+// kind: shot sounds by weapon, 'hit', 'build', 'chop', 'kill'. vol 0..1 (distance is applied by the caller)
+function sfx(kind, vol = 1) {
+  const a = audio();
+  if (!a || vol < 0.03) return;
+  const t = a.currentTime, g = a.createGain();
+  g.connect(a.destination);
+  if (!noiseBuf) {
+    noiseBuf = a.createBuffer(1, a.sampleRate * 0.4, a.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  const noise = (dur, freq, q) => {
+    const s = a.createBufferSource(), f = a.createBiquadFilter();
+    s.buffer = noiseBuf; f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
+    s.connect(f); f.connect(g); s.start(t); s.stop(t + dur);
+  };
+  const tone = (f0, f1, dur, type = 'sine') => {
+    const o = a.createOscillator(); o.type = type;
+    o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    o.connect(g); o.start(t); o.stop(t + dur);
+  };
+  const env = (peak, dur) => { g.gain.setValueAtTime(peak * vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur); };
+  switch (kind) {
+    case 'pistol': env(0.32, 0.12); noise(0.12, 1800, 0.8); break;
+    case 'smg': env(0.22, 0.08); noise(0.08, 2400, 0.9); break;
+    case 'shotgun': env(0.5, 0.28); noise(0.28, 700, 0.6); break;
+    case 'rifle': env(0.32, 0.14); noise(0.14, 1300, 0.7); break;
+    case 'sniper': env(0.6, 0.45); noise(0.45, 500, 0.5); break;
+    case 'axe': env(0.25, 0.1); tone(300, 120, 0.1, 'triangle'); break;
+    case 'hit': env(0.25, 0.07); tone(1400, 1100, 0.07, 'square'); break;
+    case 'kill': env(0.3, 0.25); tone(900, 1800, 0.25, 'triangle'); break;
+    case 'build': env(0.35, 0.16); tone(180, 90, 0.16, 'triangle'); noise(0.1, 400, 1); break;
+    case 'chop': env(0.3, 0.09); tone(260, 140, 0.09, 'triangle'); break;
+    case 'hurt': env(0.3, 0.12); tone(220, 160, 0.12, 'sawtooth'); break;
+  }
+}
+
+// ══════════════ Match state ══════════════
+let G = null, paused = false;
+const TEAM_COLORS = ['#ef5350', '#ffa726', '#ab47bc', '#ec407a', '#ff7043', '#d4e157', '#8d6e63', '#f06292', '#ffca28', '#ba68c8'];
+const MY_COLOR = '#42a5f5', MATE_COLOR = '#4dd0e1';
+function newMatch({ mode, seed, cfg, me, roster, game }) {
+  const W = game ? game.W : C.genWorld(seed);
+  G = {
+    mode, game, W, cfg, me, seed,
+    roster: new Map(roster.map(([id, name, team, diff]) => [id, { name, team, diff }])),
+    snaps: [], priv: null, phase: 'drop', zone: null, alive: C.MAX_PLAYERS, teamsLeft: 0, dropLeft: C.DROP_SECS, tick: 0,
+    pending: [], seq: 0, pred: { x: 0, y: 0 }, predPrev: { x: 0, y: 0 }, err: { x: 0, y: 0 }, landed: false,
+    rt: 0, alpha: 0, fx: [], feed: [], ann: null, land: null, landSent: null, spec: 0, dead: false, deadAt: 0,
+    hitT: -9, hitKill: false, hurtT: -9, hurtFrom: null, lastBuildT: -9, fireCd: 0, shotSeqs: [],
+    shake: new Map(), bigMap: false, winner: 0, endShown: false, cam: { x: C.MAP_SIZE / 2, y: C.MAP_SIZE / 2 },
+  };
+  G.myTeam = G.roster.get(me).team;
+  G.mapImg = renderMapImage(W);
+  keys.clear(); mouse.down = false; act = {};
+  showScreen('game');
+}
+const teamColor = t => t === G.myTeam ? MATE_COLOR : TEAM_COLORS[(t - 1) % TEAM_COLORS.length];
+const nameOf = id => { const r = G && G.roster.get(id); return r ? r.name : '?'; };
+const now = () => performance.now() / 1000;
+
+function startSolo() {
+  const seed = Math.random() * 2 ** 31 | 0;
+  const game = C.createGame({ seed, cfg: { ...settings }, humans: [{ name: playerName() }] });
+  newMatch({ mode: 'sp', seed, cfg: game.cfg, me: 1, roster: game.roster(), game });
+}
+function toMenu() {
+  if (G && G.mode === 'mp' && ws) netSend({ t: 'r_leave' });
+  G = null; room = null;
+  showScreen('menu');
+  renderRoom();
+}
+
+// ══════════════ Input ══════════════
+const keys = new Set();
+const mouse = { x: 0, y: 0, down: false };
+let act = {};
+const KEYMAP = { KeyW: 1, KeyA: 1, KeyS: 1, KeyD: 1, ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1, Space: 1, Tab: 1 };
+addEventListener('keydown', e => {
+  if (!G || e.target.tagName === 'INPUT') return;
+  if (KEYMAP[e.code]) e.preventDefault();
+  if (e.repeat) return;
+  keys.add(e.code);
+  switch (e.code) {
+    case 'Digit1': act.sl = 0; break;
+    case 'Digit2': act.sl = 1; break;
+    case 'Digit3': act.sl = 2; break;
+    case 'KeyQ': act.b = 1; break;
+    case 'KeyE': act.e = 1; break;
+    case 'KeyR': act.r = 1; break;
+    case 'KeyF': act.h = 'heal'; break;
+    case 'KeyC': act.h = 'shield'; break;
+    case 'KeyM': G.bigMap = !G.bigMap; break;
+    case 'Space': if (G.dead) nextSpec(); break;
+    case 'Escape': togglePause(); break;
+  }
+});
+addEventListener('keyup', e => keys.delete(e.code));
+addEventListener('blur', () => { keys.clear(); mouse.down = false; });
+cv.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+cv.addEventListener('mousedown', e => {
+  mouse.x = e.clientX; mouse.y = e.clientY;
+  if (!G) return;
+  if (e.button !== 0) return;
+  if (G.phase === 'drop' || G.bigMap) { pickLand(); return; }
+  if (G.dead) { nextSpec(); return; }
+  mouse.down = true;
+});
+addEventListener('mouseup', e => { if (e.button === 0) mouse.down = false; });
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('wheel', e => {
+  if (!G || !G.priv) return;
+  e.preventDefault();
+  const sl = G.priv.sl, have = [0, 1, 2].filter(i => sl[i]);
+  const i = have.indexOf(act.sl !== undefined ? act.sl : G.priv.cur);
+  act.sl = have[(i + (e.deltaY > 0 ? 1 : have.length - 1)) % have.length];
+}, { passive: false });
+document.addEventListener('visibilitychange', () => {
+  keys.clear(); mouse.down = false;
+  if (document.hidden && G && G.mode === 'sp' && G.phase === 'play' && !G.dead) togglePause(true);
+});
+function togglePause(force) {
+  if (!G) return;
+  const show = force === true ? true : $('pauseBox').hidden;
+  $('pauseBox').hidden = !show;
+  paused = show && G.mode === 'sp';
+  $('pauseText').textContent = G.mode === 'sp' ? 'Press Esc to keep playing.' : 'The game keeps going while this is open.';
+  mouse.down = false;
+}
+$('pauseResume').onclick = () => togglePause();
+$('pauseLeave').onclick = () => toMenu();
+
+function buildInput() {
+  const k = c => keys.has(c) ? 1 : 0;
+  const busy = !$('pauseBox').hidden || !$('endBox').hidden;
+  const inp = {
+    s: ++G.seq,
+    mx: busy ? 0 : (k('KeyD') || k('ArrowRight')) - (k('KeyA') || k('ArrowLeft')),
+    my: busy ? 0 : (k('KeyS') || k('ArrowDown')) - (k('KeyW') || k('ArrowUp')),
+    a: Math.round(aimAngle() * 1000) / 1000, f: mouse.down && !busy && !G.bigMap ? 1 : 0, vt: Math.round(G.rt * 10) / 10,
+  };
+  if (!busy) Object.assign(inp, act);
+  act = {};
+  if (G.land && G.land !== G.landSent) { inp.drop = G.land; G.landSent = G.land; }
+  return inp;
+}
+function aimAngle() {
+  if (!G.landed) return 0;
+  const s = toScreen(myPos());
+  return Math.atan2(mouse.y - s.y, mouse.x - s.x);
+}
+
+// ══════════════ Ticks ══════════════
+// The game runs in fixed 50 ms ticks. Solo: this page runs the game. Online: it sends its controls
+// to the server and predicts its own movement, then corrects when the server's answer arrives.
+function clientTick() {
+  G.predPrev = { x: G.pred.x, y: G.pred.y };
+  const inp = buildInput();
+  if (G.mode === 'sp') {
+    G.game.input(G.me, inp);
+    G.game.step();
+    const s = G.game.snapshot();
+    G.game.flush();
+    s.me = G.game.priv(G.me);
+    onSnap(s);
+    return;
+  }
+  if (!ws || ws.readyState !== 1) return;
+  if (G.priv && !G.priv.al) return;
+  netSend({ t: 'r_in', i: inp });
+  if (G.landed && G.priv && G.phase !== 'drop') {
+    const mul = C.speedMul(G.priv.ht > 0, curWeapon());
+    G.pending.push({ s: inp.s, mx: inp.mx, my: inp.my, mul });
+    C.move(G.W, G.pred, inp.mx, inp.my, mul);
+    predictShot(inp);
+  }
+}
+const curWeapon = () => { const s = G.priv && G.priv.sl[G.priv.cur]; return s ? C.WEAPON_IDS[s[0]] : 'axe'; };
+// Online, your own shots are drawn straight away instead of waiting for the server to echo them
+function predictShot(inp) {
+  G.fireCd -= C.DT;
+  if (inp.sl !== undefined && G.priv.sl[inp.sl] && inp.sl !== G.priv.cur) G.fireCd = Math.max(G.fireCd, 0.25);
+  if (!inp.f || G.fireCd > 0 || G.priv.rl > 0) return;
+  const s = G.priv.sl[G.priv.cur], w = C.WEAPON_IDS[s[0]], W8 = C.WEAPONS[w];
+  G.fireCd = 1 / W8.rate;
+  if (W8.melee) { addSwing(G.pred.x, G.pred.y, inp.a); sfx('axe', 0.8); return; }
+  const mag = s[1] - G.shotSeqs.length;
+  if (mag <= 0) return;
+  G.shotSeqs.push(inp.s);
+  const pts = [];
+  for (let k = 0; k < W8.pellets; k++) {
+    const a = W8.pellets > 1 ? inp.a + ((k / (W8.pellets - 1)) - 0.5) * 1.6 * W8.spread : inp.a;
+    const dx = Math.cos(a), dy = Math.sin(a);
+    const hit = C.raycast(G.W, G.pred.x, G.pred.y, dx, dy, W8.range);
+    pts.push(G.pred.x + dx * hit.t, G.pred.y + dy * hit.t);
+  }
+  addTracers(G.pred.x, G.pred.y, pts, w);
+  sfx(w, 0.7);
+}
+
+function onSnap(s) {
+  G.phase = s.ph; G.zone = s.z; G.alive = s.al; G.teamsLeft = s.tm; G.dropLeft = s.dl; G.tick = s.k;
+  const m = new Map();
+  for (const a of s.p) m.set(a[0], a);
+  G.snaps.push({ k: s.k, m });
+  while (G.snaps.length > 40) G.snaps.shift();
+  if (!G.rt) G.rt = s.k - 1;
+  G.priv = s.me;
+  for (const e of s.ev) onEvent(e);
+  const mine = m.get(G.me);
+  if (mine) {
+    if (!G.landed) {
+      G.landed = true;
+      G.pred = { x: mine[1], y: mine[2] }; G.predPrev = { ...G.pred }; G.err = { x: 0, y: 0 }; G.pending = [];
+    } else if (G.mode === 'sp') {
+      G.pred = { x: mine[1], y: mine[2] };
+    } else reconcile(mine[1], mine[2], s.me.ack);
+  }
+  if (G.mode === 'mp') G.shotSeqs = G.shotSeqs.filter(q => q > s.me.ack);
+}
+function reconcile(ax, ay, ack) {
+  G.pending = G.pending.filter(i => i.s > ack);
+  const p = { x: ax, y: ay };
+  for (const i of G.pending) C.move(G.W, p, i.mx, i.my, i.mul);
+  const ex = G.pred.x - p.x, ey = G.pred.y - p.y;
+  if (ex * ex + ey * ey > 120 * 120) { G.err = { x: 0, y: 0 }; G.predPrev = { ...p }; }
+  else { G.err.x += ex; G.err.y += ey; G.predPrev.x -= ex; G.predPrev.y -= ey; }
+  G.pred = p;
+}
+
+// Where everyone else is drawn: between the two snapshots around render tick G.rt
+function advanceRenderTick(dt) {
+  if (!G.snaps.length) return;
+  const latest = G.snaps[G.snaps.length - 1].k;
+  if (G.mode === 'sp') { G.rt = latest - 1 + G.alpha; return; }
+  const target = latest - 2.2;
+  G.rt += dt * C.TICK_RATE;
+  G.rt += (target - G.rt) * Math.min(1, dt * 2);
+  if (G.rt > latest) G.rt = latest;
+  if (G.rt < latest - 8) G.rt = target;
+}
+function playerAt(id) {
+  const S = G.snaps;
+  for (let i = S.length - 1; i >= 0; i--) {
+    if (S[i].k > G.rt && i > 0) continue;
+    const a = S[i], b = S[i + 1];
+    const pa = a.m.get(id);
+    if (!pa) return b ? b.m.get(id) || null : null;
+    const pb = b && b.m.get(id);
+    if (!pb) return pa;
+    const f = Math.max(0, Math.min(1, (G.rt - a.k) / (b.k - a.k)));
+    const r = pa.slice();
+    r[1] = pa[1] + (pb[1] - pa[1]) * f; r[2] = pa[2] + (pb[2] - pa[2]) * f;
+    r[3] = pa[3] + C.angDiff(pa[3], pb[3]) * f;
+    return r;
+  }
+  return null;
+}
+function latestPlayers() { return G.snaps.length ? G.snaps[G.snaps.length - 1].m : new Map(); }
+function myPos() {
+  return { x: G.predPrev.x + (G.pred.x - G.predPrev.x) * G.alpha + G.err.x, y: G.predPrev.y + (G.pred.y - G.predPrev.y) * G.alpha + G.err.y };
+}
+
+// ══════════════ Events ══════════════
+function onEvent(e) {
+  if (G.mode === 'mp' && (e.e === 'tr' || e.e === 'b+' || e.e === 'bh' || e.e === 'b-' || e.e === 'l+' || e.e === 'l-')) C.applyEvent(G.W, e);
+  const me = G.me;
+  switch (e.e) {
+    case 's': {
+      if (G.mode === 'mp' && e.p === me) break;
+      const pts = [];
+      for (let i = 0; i < e.pts.length; i += 2) pts.push(e.pts[i], e.pts[i + 1]);
+      addTracers(e.x, e.y, pts, C.WEAPON_IDS[e.w]);
+      sfx(C.WEAPON_IDS[e.w], e.p === me ? 0.7 : hearing(e.x, e.y) * 0.6);
+      break;
+    }
+    case 'm': if (!(G.mode === 'mp' && e.p === me)) { const q = latestPlayers().get(e.p); if (q) { addSwing(q[1], q[2], e.a); if (e.p === me) sfx('axe', 0.8); } } break;
+    case 'd': {
+      const v = playerAt(e.p) || latestPlayers().get(e.p);
+      if (e.by === me && v) { G.fx.push({ k: 'num', x: v[1], y: v[2] - 20, n: e.n, sh: e.s, t: now() }); G.hitT = now(); G.hitKill = false; sfx('hit', 0.6); }
+      if (e.p === me) {
+        G.hurtT = now(); const a = playerAt(e.by) || latestPlayers().get(e.by); G.hurtFrom = a ? { x: a[1], y: a[2] } : null; sfx('hurt', 0.5);
+      }
+      break;
+    }
+    case 'tr': {
+      const t = G.W.trees[e.id];
+      if (t) { G.shake.set(e.id, now()); for (let i = 0; i < 5; i++) G.fx.push({ k: 'leaf', x: t.x, y: t.y, vx: (Math.random() - 0.5) * 160, vy: (Math.random() - 0.5) * 160, t: now() }); sfx('chop', hearing(t.x, t.y) * 0.7); }
+      break;
+    }
+    case 'b+': if (e.tm === G.myTeam) G.lastBuildT = now(); sfx('build', hearing(e.x, e.y) * 0.7); break;
+    case 'k': {
+      const v = playerAt(e.v) || latestPlayers().get(e.v);
+      if (v) G.fx.push({ k: 'puff', x: v[1], y: v[2], t: now(), c: teamColor(G.roster.get(e.v).team) });
+      G.feed.push({ k: e.k, v: e.v, w: e.w, t: now() });
+      if (G.feed.length > 6) G.feed.shift();
+      if (e.k === me && e.v !== me) { G.hitT = now(); G.hitKill = true; announce(`You eliminated ${nameOf(e.v)}`, '#ffd54f'); sfx('kill', 0.7); }
+      if (e.v === me) {
+        G.dead = true; G.deadAt = now(); mouse.down = false;
+        G.spec = e.k && e.k !== me ? e.k : 0;
+        if (!G.spec || !latestPlayers().has(G.spec)) nextSpec();
+        setTimeout(showEnd, 1400);
+      }
+      if (G.spec === e.v && G.dead) setTimeout(nextSpec, 1200);
+      break;
+    }
+    case 'te': if (e.team === G.myTeam) setTimeout(showEnd, 1400); break;
+    case 'end': G.winner = e.team; setTimeout(showEnd, e.team === G.myTeam ? 900 : 1500); break;
+    case 'z': announce(e.n === 'shrink' ? 'The zone is closing!' : 'Next zone marked on the map', e.n === 'shrink' ? '#ce93d8' : '#fff'); break;
+    case 'land': announce('Good luck!', '#fff'); break;
+  }
+}
+const hearing = (x, y) => { const d = Math.hypot(x - G.cam.x, y - G.cam.y); return Math.max(0, 1 - d / 1400); };
+function announce(text, color) { G.ann = { text, color, t: now() }; }
+function addTracers(x, y, pts, w) {
+  const t = now();
+  for (let i = 0; i < pts.length; i += 2) G.fx.push({ k: 'tracer', x, y, x2: pts[i], y2: pts[i + 1], t, w });
+  G.fx.push({ k: 'flash', x, y, a: Math.atan2(pts[1] - y, pts[0] - x), t });
+}
+function addSwing(x, y, a) { G.fx.push({ k: 'swing', x, y, a, t: now() }); }
+function nextSpec() {
+  if (!G) return;
+  const alive = [...latestPlayers().keys()].filter(id => id !== G.me);
+  if (!alive.length) return;
+  const mates = alive.filter(id => G.roster.get(id).team === G.myTeam);
+  const order = [...mates, ...alive.filter(id => !mates.includes(id))];
+  const i = order.indexOf(G.spec);
+  G.spec = order[(i + 1) % order.length];
+}
+
+// Shown when you die, when your team is wiped out, and when the game ends (each time with the latest news)
+function showEnd() {
+  if (!G) return;
+  const p = G.priv || {};
+  const won = G.winner && G.winner === G.myTeam;
+  if (!won && !G.dead) return;
+  G.endShown = true;
+  const solo = G.cfg.mode === 'solo';
+  const teamOut = p.pl > 0;
+  const winners = G.winner && !won ? ` ${[...G.roster.values()].filter(r => r.team === G.winner).map(r => r.name).join(' & ')} won the game.` : '';
+  $('endTitle').textContent = won ? (solo ? 'You won!' : 'Your team won!') : teamOut ? 'Eliminated' : "You're out";
+  $('endPlace').textContent = won ? '#1' : teamOut ? '#' + p.pl : '';
+  $('endText').textContent = won ? `Last ${solo ? 'one' : 'team'} standing out of ${C.MAX_PLAYERS / C.TEAM_SIZES[G.cfg.mode]}.`
+    : (p.kb ? `Eliminated by ${nameOf(p.kb)}.` : 'Caught in the storm.') + (teamOut ? '' : ' Your team is still fighting.') + winners;
+  $('endStats').innerHTML = `<div><b>${p.kl || 0}</b><span>Kills</span></div><div><b>${p.dm || 0}</b><span>Damage</span></div>`;
+  $('endSpec').hidden = won || !!G.winner;
+  $('endAgain').textContent = G.mode === 'sp' ? 'Play again' : 'Back to lobby';
+  $('endAgain').disabled = G.mode === 'mp' && !(room && room.isHost);
+  if (G.mode === 'mp' && !(room && room.isHost)) $('endAgain').textContent = 'The host takes everyone back';
+  $('endBox').hidden = false;
+  mouse.down = false;
+}
+$('endSpec').onclick = () => { $('endBox').hidden = true; };
+$('endAgain').onclick = () => { if (G.mode === 'sp') startSolo(); else netSend({ t: 'r_lobby' }); };
+$('endMenu').onclick = () => toMenu();
+
+// ══════════════ Drawing ══════════════
+let grassPat = null;
+function grassPattern() {
+  if (grassPat) return grassPat;
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d'), r = C.mulberry32(42);
+  g.fillStyle = '#5d9440'; g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 220; i++) {
+    g.fillStyle = r() < 0.5 ? 'rgba(40,90,30,0.25)' : 'rgba(140,190,90,0.18)';
+    const x = r() * 256, y = r() * 256, s = 2 + r() * 5;
+    g.beginPath(); g.ellipse(x, y, s, s * 0.6, r() * 3, 0, Math.PI * 2); g.fill();
+  }
+  return (grassPat = ctx.createPattern(c, 'repeat'));
+}
+// The whole map, small, for the minimap and the landing screen
+function renderMapImage(W) {
+  const N = 520, k = N / W.size, c = document.createElement('canvas'); c.width = c.height = N;
+  const g = c.getContext('2d');
+  g.fillStyle = '#5d9440'; g.fillRect(0, 0, N, N);
+  g.fillStyle = '#b8a888'; for (const r of W.ruins) g.fillRect(r.x * k, r.y * k, r.w * k, r.h * k);
+  g.fillStyle = '#6d5f4e'; for (const w of W.walls) g.fillRect(w.x * k, w.y * k, Math.max(1.5, w.w * k), Math.max(1.5, w.h * k));
+  g.fillStyle = '#49803a'; for (const b of W.bushes) { g.beginPath(); g.arc(b.x * k, b.y * k, b.r * k, 0, 7); g.fill(); }
+  g.fillStyle = '#9aa0a6'; for (const o of W.rocks) { g.beginPath(); g.arc(o.x * k, o.y * k, o.r * k, 0, 7); g.fill(); }
+  g.fillStyle = '#2e6b2e'; for (const t of W.trees) { g.beginPath(); g.arc(t.x * k, t.y * k, t.r * k, 0, 7); g.fill(); }
+  return c;
+}
+function resize() {
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = innerWidth, h = innerHeight;
+  if (w !== cw || h !== ch || cv.width !== Math.round(w * dpr)) { cw = w; ch = h; cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+}
+let view = { s: 1, x: 0, y: 0 };   // world -> CSS pixels: sx = (x - view.x) * view.s + cw / 2
+const toScreen = p => ({ x: (p.x - view.x) * view.s + cw / 2, y: (p.y - view.y) * view.s + ch / 2 });
+
+function render(dt) {
+  resize();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#21402a'; ctx.fillRect(0, 0, cw, ch);
+  if (G.phase === 'drop' && !G.landed) { drawLandingMap(); drawCursor(); return; }
+
+  // Camera: you (or who you're watching), nudged toward the mouse so you can see where you aim
+  let focus = null;
+  if (!G.dead && G.landed) focus = myPos();
+  else if (G.spec) { const q = playerAt(G.spec); if (q) focus = { x: q[1], y: q[2] }; }
+  if (!focus) focus = G.cam;
+  const zoom = !G.dead && C.WEAPONS[curWeapon()].zoom || 1;
+  const s = Math.min(cw / (1400 * zoom), ch / (860 * zoom));
+  const look = G.dead ? 0 : zoom > 1 ? 0.45 : 0.22;
+  const lx = (mouse.x - cw / 2) / s * look, ly = (mouse.y - ch / 2) / s * look;
+  G.cam = { x: focus.x + lx, y: focus.y + ly };
+  view = { s, x: G.cam.x, y: G.cam.y };
+  const halfW = cw / 2 / s, halfH = ch / 2 / s;
+  const vx0 = view.x - halfW - 60, vx1 = view.x + halfW + 60, vy0 = view.y - halfH - 60, vy1 = view.y + halfH + 60;
+  const vis = (x, y, r) => x + r > vx0 && x - r < vx1 && y + r > vy0 && y - r < vy1;
+
+  ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (cw / 2 - view.x * s), dpr * (ch / 2 - view.y * s));
+  const W = G.W, t = now();
+  // ground
+  ctx.fillStyle = '#2f5d3a'; ctx.fillRect(vx0, vy0, vx1 - vx0, vy1 - vy0);
+  ctx.fillStyle = grassPattern(); ctx.fillRect(0, 0, W.size, W.size);
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 6; ctx.strokeRect(0, 0, W.size, W.size);
+  for (const r of W.ruins) if (vis(r.x + r.w / 2, r.y + r.h / 2, Math.max(r.w, r.h))) {
+    ctx.fillStyle = '#b3a283'; ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = 'rgba(0,0,0,0.08)'; ctx.lineWidth = 1;
+    for (let x = r.x + 32; x < r.x + r.w; x += 32) { ctx.beginPath(); ctx.moveTo(x, r.y); ctx.lineTo(x, r.y + r.h); ctx.stroke(); }
+    for (let y = r.y + 32; y < r.y + r.h; y += 32) { ctx.beginPath(); ctx.moveTo(r.x, y); ctx.lineTo(r.x + r.w, y); ctx.stroke(); }
+  }
+  // loot
+  for (const it of W.loot.values()) if (vis(it.x, it.y, 30)) drawLoot(it, t);
+  // walls
+  for (const w of W.walls) if (vis(w.x + w.w / 2, w.y + w.h / 2, Math.max(w.w, w.h))) {
+    ctx.fillStyle = '#8a7a64'; ctx.fillRect(w.x, w.y, w.w, w.h);
+    ctx.strokeStyle = '#5e5242'; ctx.lineWidth = 2; ctx.strokeRect(w.x + 1, w.y + 1, w.w - 2, w.h - 2);
+  }
+  // barricades
+  for (const b of W.bars.values()) if (vis(b.x, b.y, 50)) drawBar(b);
+  // players
+  const meVisible = !G.dead && G.landed;
+  for (const [id] of latestPlayers()) {
+    if (id === G.me && meVisible) continue;
+    const q = playerAt(id);
+    if (q && vis(q[1], q[2], 40)) drawPlayer(q, id, false);
+  }
+  if (meVisible && G.priv) {
+    const p = myPos(), sl = G.priv.sl[G.priv.cur];
+    drawPlayer([G.me, p.x, p.y, aimAngle(), G.priv.hp, G.priv.sh, sl ? sl[0] : 0, (G.priv.ht > 0 ? 1 : 0) | (G.priv.rl > 0 ? 2 : 0)], G.me, true);
+  }
+  // rocks and trees
+  for (const o of W.rocks) if (vis(o.x, o.y, o.r)) {
+    ctx.fillStyle = '#7d8388'; ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, 7); ctx.fill();
+    ctx.fillStyle = '#9aa1a7'; ctx.beginPath(); ctx.arc(o.x - o.r * 0.22, o.y - o.r * 0.25, o.r * 0.68, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#5c6166'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, 7); ctx.stroke();
+  }
+  for (const tr of W.trees) if (tr.hp > 0 && vis(tr.x, tr.y, tr.r + 10)) {
+    const sh = G.shake.get(tr.id), wob = sh && t - sh < 0.25 ? Math.sin((t - sh) * 60) * 3 * (1 - (t - sh) / 0.25) : 0;
+    const r = tr.r * (0.72 + 0.28 * tr.hp / C.TREE_HP);
+    const x = tr.x + wob;
+    ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.beginPath(); ctx.arc(x + 4, tr.y + 5, r + 4, 0, 7); ctx.fill();
+    ctx.fillStyle = '#2a6a2c'; ctx.beginPath(); ctx.arc(x, tr.y, r + 4, 0, 7); ctx.fill();
+    ctx.fillStyle = '#37883a'; ctx.beginPath(); ctx.arc(x - r * 0.2, tr.y - r * 0.22, r * 0.75, 0, 7); ctx.fill();
+    ctx.fillStyle = '#46a049'; ctx.beginPath(); ctx.arc(x - r * 0.35, tr.y - r * 0.38, r * 0.35, 0, 7); ctx.fill();
+  }
+  // bushes go over players: that's how they hide you
+  const mine = meVisible ? myPos() : null;
+  for (const b of W.bushes) if (vis(b.x, b.y, b.r)) {
+    const inside = mine && (b.x - mine.x) ** 2 + (b.y - mine.y) ** 2 < (b.r - 4) ** 2;
+    ctx.globalAlpha = inside ? 0.45 : 0.95;
+    ctx.fillStyle = '#3f8a3a'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.fill();
+    ctx.fillStyle = '#4e9e46';
+    for (let i = 0; i < 4; i++) { const a = i * 1.7 + b.x; ctx.beginPath(); ctx.arc(b.x + Math.cos(a) * b.r * 0.45, b.y + Math.sin(a) * b.r * 0.45, b.r * 0.42, 0, 7); ctx.fill(); }
+    ctx.globalAlpha = 1;
+  }
+  drawFx(t);
+  drawZone(vx0, vy0, vx1, vy1);
+  // names and health over everything
+  for (const [id] of latestPlayers()) {
+    if (id === G.me && meVisible) continue;
+    const q = playerAt(id);
+    if (q && vis(q[1], q[2], 40)) drawTag(q, id);
+  }
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawHud(t);
+  if (G.bigMap) drawBigMap(true);
+  drawCursor();
+}
+
+function drawLoot(it, t) {
+  const bob = Math.sin(t * 3 + it.id) * 1.5;
+  const x = it.x, y = it.y + bob;
+  const gun = C.WEAPONS[it.k];
+  ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(it.x, it.y + 12, 16, 5, 0, 0, 7); ctx.fill();
+  if (gun) {
+    ctx.fillStyle = 'rgba(255,213,79,0.22)'; ctx.beginPath(); ctx.arc(x, y, 20, 0, 7); ctx.fill();
+    ctx.save(); ctx.translate(x, y); ctx.rotate(-0.4); drawGunShape(it.k, -14, 0, 1.2); ctx.restore();
+    ctx.fillStyle = '#fff'; ctx.font = '800 10px Nunito, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(gun.name, x, y + 26);
+  } else if (it.k === 'wood') {
+    ctx.fillStyle = '#a0703c'; ctx.fillRect(x - 12, y - 7, 24, 6); ctx.fillRect(x - 10, y + 1, 24, 6);
+    ctx.fillStyle = '#d9a86a'; ctx.beginPath(); ctx.arc(x + 12, y - 4, 3, 0, 7); ctx.arc(x + 14, y + 4, 3, 0, 7); ctx.fill();
+  } else {
+    const col = it.k === 'shield' ? '#29b6f6' : it.k === 'medkit' ? '#e53935' : '#f5f5f5';
+    ctx.fillStyle = it.k === 'shield' ? 'rgba(41,182,246,0.25)' : 'rgba(129,199,132,0.25)'; ctx.beginPath(); ctx.arc(x, y, 18, 0, 7); ctx.fill();
+    if (it.k === 'shield') {
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y + 2, 9, 0, 7); ctx.fill(); ctx.fillRect(x - 3, y - 12, 6, 8);
+    } else {
+      ctx.fillStyle = col; ctx.fillRect(x - 10, y - 8, 20, 16);
+      ctx.fillStyle = it.k === 'medkit' ? '#fff' : '#e53935'; ctx.fillRect(x - 2, y - 6, 4, 12); ctx.fillRect(x - 6, y - 2, 12, 4);
+    }
+    if (it.n > 1) { ctx.fillStyle = '#fff'; ctx.font = '900 10px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('×' + it.n, x, y + 24); }
+  }
+}
+// A gun seen from above, pointing right from (x, y)
+function drawGunShape(w, x, y, k = 1) {
+  const L = { pistol: 16, smg: 22, shotgun: 28, rifle: 32, sniper: 40 }[w] || 16;
+  const col = { pistol: '#455a64', smg: '#37474f', shotgun: '#6d4c41', rifle: '#263238', sniper: '#1b5e20' }[w] || '#333';
+  ctx.fillStyle = col; ctx.fillRect(x, y - 3 * k, L * k, 6 * k);
+  ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillRect(x + 2, y - 3 * k, L * k * 0.5, 2 * k);
+  if (w === 'sniper') { ctx.fillStyle = '#111'; ctx.fillRect(x + L * k * 0.3, y - 5 * k, 10 * k, 3 * k); }
+}
+function drawBar(b) {
+  ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.a);
+  const L = C.BAR.len, H = C.BAR.half * 2, f = b.hp / C.BAR.hp;
+  ctx.fillStyle = f > 0.6 ? '#c48a47' : f > 0.3 ? '#a8733a' : '#8a5c2d';
+  ctx.fillRect(-L / 2, -H / 2, L, H);
+  ctx.strokeStyle = '#6b4520'; ctx.lineWidth = 1.5;
+  for (let x = -L / 2 + L / 4; x < L / 2; x += L / 4) { ctx.beginPath(); ctx.moveTo(x, -H / 2); ctx.lineTo(x, H / 2); ctx.stroke(); }
+  ctx.strokeStyle = b.tm === G.myTeam ? MATE_COLOR : '#4a2f14'; ctx.lineWidth = 2.5; ctx.strokeRect(-L / 2, -H / 2, L, H);
+  ctx.restore();
+}
+function drawPlayer(q, id, isMe) {
+  const [, x, y, a, , , wi, fl] = q;
+  const r = G.roster.get(id), col = isMe ? MY_COLOR : teamColor(r.team);
+  const R = C.PLAYER_R, w = C.WEAPON_IDS[wi] || 'axe';
+  ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.beginPath(); ctx.arc(x + 3, y + 4, R + 1, 0, 7); ctx.fill();
+  ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+  if (w === 'axe') {
+    ctx.fillStyle = '#8d6e63'; ctx.fillRect(R - 6, 5, 22, 4);
+    ctx.fillStyle = '#b0bec5'; ctx.beginPath(); ctx.moveTo(R + 12, 2); ctx.lineTo(R + 20, -2); ctx.lineTo(R + 20, 14); ctx.lineTo(R + 12, 11); ctx.fill();
+  } else drawGunShape(w, R - 6, 0);
+  // hands
+  ctx.fillStyle = '#ffcc99'; ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1.5;
+  for (const hy of w === 'axe' ? [7] : [-1, 1]) { ctx.beginPath(); ctx.arc(R - 2 + (w === 'axe' ? 4 : hy > 0 ? 8 : 0), w === 'axe' ? hy : hy * 5, 5, 0, 7); ctx.fill(); ctx.stroke(); }
+  ctx.restore();
+  ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, R, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.beginPath(); ctx.arc(x - 4, y - 5, R * 0.45, 0, 7); ctx.fill();
+  if (fl & 1) {   // healing
+    const p = isMe && G.priv.hk >= 0 ? 1 - G.priv.ht / C.HEALS[C.HEAL_IDS[G.priv.hk]].time : (now() * 0.8) % 1;
+    ctx.strokeStyle = '#81c784'; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.arc(x, y, R + 6, -Math.PI / 2, -Math.PI / 2 + p * Math.PI * 2); ctx.stroke();
+  }
+  if (fl & 2 && !isMe) { ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, R + 5, now() * 6, now() * 6 + 1.5); ctx.stroke(); }
+}
+function drawTag(q, id) {
+  const [, x, y, , hp, sh] = q;
+  const r = G.roster.get(id), mate = r.team === G.myTeam;
+  if (!mate && C.inBush(G.W, x, y)) return;   // the bush is hiding them
+  ctx.textAlign = 'center'; ctx.font = '800 12px Nunito, sans-serif';
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillText(r.name, x + 1, y - 31);
+  ctx.fillStyle = mate ? MATE_COLOR : '#fff'; ctx.fillText(r.name, x, y - 32);
+  const bw = 40;
+  ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(x - bw / 2 - 1, y - 27, bw + 2, 7);
+  ctx.fillStyle = '#66bb6a'; ctx.fillRect(x - bw / 2, y - 26, bw * hp / C.HP_MAX, 3);
+  ctx.fillStyle = '#29b6f6'; ctx.fillRect(x - bw / 2, y - 23, bw * sh / C.SHIELD_MAX, 2);
+}
+function drawFx(t) {
+  G.fx = G.fx.filter(f => {
+    const age = t - f.t;
+    switch (f.k) {
+      case 'tracer': {
+        if (age > 0.12) return false;
+        const al = 1 - age / 0.12;
+        ctx.strokeStyle = `rgba(255,236,150,${al * 0.9})`; ctx.lineWidth = f.w === 'sniper' ? 3 : 1.6;
+        ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(f.x2, f.y2); ctx.stroke();
+        ctx.fillStyle = `rgba(255,255,255,${al})`; ctx.beginPath(); ctx.arc(f.x2, f.y2, 2.5, 0, 7); ctx.fill();
+        return true;
+      }
+      case 'flash': {
+        if (age > 0.06) return false;
+        ctx.fillStyle = 'rgba(255,220,120,0.9)'; ctx.beginPath(); ctx.arc(f.x + Math.cos(f.a) * 38, f.y + Math.sin(f.a) * 38, 7, 0, 7); ctx.fill();
+        return true;
+      }
+      case 'swing': {
+        if (age > 0.18) return false;
+        ctx.strokeStyle = `rgba(255,255,255,${0.7 * (1 - age / 0.18)})`; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(f.x, f.y, C.PLAYER_R + 22, f.a - 0.9 + age * 6, f.a + 0.2 + age * 6); ctx.stroke();
+        return true;
+      }
+      case 'num': {
+        if (age > 0.8) return false;
+        ctx.globalAlpha = 1 - age / 0.8; ctx.textAlign = 'center'; ctx.font = '900 16px Nunito, sans-serif';
+        ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillText(f.n, f.x + 1, f.y - age * 40 + 1);
+        ctx.fillStyle = f.sh ? '#4fc3f7' : '#fff'; ctx.fillText(f.n, f.x, f.y - age * 40);
+        ctx.globalAlpha = 1;
+        return true;
+      }
+      case 'leaf': {
+        if (age > 0.5) return false;
+        ctx.fillStyle = `rgba(90,170,70,${1 - age / 0.5})`; ctx.beginPath(); ctx.arc(f.x + f.vx * age, f.y + f.vy * age, 4, 0, 7); ctx.fill();
+        return true;
+      }
+      case 'puff': {
+        if (age > 0.6) return false;
+        ctx.strokeStyle = f.c; ctx.globalAlpha = 1 - age / 0.6; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(f.x, f.y, 16 + age * 80, 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
+        return true;
+      }
+    }
+    return false;
+  });
+}
+function drawZone(vx0, vy0, vx1, vy1) {
+  const z = G.zone;
+  if (!z) return;
+  ctx.fillStyle = 'rgba(120,40,170,0.32)';
+  ctx.beginPath(); ctx.rect(vx0 - 10, vy0 - 10, vx1 - vx0 + 20, vy1 - vy0 + 20);
+  ctx.arc(z[0], z[1], Math.max(0, z[2]), 0, Math.PI * 2, true);
+  ctx.fill('evenodd');
+  ctx.strokeStyle = 'rgba(206,147,216,0.9)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(z[0], z[1], Math.max(0, z[2]), 0, 7); ctx.stroke();
+  if (z[5] < z[2] - 2) {
+    ctx.setLineDash([18, 14]); ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(z[3], z[4], Math.max(1, z[5]), 0, 7); ctx.stroke(); ctx.setLineDash([]);
+  }
+}
+
+// ── HUD (in CSS pixels) ──
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+function txt(s, x, y, size, color, align = 'left', weight = 900) {
+  ctx.font = `${weight} ${size}px Nunito, sans-serif`; ctx.textAlign = align;
+  ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillText(s, x + 1, y + 1.5);
+  ctx.fillStyle = color; ctx.fillText(s, x, y);
+}
+const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+function drawHud(t) {
+  const p = G.priv;
+  if (!p) return;
+  const z = G.zone;
+  // top right: minimap and counts
+  const M = Math.min(180, cw * 0.22), mx0 = cw - M - 14, my0 = 14;
+  drawMinimap(mx0, my0, M);
+  txt(`${G.alive} ALIVE`, cw - 14, my0 + M + 22, 15, '#fff', 'right');
+  if (G.cfg.mode !== 'solo') txt(`${G.teamsLeft} TEAMS`, cw - 14, my0 + M + 41, 13, 'rgba(255,255,255,0.8)', 'right');
+  txt(`${p.kl} KILL${p.kl === 1 ? '' : 'S'}`, cw - 14, my0 + M + (G.cfg.mode !== 'solo' ? 60 : 41), 13, '#ffd54f', 'right');
+
+  // top centre: zone timer
+  if (z) {
+    const label = z[8] ? (z[7] > 0 ? `Zone closing · ${mmss(z[7])}` : 'Final zone') : `Zone shrinks in ${mmss(z[7])}`;
+    txt(label, cw / 2, 30, 16, z[8] ? '#e1bee7' : '#fff', 'center');
+    const me = !G.dead && G.landed ? myPos() : null;
+    if (me && (me.x - z[0]) ** 2 + (me.y - z[1]) ** 2 > z[2] * z[2]) txt("You're in the storm! Get inside the circle", cw / 2, 54, 15, '#ff8a80', 'center');
+  }
+  // announcements
+  if (G.ann && t - G.ann.t < 2.6) {
+    ctx.globalAlpha = Math.min(1, (2.6 - (t - G.ann.t)) * 2);
+    txt(G.ann.text, cw / 2, ch * 0.24, 26, G.ann.color, 'center');
+    ctx.globalAlpha = 1;
+  }
+  // kill feed, top left
+  let fy = 28;
+  for (const f of G.feed) {
+    if (t - f.t > 7) continue;
+    const v = nameOf(f.v), mine = f.k === G.me || f.v === G.me;
+    const line = f.k === 0 ? `${v} was caught in the storm` : f.k === f.v ? `${v} is out` : `${nameOf(f.k)}  ✕  ${v}`;
+    ctx.font = '800 13px Nunito, sans-serif';
+    const w = ctx.measureText(line).width + 18;
+    ctx.fillStyle = mine ? 'rgba(245,197,24,0.35)' : 'rgba(0,0,0,0.4)'; rr(12, fy - 16, w, 22, 8); ctx.fill();
+    txt(line, 21, fy, 13, '#fff', 'left', 800);
+    if (f.w && C.WEAPONS[f.w]) { ctx.font = '700 11px Nunito, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fillText(C.WEAPONS[f.w].name, 12 + w + 6, fy); }
+    fy += 26;
+  }
+
+  if (G.dead) {
+    if (G.spec && G.roster.get(G.spec)) {
+      txt(`Watching ${nameOf(G.spec)}`, cw / 2, ch - 46, 18, '#fff', 'center');
+      txt('Click or press Space to switch player', cw / 2, ch - 24, 13, 'rgba(255,255,255,0.7)', 'center', 800);
+    }
+    if ($('endBox').hidden && t - G.deadAt > 2) {
+      txt('Esc for the menu', 14, ch - 18, 12, 'rgba(255,255,255,0.6)', 'left', 800);
+    }
+    return;
+  }
+  if (G.phase === 'drop') return;
+
+  // bottom centre: health, shield, slots
+  const bw = Math.min(300, cw * 0.4), bx = cw / 2 - bw / 2, by = ch - 112;
+  ctx.fillStyle = 'rgba(0,0,0,0.45)'; rr(bx - 2, by - 2, bw + 4, 26, 8); ctx.fill();
+  ctx.fillStyle = '#29b6f6'; rr(bx, by, bw * p.sh / C.SHIELD_MAX, 8, 4); ctx.fill();
+  ctx.fillStyle = p.hp > 30 ? '#66bb6a' : '#ef5350'; rr(bx, by + 10, bw * p.hp / C.HP_MAX, 12, 4); ctx.fill();
+  txt(`${p.hp}`, bx - 8, by + 21, 16, '#fff', 'right');
+  if (p.sh > 0) txt(`${p.sh}`, bx + bw + 8, by + 10, 13, '#81d4fa', 'left');
+  const sw = 86, sx0 = cw / 2 - sw * 1.5 - 6;
+  for (let i = 0; i < 3; i++) {
+    const sl = p.sl[i], x = sx0 + i * (sw + 6), y = ch - 78, on = i === p.cur;
+    ctx.fillStyle = on ? 'rgba(245,197,24,0.3)' : 'rgba(0,0,0,0.45)'; rr(x, y, sw, 58, 10); ctx.fill();
+    if (on) { ctx.strokeStyle = '#f5c518'; ctx.lineWidth = 2.5; rr(x, y, sw, 58, 10); ctx.stroke(); }
+    txt(String(i + 1), x + 7, y + 15, 11, 'rgba(255,255,255,0.6)');
+    if (!sl) { txt('empty', x + sw / 2, y + 36, 12, 'rgba(255,255,255,0.35)', 'center', 800); continue; }
+    const w = C.WEAPON_IDS[sl[0]], W8 = C.WEAPONS[w];
+    txt(W8.name, x + sw / 2, y + 30, 14, '#fff', 'center');
+    if (!W8.melee) {
+      const mag = on && G.mode === 'mp' ? Math.max(0, sl[1] - G.shotSeqs.length) : sl[1];
+      txt(`${mag} / ${W8.mag}`, x + sw / 2, y + 49, 12, mag === 0 ? '#ff8a80' : 'rgba(255,255,255,0.8)', 'center', 800);
+    } else txt('chop · swing', x + sw / 2, y + 49, 11, 'rgba(255,255,255,0.6)', 'center', 800);
+  }
+  // bottom left: wood and heals
+  const lx = 16, ly = ch - 96;
+  ctx.fillStyle = 'rgba(0,0,0,0.45)'; rr(lx, ly, 200, 80, 12); ctx.fill();
+  ctx.fillStyle = '#a0703c'; ctx.fillRect(lx + 12, ly + 12, 20, 6); ctx.fillRect(lx + 14, ly + 20, 20, 6);
+  txt(`${p.wd}`, lx + 42, ly + 27, 18, '#fff');
+  txt(`Q barricade`, lx + 190, ly + 26, 12, p.wd >= C.BAR.cost ? '#ffe082' : 'rgba(255,255,255,0.4)', 'right', 800);
+  const [b, m, sh] = p.hl;
+  txt(`F  Bandage ×${b}  Medkit ×${m}`, lx + 12, ly + 50, 12, b + m ? '#c8e6c9' : 'rgba(255,255,255,0.4)', 'left', 800);
+  txt(`C  Shield ×${sh}`, lx + 12, ly + 69, 12, sh ? '#81d4fa' : 'rgba(255,255,255,0.4)', 'left', 800);
+
+  // prompts above the slots
+  const me = myPos();
+  let near = null, nd = C.PICKUP_R * C.PICKUP_R;
+  for (const it of G.W.loot.values()) {
+    if (!C.WEAPONS[it.k]) continue;
+    const d = (it.x - me.x) ** 2 + (it.y - me.y) ** 2;
+    if (d <= nd) { nd = d; near = it; }
+  }
+  let py = ch - 130;
+  if (near) {
+    const full = p.sl[1] && p.sl[2], cur = p.cur > 0 ? p.cur : 1;
+    const msg = full ? `E  Swap ${C.WEAPONS[C.WEAPON_IDS[p.sl[cur][0]]].name} for ${C.WEAPONS[near.k].name}` : `E  Pick up ${C.WEAPONS[near.k].name}`;
+    txt(msg, cw / 2, py - 6, 16, '#ffe082', 'center'); py -= 24;
+  }
+  if (t - G.hurtT < 1.6 && p.wd >= C.BAR.cost && t - G.lastBuildT > 2) {
+    ctx.globalAlpha = 0.6 + 0.4 * Math.sin(t * 14);
+    txt('Under fire!  Q  Barricade', cw / 2, py - 6, 18, '#ffab40', 'center');
+    ctx.globalAlpha = 1; py -= 26;
+  } else if (t - G.hurtT < 1.6 && p.wd < C.BAR.cost) {
+    txt('No wood. Chop trees with your axe (1) to build', cw / 2, py - 6, 13, 'rgba(255,255,255,0.75)', 'center', 800);
+  }
+  if (p.rl > 0) txt(`Reloading ${p.rl.toFixed(1)}s`, cw / 2, ch * 0.5 + 52, 13, '#fff', 'center');
+  if (p.ht > 0 && p.hk >= 0) txt(`${C.HEALS[C.HEAL_IDS[p.hk]].name} ${p.ht.toFixed(1)}s`, cw / 2, ch * 0.5 + 52, 13, '#a5d6a7', 'center');
+
+  // hurt: red edge and an arrow toward whoever shot you
+  if (t - G.hurtT < 0.5) {
+    const al = 0.35 * (1 - (t - G.hurtT) / 0.5);
+    const g = ctx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.3, cw / 2, ch / 2, Math.max(cw, ch) * 0.7);
+    g.addColorStop(0, 'rgba(255,0,0,0)'); g.addColorStop(1, `rgba(255,0,0,${al})`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, cw, ch);
+  }
+  if (t - G.hurtT < 1.2 && G.hurtFrom) {
+    const s = toScreen(me), a = Math.atan2(G.hurtFrom.y - me.y, G.hurtFrom.x - me.x);
+    ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(a);
+    ctx.fillStyle = `rgba(255,80,80,${0.9 * (1 - (t - G.hurtT) / 1.2)})`;
+    ctx.beginPath(); ctx.moveTo(70, -12); ctx.lineTo(88, 0); ctx.lineTo(70, 12); ctx.fill();
+    ctx.restore();
+  }
+}
+function drawMinimap(x0, y0, M) {
+  const k = M / C.MAP_SIZE;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.5)'; rr(x0 - 3, y0 - 3, M + 6, M + 6, 10); ctx.fill();
+  rr(x0, y0, M, M, 8); ctx.clip();
+  ctx.drawImage(G.mapImg, x0, y0, M, M);
+  const z = G.zone;
+  if (z) {
+    ctx.fillStyle = 'rgba(120,40,170,0.45)';
+    ctx.beginPath(); ctx.rect(x0, y0, M, M); ctx.arc(x0 + z[0] * k, y0 + z[1] * k, Math.max(0, z[2] * k), 0, Math.PI * 2, true); ctx.fill('evenodd');
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.2; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.arc(x0 + z[3] * k, y0 + z[4] * k, Math.max(1, z[5] * k), 0, 7); ctx.stroke(); ctx.setLineDash([]);
+  }
+  for (const [id] of latestPlayers()) {
+    if (id === G.me) continue;
+    if (G.roster.get(id).team !== G.myTeam) continue;
+    const q = playerAt(id); if (!q) continue;
+    ctx.fillStyle = MATE_COLOR; ctx.beginPath(); ctx.arc(x0 + q[1] * k, y0 + q[2] * k, 3.5, 0, 7); ctx.fill();
+  }
+  const f = !G.dead && G.landed ? myPos() : G.cam;
+  ctx.fillStyle = G.dead ? '#fff' : MY_COLOR; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(x0 + f.x * k, y0 + f.y * k, 4.5, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+// Landing screen (and the M map): the whole island
+function mapRect() { const S = Math.min(cw, ch) * 0.82; return { x: (cw - S) / 2, y: (ch - S) / 2 + 14, S }; }
+function drawBigMap(overlay) {
+  const { x, y, S } = mapRect(), k = S / C.MAP_SIZE;
+  if (overlay) { ctx.fillStyle = 'rgba(10,20,15,0.75)'; ctx.fillRect(0, 0, cw, ch); }
+  ctx.fillStyle = 'rgba(0,0,0,0.5)'; rr(x - 6, y - 6, S + 12, S + 12, 14); ctx.fill();
+  ctx.drawImage(G.mapImg, x, y, S, S);
+  const z = G.zone;
+  if (z && G.phase !== 'drop') {
+    ctx.save(); rr(x, y, S, S, 4); ctx.clip();
+    ctx.fillStyle = 'rgba(120,40,170,0.4)'; ctx.beginPath(); ctx.rect(x, y, S, S); ctx.arc(x + z[0] * k, y + z[1] * k, Math.max(0, z[2] * k), 0, Math.PI * 2, true); ctx.fill('evenodd');
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]); ctx.beginPath(); ctx.arc(x + z[3] * k, y + z[4] * k, Math.max(1, z[5] * k), 0, 7); ctx.stroke(); ctx.setLineDash([]);
+    ctx.restore();
+  }
+  for (const [id] of latestPlayers()) {
+    if (G.roster.get(id).team !== G.myTeam || id === G.me) continue;
+    const q = playerAt(id); if (!q) continue;
+    ctx.fillStyle = MATE_COLOR; ctx.beginPath(); ctx.arc(x + q[1] * k, y + q[2] * k, 5, 0, 7); ctx.fill();
+  }
+  if (G.landed && !G.dead) { const m = myPos(); ctx.fillStyle = MY_COLOR; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x + m.x * k, y + m.y * k, 6, 0, 7); ctx.fill(); ctx.stroke(); }
+  if (overlay) txt('Map · press M to close', cw / 2, y - 16, 16, '#fff', 'center');
+}
+function drawLandingMap() {
+  drawBigMap(false);
+  const { x, y, S } = mapRect(), k = S / C.MAP_SIZE;
+  txt('Click where you want to land', cw / 2, y - 34, 22, '#fff', 'center');
+  txt(G.cfg.mode === 'solo' ? `Landing in ${G.dropLeft}s · ruins have the most loot` : `Landing in ${G.dropLeft}s · bot teammates land with you`, cw / 2, y - 12, 14, 'rgba(255,255,255,0.8)', 'center', 800);
+  const l = G.land || (G.priv && G.priv.land);
+  if (l) {
+    ctx.strokeStyle = '#ffd54f'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(x + l[0] * k, y + l[1] * k, 10, 0, 7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + l[0] * k - 16, y + l[1] * k); ctx.lineTo(x + l[0] * k + 16, y + l[1] * k); ctx.moveTo(x + l[0] * k, y + l[1] * k - 16); ctx.lineTo(x + l[0] * k, y + l[1] * k + 16); ctx.stroke();
+  } else txt('(or wait for a random spot)', cw / 2, y + S + 24, 13, 'rgba(255,255,255,0.6)', 'center', 800);
+}
+function pickLand() {
+  if (G.phase !== 'drop') return;
+  const { x, y, S } = mapRect();
+  const mx = (mouse.x - x) / S * C.MAP_SIZE, my = (mouse.y - y) / S * C.MAP_SIZE;
+  if (mx < 0 || my < 0 || mx > C.MAP_SIZE || my > C.MAP_SIZE) return;
+  G.land = [Math.round(mx), Math.round(my)];
+}
+function drawCursor() {
+  if (!$('endBox').hidden || !$('pauseBox').hidden) return;
+  const x = mouse.x, y = mouse.y, t = now();
+  const hit = t - G.hitT < 0.15;
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 4;
+  const cross = () => { ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.moveTo(x - 16, y); ctx.lineTo(x - 5, y); ctx.moveTo(x + 5, y); ctx.lineTo(x + 16, y); ctx.moveTo(x, y - 16); ctx.lineTo(x, y - 5); ctx.moveTo(x, y + 5); ctx.lineTo(x, y + 16); ctx.stroke(); };
+  cross(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; cross();
+  if (hit) {
+    ctx.strokeStyle = G.hitKill ? '#ff5252' : '#fff'; ctx.lineWidth = 2.5; ctx.beginPath();
+    for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { ctx.moveTo(x + dx * 6, y + dy * 6); ctx.lineTo(x + dx * 13, y + dy * 13); }
+    ctx.stroke();
+  }
+  if (G.priv && G.priv.rl > 0 && G.priv.rlm) {
+    ctx.strokeStyle = '#ffd54f'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 20, -Math.PI / 2, -Math.PI / 2 + (1 - G.priv.rl / G.priv.rlm) * Math.PI * 2); ctx.stroke();
+  }
+}
+
+// ══════════════ Main loop ══════════════
+let lastT = performance.now(), acc = 0;
+function frame(tm) {
+  requestAnimationFrame(frame);
+  let dt = (tm - lastT) / 1000; lastT = tm;
+  if (dt > 0.25) dt = 0.25;
+  if (!G) return;
+  if (!paused) {
+    acc += dt;
+    let n = 0;
+    while (acc >= C.DT && n < 4) { acc -= C.DT; clientTick(); n++; }
+    if (n === 4) acc = 0;
+  }
+  G.alpha = paused ? 1 : acc / C.DT;
+  advanceRenderTick(dt);
+  const decay = Math.exp(-dt * 10);
+  G.err.x *= decay; G.err.y *= decay;
+  render(dt);
+}
+requestAnimationFrame(frame);
+
+// ══════════════ Online ══════════════
+let ws = null, netOpen = false, retryT = 0, retryMs = 1000, serverRules = null, pageRules = null;
+// Hash of this page's copy of the rules; the server sends its own. They must match to play.
+(async () => {
+  if (location.protocol === 'file:') return;
+  try {
+    const buf = await fetch('timberfall-core.js?v=' + RULES_V).then(r => { if (!r.ok) throw new Error(); return r.arrayBuffer(); });
+    const h = new Uint8Array(await crypto.subtle.digest('SHA-1', buf));
+    pageRules = [...h].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 8);
+  } catch (e) { pageRules = null; }
+  checkRules();
+})();
+const rulesMismatch = () => !!(pageRules && serverRules && pageRules !== serverRules);
+function checkRules() {
+  const bad = rulesMismatch();
+  for (const id of ['mpCreate', 'mpJoin', 'roomStart']) $(id).disabled = bad || !netOpen;
+  if (bad) setStatus('wait', 'The game server is still updating to this version of Timberfall. Try again in a few minutes and reload the page.');
+  if (room && !room.isHost) $('roomStart').disabled = true;
+}
+function setStatus(cls, text) { $('mpDot').className = 'dot ' + cls; $('mpStatus').textContent = text; }
+function netSend(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
+function netConnect() {
+  if (ws && ws.readyState <= 1) return;
+  clearTimeout(retryT);
+  setStatus('wait', 'Connecting to the game server… (it can take up to a minute to wake up)');
+  try { ws = new WebSocket(SERVER); } catch (e) { setStatus('off', 'Could not reach the game server'); return; }
+  ws.onopen = () => {
+    netOpen = true; retryMs = 1000;
+    let token = null;
+    try { token = sessionStorage.getItem('timberfall-token'); } catch (e) { }
+    netSend({ t: 'r_hello' });
+    if (token) netSend({ t: 'r_resume', token });
+  };
+  ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch { return; } onNet(m); };
+  ws.onclose = () => {
+    const wasOpen = netOpen; netOpen = false; ws = null;
+    setStatus('off', wasOpen ? 'Disconnected. Reconnecting…' : 'Game server is offline or waking up. Retrying…');
+    checkRules();
+    if (tab === 'mp' || (G && G.mode === 'mp')) { retryT = setTimeout(netConnect, retryMs); retryMs = Math.min(15000, retryMs * 1.7); }
+  };
+}
+function onNet(m) {
+  switch (m.t) {
+    case 'r_welcome':
+      serverRules = m.core;
+      if (m.token) try { sessionStorage.setItem('timberfall-token', m.token); } catch (e) { }
+      setStatus('on', 'Connected');
+      checkRules();
+      break;
+    case 'r_room': {
+      const wasGame = G && G.mode === 'mp';
+      room = m;
+      if (wasGame) { G = null; showScreen('menu'); }
+      if (tab !== 'mp') setTab('mp');
+      renderRoom();
+      break;
+    }
+    case 'r_err': $('mpErr').textContent = m.msg; break;
+    case 'r_gone': case 'r_closed':
+      try { sessionStorage.removeItem('timberfall-token'); } catch (e) { }
+      if (G && G.mode === 'mp') { G = null; showScreen('menu'); }
+      room = null; renderRoom();
+      if (m.msg) $('mpErr').textContent = m.msg;
+      else if (m.t === 'r_closed') $('mpErr').textContent = 'That game has closed.';
+      break;
+    case 'r_start':
+      $('mpErr').textContent = '';
+      newMatch({ mode: 'mp', seed: m.seed, cfg: m.cfg, me: m.me, roster: m.roster });
+      if (m.rejoin) announce('Reconnected', '#fff');
+      break;
+    case 'r_full': if (G && G.mode === 'mp') C.applyFull(G.W, m); break;
+    case 'r_s': if (G && G.mode === 'mp') onSnap(m); break;
+  }
+}
+function renderRoom() {
+  $('mpHome').hidden = !!room; $('mpRoom').hidden = !room;
+  if (room) {
+    $('roomCode').textContent = room.code;
+    $('roomPlayers').innerHTML = room.players.map(p => `<span class="${p.host ? 'host' : ''} ${p.on ? '' : 'off'}">${esc(p.name)}</span>`).join('');
+    const bots = C.MAX_PLAYERS - room.players.length;
+    $('roomHint').textContent = (room.isHost ? 'You are the host. Pick the settings above, then start. ' : 'Waiting for the host to start. ') + `${room.players.length} of ${room.max} people · ${bots} bots fill the rest.`;
+    $('roomStart').hidden = !room.isHost;
+  }
+  renderSettings();
+  checkRules();
+}
+$('mpCreate').onclick = () => { $('mpErr').textContent = ''; netSend({ t: 'r_create', name: playerName(), cfg: { ...settings } }); };
+$('mpJoin').onclick = () => {
+  const code = $('codeIn').value.trim().toUpperCase();
+  if (code.length !== 4) { $('mpErr').textContent = 'Codes are 4 letters'; return; }
+  $('mpErr').textContent = '';
+  netSend({ t: 'r_join', name: playerName(), code });
+};
+$('codeIn').addEventListener('keydown', e => { if (e.key === 'Enter') $('mpJoin').click(); });
+$('roomStart').onclick = () => { $('mpErr').textContent = ''; netSend({ t: 'r_start' }); };
+$('roomLeave').onclick = () => { netSend({ t: 'r_leave' }); room = null; renderRoom(); };
+
+renderSettings();
+// Back in a game after a reload? Reconnect to it.
+try { if (sessionStorage.getItem('timberfall-token')) setTab('mp'); } catch (e) { }
+</script>
+</body>
+</html>

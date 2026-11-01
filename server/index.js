@@ -2,8 +2,8 @@
 // The server runs the real game (frontier-core.js) and streams changes to every player over
 // WebSockets. Players only send intents ("attack this tile", "build a city here"), so nobody
 // can cheat by editing their own copy of the game.
-// It also hosts the EduArcade chatroom and Frontier's lobby/in-game chat (see chat.js), and
-// Imposter games played on several devices (see imposter.js).
+// It also hosts the EduArcade chatroom and Frontier's lobby/in-game chat (see chat.js),
+// Imposter games played on several devices (see imposter.js) and Timberfall (see timberfall.js).
 'use strict';
 const http = require('http');
 const crypto = require('crypto');
@@ -22,6 +22,7 @@ const CORE_HASH = (() => {
 })();
 const { filterMessage, checkName, newRate, rateCheck, createChat } = require('./chat.js');
 const { createImposter } = require('./imposter.js');
+const { createTimberfall } = require('./timberfall.js');
 
 const PORT = process.env.PORT || 8080;
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ||
@@ -203,16 +204,19 @@ setInterval(() => {
 
 const chat = createChat({ send, now, log });
 const imposter = createImposter({ send, now, log, checkName, filterMessage });
+const timberfall = createTimberfall({ send, now, log, checkName });
 
 // ──────────── Messages ────────────
 function onMessage(ws, raw) {
+  let m;
+  try { m = JSON.parse(raw); } catch { return; }
+  if (!m || typeof m.t !== 'string') return;
+  // Timberfall sends controls 20 times a second and has its own flood limit
+  if (m.t.startsWith('r_')) { timberfall.handle(ws, m); return; }
   // Simple flood protection: at most 30 messages per second.
   const t = now();
   if (t - ws.rateStart > 1000) { ws.rateStart = t; ws.rateCount = 0; }
   if (++ws.rateCount > 30) return;
-  let m;
-  try { m = JSON.parse(raw); } catch { return; }
-  if (!m || typeof m.t !== 'string') return;
   if (m.t.startsWith('c_')) { chat.handle(ws, m); return; }
   if (m.t.startsWith('i_')) { imposter.handle(ws, m); return; }
 
@@ -296,7 +300,7 @@ function onMessage(ws, raw) {
 const server = http.createServer((req, res) => {
   if (req.url === '/status') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-    res.end(JSON.stringify({ ok: true, online: clients.size, games: runningGames(), core: CORE_HASH, lobbies: rooms.size - runningGames(), chat: chat.stats(), imposter: imposter.stats() }));
+    res.end(JSON.stringify({ ok: true, online: clients.size, games: runningGames(), core: CORE_HASH, lobbies: rooms.size - runningGames(), chat: chat.stats(), imposter: imposter.stats(), timberfall: timberfall.stats() }));
     return;
   }
   res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -326,6 +330,7 @@ wss.on('connection', (ws, req) => {
     clients.delete(ws);
     chat.close(ws);
     imposter.close(ws);
+    timberfall.close(ws);
     const s = ws.session;
     if (!s || s.ws !== ws) return;
     s.ws = null;
