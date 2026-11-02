@@ -326,6 +326,8 @@
     .cr-moved h2 { font-size: 1.35rem; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; }
     .cr-moved p { font-size: 0.92rem; font-weight: 600; color: var(--muted); line-height: 1.6; margin: 0.5rem auto 1.1rem; max-width: 560px; }
     .cr-moved p b { color: #fff; }
+    .cr-dl { display: flex; gap: 0.7rem; justify-content: center; flex-wrap: wrap; }
+    .cr-moved p.cr-note { font-size: 0.74rem; color: var(--muted); margin: 0.8rem auto 0; }
     .cr-btn { display: inline-block; text-decoration: none; font-family: inherit; font-size: 0.8rem; font-weight: 900; letter-spacing: 1px; color: #fff; border: none; border-radius: 20px; padding: 0.55rem 1.3rem; cursor: pointer; background: var(--green); white-space: nowrap; box-shadow: 0 3px 0 #1b7a43; transition: transform 0.12s, filter 0.12s; }
     .cr-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
     .cr-btn:active { transform: translateY(1px); box-shadow: 0 1px 0 #1b7a43; }
@@ -533,8 +535,12 @@
   <div class="cr-wrap">
     <div class="cr-card cr-moved">
       <h2>EduArcade chat has moved</h2>
-      <p>EduArcade chat has migrated to an app version, <b>privatewebchat</b>. Download the latest release to keep chatting.</p>
-      <a class="cr-btn" href="https://github.com/gronkreeks/privatewebchat/releases/latest" target="_blank" rel="noopener">Get privatewebchat</a>
+      <p>EduArcade chat has migrated to an app version, <b>privatewebchat</b>. Download it for your computer to keep chatting.</p>
+      <div class="cr-dl">
+        <a class="cr-btn" href="https://github.com/gronkreeks/privatewebchat/releases/latest/download/privatewebchat.dmg" download>Download for Mac</a>
+        <a class="cr-btn" href="https://github.com/gronkreeks/privatewebchat/releases/latest/download/privatewebchat.exe" download>Download for Windows</a>
+      </div>
+      <p class="cr-note">Mac: Apple Silicon, macOS 12 or newer. Windows 10 or 11.</p>
     </div>
   </div>
 </section>
