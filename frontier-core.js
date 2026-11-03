@@ -146,6 +146,8 @@ const SHARE_SHIFT = 0.005;         // share of population that can switch role e
 const DEFAULT_SHARE = 0.8;         // humans start with 80% troops
 const TRAITOR_TICKS = 1200;        // breaking an alliance weakens your troops by 20% for 2 minutes
 const TRUCE_TICKS = 1200;          // computer nations keep a peace treaty for at least 2 minutes
+const MILITIA = 0.5;               // civilians defend their own land at half a soldier's strength
+const SACK_GOLD = 100000;          // loot for each level of a port or factory wrecked when captured
 
 const BUILD = {
   city:     { name: 'City',      key: '1', time: 50,  tip: '+250K troop cap. Build on a city to raise its level.' },
@@ -425,10 +427,21 @@ function createGame(opt) {
     if (si >= 0) {
       const s = structs[si];
       if (!o || s.type === 'defense') destroyStruct(s);
+      else if ((s.type === 'port' || s.type === 'factory') && old && players[old].type !== 'bot') sack(s, players[o], players[old]);
       else { s.owner = o; structVer++; }
     }
   }
 
+  // A conquered port or factory is sacked: it loses a level (a level 1 one is wrecked) and the
+  // conqueror carries off some loot, so taking an economy is never as good as building one
+  function sack(s, p, from) {
+    const name = BUILD[s.type].name.toLowerCase();
+    p.gold += SACK_GOLD;
+    if (s.level > 1) { s.level--; s.owner = p.id; structVer++; }
+    else destroyStruct(s);
+    if (isHuman(p)) ev(p.id, `Sacked a ${name}: +${fmt(SACK_GOLD)} gold`, 'info', { ttl: 2000 });
+    if (isHuman(from)) ev(from.id, `${who(p)} sacked your ${name}`, 'bad', { ttl: 3000 });
+  }
   // Distance-to-border pass: used for name label placement and finding interior tiles.
   function computeLabels() {
     for (let t = 0; t < N; t++) {
@@ -527,6 +540,8 @@ function createGame(opt) {
     if (p.m.warGrowth !== 1 && underFire(p)) add *= p.m.warGrowth;
     return add;
   }
+  // Everyone who fights when p's land is invaded: troops plus civilian militia
+  const defenders = p => p.troops + (p.civs || 0) * MILITIA;
   const underFire = p => p.wars.size > 0 || attacks.some(a => a.target === p.id && players[a.p].type !== 'bot');
   function troopRate(p) { return popRate(p) * (p.share == null ? 1 : p.share); }
   function landGold(p) {
@@ -680,21 +695,24 @@ function createGame(opt) {
       if (falloutUntil[t] > tick) { mag *= 2; cost *= 2; }
       mag *= hills ? Pm.atkHills : Pm.atkPlains;
       if (T) mag *= am * (hills ? Tm.defHills : 1);
-      let loss, defLoss = 0, f;
+      let loss, defLoss = 0, militia = 0, f;
       if (!T) {
         loss = mag / (P.type === 'bot' ? 10 : 5) * TILE_SCALE * Pm.atkNeutral;
         f = within(2000 * cost / Math.max(1, a.troops), 5, 100) / (border * 2);
       } else {
         if (P.type !== 'bot' && T.type === 'bot') mag *= 0.7;
-        defLoss = T.troops / Math.max(1, T.tiles);
-        const ratio = T.troops / Math.max(1, a.troops);
+        // Civilians take up arms as militia, so staffing ports and factories doesn't leave land undefended
+        const civs = (T.civs || 0) * MILITIA;
+        defLoss = (T.troops + civs) / Math.max(1, T.tiles);
+        militia = civs / Math.max(1, T.tiles);
+        const ratio = (T.troops + civs) / Math.max(1, a.troops);
         loss = mag * within(ratio, 0.6, 2) * (0.463 * TILE_SCALE + 0.0039 * defLoss);
         const speedCost = within(ratio, 0.82, 7.5) * within(ratio / 20, 1, 50) / 8.55;
         f = speedCost * cost / border;
       }
       if (a.troops < loss) { removeAttack(a, 0); return; }
       a.troops -= loss;
-      if (T) { T.troops = Math.max(0, T.troops - defLoss); T.lastHitBy = a.p; P.gold += Pm.plunder; }
+      if (T) { T.troops = Math.max(0, T.troops - (defLoss - militia)); T.civs = Math.max(0, T.civs - militia); T.lastHitBy = a.p; P.gold += Pm.plunder; }
       setOwner(t, a.p);
       frac += f * FRONT_SLOWDOWN / Pm.speed;
       if (frac >= 1) break;
@@ -1821,7 +1839,7 @@ function createGame(opt) {
       for (const [id] of info.players) {
         if (allied(p.id, id) || !mayDeclare(p, id)) continue;
         const q = players[id];
-        let s = q.troops / Math.max(1, p.troops);
+        let s = defenders(q) / Math.max(1, p.troops);
         if (q.type === 'bot') s -= 0.6;
         else { const op = opinion(p, q); s += op > 0 ? op * 0.04 : op * 0.02; }   // spare friends, pick on rivals
         if (q.traitorUntil > tick) s -= 0.3;
@@ -1852,7 +1870,7 @@ function createGame(opt) {
       if (!coastal[t]) continue;
       const o = owner[t];
       if (o === p.id || allied(p.id, o) || (o && (imm || !mayDeclare(p, o)))) continue;
-      if (o && players[o].troops > p.troops * D.aggr) continue;
+      if (o && defenders(players[o]) > p.troops * D.aggr) continue;
       const d = (t % W - p.lx) ** 2 + (((t / W) | 0) - p.ly) ** 2 + (o ? 4000 : 0);
       if (d < pd) { pd = d; pick = t; }
     }
@@ -1891,7 +1909,8 @@ function createGame(opt) {
       const ex = structs.find(s => s.alive && s.type === 'port' && s.owner === p.id);
       if (!opts.length && ex && ok('port', ex.t)) return;
     }
-    if ((D.defense || T.defense >= 0.85) && tick > immunityUntil && g >= costOf(p, 'defense') && countUnits(p, 'defense') < (D.defense ? 1 : 0.5) * (1 + p.tiles / 450 * (0.5 + T.defense))) {
+    // Peaceful leaders spend their gold on forts facing a stronger neighbour
+    if ((D.defense || T.defense >= 0.85 || T.aggr <= 0.5) && tick > immunityUntil && g >= costOf(p, 'defense') && countUnits(p, 'defense') < (D.defense ? 1 : 0.5) * (1 + p.tiles / 450 * (0.5 + T.defense))) {
       let threat = 0, tt = 0;
       for (const [id] of info.players) { const q = players[id]; if (!allied(p.id, id) && q.type !== 'bot' && q.troops > tt) { tt = q.troops; threat = id; } }
       if (threat && (tt > p.troops * 0.7 || atWar(p.id, threat))) {
