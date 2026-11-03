@@ -438,6 +438,23 @@
     }
     .pcard:hover { background: rgba(255,255,255,0.12); }
     .pcard.on { border-color: #2ecc71; background: rgba(46,204,113,0.14); }
+    /* The Dark Emperor: a dark card with a slowly turning violet frame */
+    .pcard.emp, .leaderPick.emp, .pickInfo.emp { position: relative; isolation: isolate; border-color: transparent;
+      background: radial-gradient(ellipse at top, #2a1240, #0b0612 70%); }
+    .pcard.emp::before, .leaderPick.emp::before, .pickInfo.emp::before { content: ''; position: absolute; inset: -2px; z-index: -1; border-radius: inherit; padding: 2px;
+      background: conic-gradient(from var(--empA, 0deg), #8e44ff, #e0115f, #1a0b2e, #8e44ff, #f5c518, #8e44ff);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+      animation: empSpin 6s linear infinite; }
+    .pcard.emp b, .pickInfo.emp .nm { color: #d9b8ff; text-shadow: 0 0 8px rgba(142,68,255,0.8); }
+    .pcard.emp img, .pickInfo.emp img { box-shadow: 0 0 14px rgba(142,68,255,0.75); }
+    .pcard.emp.locked { filter: grayscale(0.6) brightness(0.75); }
+    .pcard.emp.locked small { color: #f7d46a; }
+    @property --empA { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+    @keyframes empSpin { to { --empA: 360deg; } }
+    @media (prefers-reduced-motion: reduce) { .pcard.emp::before, .leaderPick.emp::before, .pickInfo.emp::before { animation: none; } }
+    .empPick { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin: .5rem 0 .2rem; }
+    .empPick label { font-size: .72rem; font-weight: 800; color: #d9b8ff; display: flex; flex-direction: column; gap: .25rem; }
+    .empPick select { background: #120a1c; color: #fff; border: 1px solid #5b2d8f; border-radius: 8px; padding: .35rem .4rem; font: inherit; font-size: .78rem; }
     .pcard img { width: 64px; height: 64px; border-radius: 50%; margin-bottom: 4px; background: #16294d; }
     .pcard b { font-size: 0.76rem; line-height: 1.2; }
     .pcard small { font-size: 0.64rem; color: rgba(255,255,255,0.55); font-weight: 600; line-height: 1.3; }
@@ -749,9 +766,9 @@
 </div>
 
 <!-- ?v= makes browsers fetch the matching rules after an update -->
-<script src="frontier-maps.js?v=6"></script>
-<script src="frontier-leaders.js?v=6"></script>
-<script src="frontier-core.js?v=6"></script>
+<script src="frontier-maps.js?v=7"></script>
+<script src="frontier-leaders.js?v=7"></script>
+<script src="frontier-core.js?v=7"></script>
 <script src="chat-alerts.js"></script>
 <script>
 'use strict';
@@ -867,7 +884,24 @@ const BEARD = {
   chinstrap: c => `<path d="M34.8 45 Q36 63 50 66.5 Q64 63 65.2 45 L63 45 Q62 59.5 50 62 Q38 59.5 37 45 Z" fill="${c}"/>`,
 };
 let svgSeq = 0;
+// The Dark Emperor: a hooded figure with glowing eyes and a black crown on a violet aura
+function emperorSVG() {
+  const id = 'pg' + (svgSeq++);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs>
+    <radialGradient id="${id}" cx="50%" cy="42%" r="70%"><stop offset="0" stop-color="#6c2bd9"/><stop offset=".55" stop-color="#2a0f45"/><stop offset="1" stop-color="#07030c"/></radialGradient>
+    <radialGradient id="${id}e" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#ff3b6b"/><stop offset="1" stop-color="rgba(255,30,80,0)"/></radialGradient></defs>
+    <rect width="100" height="100" fill="url(#${id})"/>
+    <path d="M4 101 Q9 70 30 64 Q50 58 70 64 Q91 70 96 101 Z" fill="#14091f"/>
+    <path d="M30 64 L50 92 L70 64" stroke="#8e44ff" stroke-width="2.5" fill="none" stroke-linejoin="round"/>
+    <path d="M22 72 Q24 30 50 18 Q76 30 78 72 Q66 60 50 60 Q34 60 22 72 Z" fill="#1d0f2c"/>
+    <path d="M33 58 Q32 34 50 30 Q68 34 67 58 Q60 64 50 64 Q40 64 33 58 Z" fill="#0b0612"/>
+    <ellipse cx="43" cy="46" rx="5" ry="3.2" fill="url(#${id}e)"/><ellipse cx="57" cy="46" rx="5" ry="3.2" fill="url(#${id}e)"/>
+    <ellipse cx="43" cy="46" rx="1.6" ry="1" fill="#fff"/><ellipse cx="57" cy="46" rx="1.6" ry="1" fill="#fff"/>
+    <path d="M36 25 L36 13 L41 19 L45.5 9 L50 17 L54.5 9 L59 19 L64 13 L64 25 Q50 21 36 25 Z" fill="#0b0612" stroke="#8e44ff" stroke-width="1"/>
+    <circle cx="50" cy="21" r="1.8" fill="#e0115f"/><circle cx="41.5" cy="22.5" r="1" fill="#8e44ff"/><circle cx="58.5" cy="22.5" r="1" fill="#8e44ff"/></svg>`;
+}
 function portraitSVG(li, col) {
+  if (LEADERS[li].look.emperor) return emperorSVG();
   const k = LEADERS[li].look, id = 'pg' + (svgSeq++), sd = shade(k.skin, -0.2), hairC = k.hairC || '#222';
   const bg = col || [70, 90, 130];
   let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><radialGradient id="${id}" cx="50%" cy="38%" r="70%">
@@ -1373,7 +1407,7 @@ function updateHUD() {
   const rows = ranked.slice(0, 8);
   if (ranked.indexOf(p) >= 8) rows.push(p);
   $('boardT').innerHTML = '<tr><td></td><td style="color:rgba(255,255,255,.45)">Nation</td><td class="r" style="color:rgba(255,255,255,.45)">Land</td><td class="r" style="color:rgba(255,255,255,.45)">Troops</td></tr>' +
-    rows.map(q => `<tr class="${q === p ? 'me' : ''}" data-dip="${q.id}" title="${q.leader >= 0 ? esc(LEADERS[q.leader].name) + ' · ' : ''}Click for diplomacy"><td>${ranked.indexOf(q) + 1}</td><td class="nm">${q.leader >= 0 ? `<img class="lp" src="${picURL(q)}" style="border-color:${rgb(q.color)}" alt="">` : `<span class="sw" style="background:${rgb(q.color)}"></span>`}${G.allied(meId, q.id) ? '🤝 ' : G.atWar(meId, q.id) ? '⚔️ ' : ''}${q.type === 'human' && q !== p ? '👤 ' : ''}${esc(q.name)}</td><td class="r">${(q.tiles / G.landTotal * 100).toFixed(1)}%</td><td class="r">${fmt(q.troops)}</td></tr>`).join('');
+    rows.map(q => `<tr class="${q === p ? 'me' : ''}" data-dip="${q.id}" title="${q.leader >= 0 ? esc(G.leaderOf(q).name) + ' · ' : ''}Click for diplomacy"><td>${ranked.indexOf(q) + 1}</td><td class="nm">${q.leader >= 0 ? `<img class="lp" src="${picURL(q)}" style="border-color:${rgb(q.color)}" alt="">` : `<span class="sw" style="background:${rgb(q.color)}"></span>`}${G.allied(meId, q.id) ? '🤝 ' : G.atWar(meId, q.id) ? '⚔️ ' : ''}${q.type === 'human' && q !== p ? '👤 ' : ''}${esc(q.name)}</td><td class="r">${(q.tiles / G.landTotal * 100).toFixed(1)}%</td><td class="r">${fmt(q.troops)}</td></tr>`).join('');
   const mine = G.attacks.filter(a => a.p === meId);
   const boats = G.ships.filter(s => s.kind === 'transport' && s.owner === meId);
   const inc = G.attacks.filter(a => a.target === meId).sort((a, b) => b.troops - a.troops);
@@ -1448,7 +1482,7 @@ function usePower() {
 }
 // The leader power button: name, recharge timer and progress
 function updatePowerButton(p) {
-  const L = p.leader >= 0 ? LEADERS[p.leader] : null, b = $('abilBtn');
+  const L = p.leader >= 0 ? G.leaderOf(p) : null, b = $('abilBtn');
   b.classList.toggle('hidden', !L);
   if (!L) return;
   const P = L.power, play = G.state === 'play', on = p.powerUntil > G.tick, wait = p.powerReady - G.tick;
@@ -1483,7 +1517,7 @@ function updateTip() {
     const q = G.players[o];
     html = `<b style="color:${rgb(q.color)}">${esc(q.name)}</b><br>${relation(o)}<br>Troops: ${fmt(q.troops)} · Land: ${(q.tiles / G.landTotal * 100).toFixed(1)}%<br>Gold: ${fmt(q.gold)}`;
     if (q.leader >= 0) {
-      const L = LEADERS[q.leader];
+      const L = G.leaderOf(q);
       html += `<br>Led by ${esc(L.name)}`;
       if (q.powerUntil > G.tick) html += `<br><span style="color:#f5c518">&#9889; ${esc(L.power.name)} active</span>`;
       if (q.type === 'nation' && o !== meId) { const att = attitude(G.opinion(q, me())); html += ` · <span style="color:${ATT_COLOR[att]}">${att}</span>`; }
@@ -1604,13 +1638,13 @@ function openCtxAt(t, sx, sy) {
   }
   else if (o === meId) {
     head = 'Your land';
-    items.push([`&#128081; Your nation${p.leader >= 0 ? ' · ' + esc(LEADERS[p.leader].name) : ''}`, () => openDip(meId), false]);
+    items.push([`&#128081; Your nation${p.leader >= 0 ? ' · ' + esc(G.leaderOf(p).name) : ''}`, () => openDip(meId), false]);
     for (const b of ['city', 'port', 'factory', 'defense', 'silo', 'sam']) buildItem(b, 'Build ' + BUILD[b].name);
   }
   else {
     const q = o ? G.players[o] : null, ally = o && G.allied(meId, o);
     head = q ? esc(q.name) + ' · ' + relation(o) : 'Unclaimed land';
-    if (q) items.push([`&#128081; Diplomacy${q.leader >= 0 ? ' with ' + esc(LEADERS[q.leader].name) : ''}`, () => openDip(o), false]);
+    if (q) items.push([`&#128081; Diplomacy${q.leader >= 0 ? ' with ' + esc(G.leaderOf(q).name) : ''}`, () => openDip(o), false]);
     const war = q && G.needsWar(p, o) ? ' (declares war)' : '';
     items.push([`&#9876;&#65039; Attack (${fmt(p.troops * r)})${war}`, () => withWar(o, d => sendAct({ a: 'click', t, r, declare: d })), ally]);
     const bt = G.coastal[t] ? t : nearestTile(t, u => G.coastal[u] && G.owner[u] === o && G.landBody[u] === G.landBody[t]);
@@ -1768,7 +1802,7 @@ function withWar(o, run) {
 }
 let warYes = null;
 function askWar(q, yes) {
-  const L = q.leader >= 0 ? LEADERS[q.leader] : null;
+  const L = q.leader >= 0 ? G.leaderOf(q) : null;
   warYes = yes;
   $('askBody').innerHTML = `<img src="${picURL(q)}" alt="" style="border-color:${rgb(q.color)}"><div>
     <b>Declare war on ${esc(q.name)}?</b>
@@ -1897,7 +1931,7 @@ function verdictHTML(v) {
 function renderDip(full) {
   const q = G && G.players[dipId], p = me();
   if (!q || !p) { closeDip(); return; }
-  const L = q.leader >= 0 ? LEADERS[q.leader] : null, self = q === p, nation = q.type === 'nation', bot = q.type === 'bot';
+  const L = q.leader >= 0 ? G.leaderOf(q) : null, self = q === p, nation = q.type === 'nation', bot = q.type === 'bot';
   const ally = G.allied(meId, q.id), war = G.atWar(meId, q.id), op = nation && !self ? G.opinion(q, p) : 0, att = attitude(op);
   $('dip').style.setProperty('--nc', rgb(q.color));
   const moods = [];
@@ -1929,7 +1963,7 @@ function renderDip(full) {
   } else setHTML(body, dipTab === 'war' ? warHTML(q) : relHTML(q));
 }
 function relHTML(q) {
-  const p = me(), L = q.leader >= 0 ? LEADERS[q.leader] : null, self = q === p, nation = q.type === 'nation';
+  const p = me(), L = q.leader >= 0 ? G.leaderOf(q) : null, self = q === p, nation = q.type === 'nation';
   const ally = G.allied(meId, q.id), war = G.atWar(meId, q.id), live = G.state === 'play' && p.alive && q.alive;
   let h = '';
   if (nation && !self && q.alive) {
@@ -2003,7 +2037,7 @@ function updateTrade(q) {
   b.disabled = empty || G.state !== 'play' || !p.alive || !q.alive;
 }
 function warHTML(q) {
-  const p = me(), L = q.leader >= 0 ? LEADERS[q.leader] : null, nm = esc(L ? L.name : q.name), live = G.state === 'play' && p.alive && q.alive;
+  const p = me(), L = q.leader >= 0 ? G.leaderOf(q) : null, nm = esc(L ? L.name : q.name), live = G.state === 'play' && p.alive && q.alive;
   const foes = G.players.filter(e => e && e.alive && e !== p && e !== q && e.type !== 'bot' && e.tiles > 0)
     .map(e => [e, G.jointWarVerdict(q, p, e)])
     .sort((a, b) => (b[1].ok === true) - (a[1].ok === true) || b[0].tiles - a[0].tiles);
@@ -2014,7 +2048,7 @@ function warHTML(q) {
     // Short reason: the biggest thing holding them back when they refuse
     const worst = v.factors && v.factors.reduce((w, f) => f[1] < (w ? w[1] : 0) ? f : w, null);
     const why = v.ok === true ? 'Would join' : v.ok === false && v.factors ? (worst ? worst[0] : 'Not interested') : v.reason;
-    return `<div class="wrow"><img src="${picURL(e)}" style="border-color:${rgb(e.color)}" alt=""><div class="nm">${esc(e.name)}<small>${e.leader >= 0 ? esc(LEADERS[e.leader].name) + ' · ' : ''}${pct(e)} land · ${fmt(e.troops)} troops</small></div>
+    return `<div class="wrow"><img src="${picURL(e)}" style="border-color:${rgb(e.color)}" alt=""><div class="nm">${esc(e.name)}<small>${e.leader >= 0 ? esc(G.leaderOf(e).name) + ' · ' : ''}${pct(e)} land · ${fmt(e.troops)} troops</small></div>
       <div class="why verdict ${cls}" title="${esc(tip)}">${v.ok === false ? '&#10006; ' : v.ok ? '&#10004; ' : ''}${esc(why)}</div>
       <button class="dbtn red" data-dip="war:${e.id}" ${live && v.ok !== false ? '' : 'disabled'}>${v.ok === null ? 'Propose' : 'Declare'}</button></div>`;
   }).join('') || '<p class="dnote">There is nobody left to fight.</p>';
@@ -2046,13 +2080,13 @@ $('dip').addEventListener('click', e => {
     case 'ally': dipAnswer(G.allianceVerdict(q, p), 'ally'); sendAct({ a: 'ally', target: q.id }); break;
     case 'break':
       sendAct({ a: 'break', target: q.id });
-      if (q.leader >= 0 && q.type === 'nation') dipReply = { text: LEADERS[q.leader].angry, until: performance.now() + 6000 };
+      if (q.leader >= 0 && q.type === 'nation') dipReply = { text: G.leaderOf(q).angry, until: performance.now() + 6000 };
       break;
     case 'donate': sendAct({ a: 'donate', target: q.id, r: ratio() }); break;
     case 'declare': {
       const block = G.declareBlocker(p, q);
       if (block) { addEvent(esc(block), 'warn', { ttl: 3000 }); return; }
-      askWar(q, () => { sendAct({ a: 'declare', target: q.id }); if (q.leader >= 0 && q.type === 'nation') dipReply = { text: LEADERS[q.leader].angry, until: performance.now() + 6000 }; renderDip(true); });
+      askWar(q, () => { sendAct({ a: 'declare', target: q.id }); if (q.leader >= 0 && q.type === 'nation') dipReply = { text: G.leaderOf(q).angry, until: performance.now() + 6000 }; renderDip(true); });
       return;
     }
     case 'peace': dipAnswer(G.peaceVerdict(q, p), 'peace'); sendAct({ a: 'peace', target: q.id }); break;
@@ -2090,6 +2124,10 @@ function showEnd(winnerId) {
   $('endTitle').style.color = won ? '#2ecc71' : '#e74c3c';
   const lines = [];
   if (won) lines.push(`You control ${(p.tiles / G.landTotal * 100).toFixed(1)}% of the land.`);
+  if (won && G.cfg && G.cfg.diff === 'impossible' && !emperorWon()) {
+    try { localStorage.setItem('frontier-emperor', '1'); } catch (e) { }
+    lines.push('<b style="color:#d9b8ff;text-shadow:0 0 8px #8e44ff">&#128081; You unlocked the Dark Emperor!</b> Choose him under Your leader.');
+  }
   else if (winner) lines.push(`<b>${esc(winner.name)}</b> has conquered the world.`);
   else lines.push('Your nation has fallen.');
   lines.push(`Time: ${fmtTime(G.tick - (G.immunityUntil - IMMUNITY_TICKS))} · Players eliminated: ${p.kills || 0}`);
@@ -2235,25 +2273,36 @@ function playerName() {
   try { localStorage.setItem('frontier-name', name); } catch (e) { }
   return name;
 }
-$('nameIn').addEventListener('change', () => netSend({ t: 'name', name: playerName() }));
+$('nameIn').addEventListener('change', () => { showLeaderChoice(); netSend({ t: 'name', name: playerName(), ...leaderInfo() }); });
 
 // ── Leader choice ──
 let myLeader = -1;   // -1 = random
 try { const v = localStorage.getItem('frontier-leader'); if (v !== null && LEADERS[+v]) myLeader = +v; } catch (e) { }
-let randomLeader = Math.random() * LEADERS.length | 0;
-const leaderPick = () => myLeader >= 0 ? myLeader : randomLeader;
+// The Dark Emperor (last in LEADERS) is unlocked by winning a game on Impossible (kept in this browser),
+// or by playing under the name Former Coach. He picks two leaders whose bonuses and powers he gets.
+const EMP = FrontierCore.EMPEROR_ID;
+const emperorWon = () => { try { return localStorage.getItem('frontier-emperor') === '1'; } catch (e) { return false; } };
+const emperorUnlocked = () => emperorWon() || $('nameIn').value.trim() === 'Former Coach';
+let empCombo = [0, 1];
+try { const c = JSON.parse(localStorage.getItem('frontier-emperor-combo')); if (Array.isArray(c) && c.length === 2 && c.every(FrontierCore.isLeader) && c[0] !== c[1]) empCombo = c; } catch (e) { }
+let randomLeader = Math.random() * EMP | 0;   // never the Dark Emperor
+const leaderPick = () => myLeader === EMP && !emperorUnlocked() ? randomLeader : myLeader >= 0 ? myLeader : randomLeader;
+// What the game and the server are told: the leader, and for the Dark Emperor his two leaders
+const leaderInfo = () => ({ leader: leaderPick(), combo: leaderPick() === EMP ? empCombo : undefined });
 const STYLES = FrontierCore.STYLES;
 function showLeaderChoice() {
-  const L = LEADERS[myLeader];
+  if (myLeader === EMP && !emperorUnlocked()) myLeader = -1;
+  const L = LEADERS[myLeader], emp = myLeader === EMP;
+  $('leaderBtn').classList.toggle('emp', emp);
   $('leaderImg').src = picURL(null, myLeader);
   $('leaderName').textContent = L ? L.name : 'Random leader';
-  $('leaderSub').textContent = L ? `${L.civ} · ${L.style} · ⚡ ${L.power.name}` : 'Click to choose who you play as';
+  $('leaderSub').textContent = emp ? `${LEADERS[empCombo[0]].name} + ${LEADERS[empCombo[1]].name}` : L ? `${L.civ} · ${L.style} · ⚡ ${L.power.name}` : 'Click to choose who you play as';
   $('nameIn').placeholder = L ? L.civ : 'Player';
 }
 // Bonus and power text for the picker; shows the secret too, since you'd be the one playing them
 function abilityText(L) {
   return `<p><b>${esc(L.bonus.name)}</b> · ${esc(L.bonus.desc)}</p>
-    <p><b>&#9889; ${esc(L.power.name)}</b> · ${esc(L.power.desc)} <span style="color:rgba(255,255,255,.5)">(recharges in ${fmtTime(L.power.cd)})</span></p>` +
+    <p><b>&#9889; ${esc(L.power.name)}</b> · ${esc(L.power.desc)} <span style="color:rgba(255,255,255,.5)">(${L.power.instant ? 'ready from the start, then recharges in' : 'recharges in'} ${fmtTime(L.power.cd)})</span></p>` +
     (L.hidden ? `<p style="color:#f7d46a"><b>Secret:</b> ${esc(L.hidden)} Other players only see a peaceful leader until the first bomb.</p>` : '');
 }
 function styleBar(el, cur) {
@@ -2262,27 +2311,45 @@ function styleBar(el, cur) {
 let pickStyle = 'All', pickSel = -1;
 function renderPicker() {
   styleBar($('pickStyles'), pickStyle);
-  const L = LEADERS[pickSel];
+  const L = LEADERS[pickSel], emp = pickSel === EMP, open = emperorUnlocked();
+  const opts = sel => LEADERS.slice(0, EMP).map((X, i) => [X, i]).sort((a, b) => a[0].name.localeCompare(b[0].name))
+    .map(([X, i]) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${esc(X.name)} · ${esc(X.style)}</option>`).join('');
+  $('pickInfo').classList.toggle('emp', emp);
   $('pickInfo').innerHTML = `<img src="${picURL(null, pickSel)}" alt=""><div class="tx">` +
-    (L ? `<b class="nm">${esc(L.name)}</b> · ${esc(L.civ)} · <span style="color:#f7d46a;font-weight:800">${esc(L.style)}</span>${abilityText(L)}`
+    (emp ? `<b class="nm">${esc(L.name)}</b> · <span style="color:#d9b8ff;font-weight:800">Two crowns</span>
+        <p>Pick two leaders. You get both their always-on bonuses, and your ultimate, <b>&#9889; ${esc(L.power.name)}</b>, unleashes both their powers at once (it recharges as slowly as the slower one). But your attacks advance <b>30% slower</b> and your troop cap is <b>10% lower</b>. Only one Dark Emperor per game.</p>` +
+        (open ? `<div class="empPick"><label>First crown<select id="empA">${opts(empCombo[0])}</select></label><label>Second crown<select id="empB">${opts(empCombo[1])}</select></label></div>
+          ${abilityText(FrontierCore.emperorLeader(empCombo))}`
+          : `<p style="color:#f7d46a"><b>Locked.</b> Win a game on Impossible to unlock the Dark Emperor.</p>`)
+      : L ? `<b class="nm">${esc(L.name)}</b> · ${esc(L.civ)} · <span style="color:#f7d46a;font-weight:800">${esc(L.style)}</span>${abilityText(L)}`
        : '<b class="nm">Random leader</b><p>You get a different leader, with their own bonus and power, every game.</p>') +
-    `</div><button class="dbtn" id="pickGo">PLAY AS ${esc(L ? L.name.toUpperCase() : 'RANDOM')}</button>`;
-  const cards = LEADERS.map((L, i) => [L, i]).filter(([L]) => pickStyle === 'All' || L.style === pickStyle);
-  $('pickGrid').innerHTML = (pickStyle === 'All' ? `<button class="pcard ${pickSel < 0 ? 'on' : ''}" data-l="-1"><img src="${picURL(null, -1)}" alt=""><b>Random</b><small>Surprise me</small></button>` : '') +
+    `</div><button class="dbtn" id="pickGo" ${emp && !open ? 'disabled' : ''}>PLAY AS ${esc(L ? L.name.toUpperCase() : 'RANDOM')}</button>`;
+  const cards = LEADERS.map((L, i) => [L, i]).filter(([L, i]) => i !== EMP && (pickStyle === 'All' || L.style === pickStyle));
+  const E = LEADERS[EMP];
+  $('pickGrid').innerHTML = (pickStyle === 'All' ? `<button class="pcard ${pickSel < 0 ? 'on' : ''}" data-l="-1"><img src="${picURL(null, -1)}" alt=""><b>Random</b><small>Surprise me</small></button>
+      <button class="pcard emp ${emp ? 'on' : ''} ${open ? '' : 'locked'}" data-l="${EMP}"><img src="${picURL(null, EMP)}" alt=""><b>${esc(E.name)}</b><small>${open ? esc(E.civ) : '&#128274; Win on Impossible'}</small></button>` : '') +
     cards.map(([L, i]) => `<button class="pcard ${pickSel === i ? 'on' : ''}" data-l="${i}"><img src="${picURL(null, i)}" alt=""><b>${esc(L.name)}</b><small>${esc(L.civ)}</small></button>`).join('');
 }
+$('pick').addEventListener('change', e => {
+  if (e.target.id !== 'empA' && e.target.id !== 'empB') return;
+  const a = +$('empA').value, b = +$('empB').value;
+  if (a === b) { renderPicker(); return; }   // two different leaders
+  empCombo = [a, b];
+  try { localStorage.setItem('frontier-emperor-combo', JSON.stringify(empCombo)); } catch (x) { }
+  renderPicker();
+});
 $('leaderBtn').onclick = () => { pickSel = myLeader; renderPicker(); $('pickOv').classList.remove('hidden'); };
 $('pick').onclick = e => {
   const st = e.target.closest('[data-style]');
   if (st) { pickStyle = st.dataset.style; renderPicker(); return; }
   const b = e.target.closest('[data-l]');
   if (b) { pickSel = +b.dataset.l; renderPicker(); return; }
-  if (!e.target.closest('#pickGo')) return;
+  if (!e.target.closest('#pickGo') || (pickSel === EMP && !emperorUnlocked())) return;
   myLeader = pickSel;
   try { if (myLeader >= 0) localStorage.setItem('frontier-leader', myLeader); else localStorage.removeItem('frontier-leader'); } catch (e) { }
   showLeaderChoice();
   $('pickOv').classList.add('hidden');
-  netSend({ t: 'name', name: playerName(), leader: leaderPick() });
+  netSend({ t: 'name', name: playerName(), ...leaderInfo() });
 };
 $('pickClose').onclick = () => $('pickOv').classList.add('hidden');
 $('pickOv').addEventListener('pointerdown', e => { if (e.target === $('pickOv')) $('pickOv').classList.add('hidden'); });
@@ -2296,7 +2363,7 @@ const lineTotal = () => Object.values(lineCounts).reduce((a, b) => a + b, 0);
 function lineup() {
   const out = [];
   for (const [id, n] of Object.entries(lineCounts)) {
-    const i = id === '_random' ? -1 : LEADERS.findIndex(L => L.id === id);
+    const i = id === '_random' ? -1 : LEADERS.findIndex(L => L.id === id && !L.special);
     if (id === '_random' || i >= 0) for (let k = 0; k < n; k++) out.push(i);
   }
   for (let i = out.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [out[i], out[j]] = [out[j], out[i]]; }
@@ -2324,7 +2391,7 @@ function renderLineup() {
       <div class="step"><button data-lc="${id}" data-d="-1">&minus;</button><input data-li="${id}" type="number" min="0" max="48" value="${n}"><button data-lc="${id}" data-d="1">+</button></div></div>`;
   };
   $('lineGrid').innerHTML = (lineStyle === 'All' ? row('_random', picURL(null, -1), 'Random leader', 'Any leader') : '') +
-    LEADERS.map((L, i) => [L, i]).filter(([L]) => lineStyle === 'All' || L.style === lineStyle)
+    LEADERS.map((L, i) => [L, i]).filter(([L]) => !L.special && (lineStyle === 'All' || L.style === lineStyle))
       .map(([L, i]) => row(L.id, picURL(null, i), L.name, `${L.civ} · ${L.style}`)).join('');
 }
 $('lineBtn').onclick = () => { renderLineup(); $('lineOv').classList.remove('hidden'); };
@@ -2346,7 +2413,7 @@ $('startBtn').onclick = () => {
   const lu = lineup();
   const cfg = { ...menuCfg, nations: lu.length || +$('nNations').value, bots: +$('nBots').value, seed: (Math.random() * 2 ** 31) | 0, lineup: lu };
   paintReady = false;
-  const game = FrontierCore.createGame({ cfg, humans: [{ name: playerName(), leader: leaderPick() }], allowStartNow: true, hooks });
+  const game = FrontierCore.createGame({ cfg, humans: [{ name: playerName(), ...leaderInfo() }], allowStartNow: true, hooks });
   initGame(game, 1, 'sp');
   randomLeader = Math.random() * LEADERS.length | 0;
 };
@@ -2388,7 +2455,7 @@ function netConnect() {
     netOpen = true; retryMs = 1000;
     let token = null;
     try { token = sessionStorage.getItem('frontier-token'); } catch (e) { }
-    netSend({ t: 'hello', name: playerName(), token, leader: leaderPick() });
+    netSend({ t: 'hello', name: playerName(), token, ...leaderInfo() });
   };
   ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch { return; } onNet(m); };
   ws.onclose = () => {

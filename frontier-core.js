@@ -8,7 +8,28 @@
 'use strict';
 const inNode = typeof module !== 'undefined' && module.exports;
 const Maps = inNode ? require('./frontier-maps.js') : root.FrontierMaps;
-const { LEADERS, STYLES } = inNode ? require('./frontier-leaders.js') : root.FrontierLeaders;
+// LEADERS here ends with the Dark Emperor (EMPEROR_ID), who only humans can play
+const { FRONTIER_LEADERS: LEADERS, STYLES, EMPEROR, EMPEROR_ID } = inNode ? require('./frontier-leaders.js') : root.FrontierLeaders;
+const isLeader = i => Number.isInteger(i) && i >= 0 && i < EMPEROR_ID;   // an ordinary leader
+// The Dark Emperor's two chosen leaders, or two random ones
+function cleanCombo(c, rand) {
+  const a = Array.isArray(c) ? c.map(n => n | 0).filter(isLeader) : [];
+  const out = [...new Set(a)].slice(0, 2);
+  while (out.length < 2) { const i = rand() * EMPEROR_ID | 0; if (!out.includes(i)) out.push(i); }
+  return out;
+}
+// The Dark Emperor as one player sees him: his two leaders' bonuses, and both their powers in one.
+// The power that lasts longer runs until powerUntil, the other until powerUntil2.
+function emperorLeader(combo) {
+  const [A, B] = combo.map(i => LEADERS[i]), [long, short] = (B.power.dur || 0) > (A.power.dur || 0) ? [B, A] : [A, B];
+  return {
+    ...EMPEROR, combo: [A, B], long, short,
+    bonus: { name: `${EMPEROR.bonus.name}: ${A.bonus.name} + ${B.bonus.name}`,
+      desc: `${A.bonus.desc} ${B.bonus.desc} As Dark Emperor, attacks advance 30% slower and your troop cap is 10% lower.`, mods: EMPEROR.bonus.mods },
+    power: { name: `${EMPEROR.power.name}: ${A.power.name} + ${B.power.name}`, desc: `${A.power.desc} ${B.power.desc}`,
+      cd: Math.max(A.power.cd, B.power.cd), dur: Math.max(A.power.dur || 0, B.power.dur || 0) || undefined, secret: A.power.secret || B.power.secret },
+  };
+}
 
 // ════════════════ Utilities ════════════════
 function mulberry32(a) {
@@ -483,10 +504,12 @@ function createGame(opt) {
   }
 
   // ──────────── Players ────────────
-  function makePlayer(name, type, color, id, leader) {
+  function makePlayer(name, type, color, id, leader, combo) {
+    const emperor = leader === EMPEROR_ID && type === 'human';
     const p = {
       id: id || players.length, name, type, color,
-      leader: LEADERS[leader] ? leader : -1,
+      leader: isLeader(leader) || emperor ? leader : -1,
+      combo: emperor ? cleanCombo(combo, rand) : null,
       troops: type === 'bot' ? 10000 : type === 'nation' ? D.start : 25000,
       gold: 0, tiles: 0, border: new Set(), alive: true, spawned: false,
       civs: 0, share: type === 'human' ? DEFAULT_SHARE : 1, factories: 0, ports: 0,
@@ -500,23 +523,34 @@ function createGame(opt) {
       m: null,             // rule modifiers from the leader's bonus and active power
       terr: [0, 0, 0, 0],  // tiles owned of each terrain
       coast: 0,            // coastal tiles owned
-      powerReady: 0, powerUntil: 0, powerOn: false, freeNukes: 0,
+      powerReady: 0, powerUntil: 0, powerUntil2: 0, powerOn: false, freeNukes: 0,
       nukes: 0,            // bombs launched (reveals a hidden agenda)
       lx: 0, ly: 0, lfs: 0, best: 0, bestT: -1, minX: W, maxX: 0, minY: H, maxY: 0,
       aiPhase: (rand() * 20) | 0, lastHitBy: 0,
     };
+    p.L = p.combo ? emperorLeader(p.combo) : null;
     refreshMods(p);
     players[p.id] = p;
     return p;
   }
-  // Rebuild p.m from the leader's bonus plus their power while it is active
+  // Rebuild p.m from the leader's bonus plus their power while it is active. The Dark Emperor has two
+  // bonuses on top of his own, and each of his two powers lasts as long as it would for its leader.
   function refreshMods(p) {
     const L = leaderOf(p);
-    p.powerOn = !!L && p.powerUntil > tick;
+    p.powerOn = !!L && (p.powerUntil > tick || p.powerUntil2 > tick);
+    if (L && L.combo) {
+      let m = mergeMods({ ...MOD_DEFAULTS }, L.bonus.mods);
+      for (const X of L.combo) m = mergeMods(m, X.bonus.mods);
+      p.longOn = p.powerUntil > tick; p.shortOn = p.powerUntil2 > tick;
+      if (p.longOn) m = mergeMods(m, L.long.power.mods);
+      if (p.shortOn) m = mergeMods(m, L.short.power.mods);
+      p.m = m;
+      return;
+    }
     p.m = mergeMods(mergeMods({ ...MOD_DEFAULTS }, L && L.bonus.mods), p.powerOn && L.power.mods);
   }
-  function traitsOf(p) { return p && p.leader >= 0 ? LEADERS[p.leader].t : NEUTRAL_TRAITS; }
-  function leaderOf(p) { return p && p.leader >= 0 ? LEADERS[p.leader] : null; }
+  function traitsOf(p) { const L = leaderOf(p); return L ? L.t : NEUTRAL_TRAITS; }
+  function leaderOf(p) { return p && p.leader >= 0 ? p.L || LEADERS[p.leader] : null; }
   // "Gandhi (India)" for diplomatic messages
   function who(p) { const L = leaderOf(p); return L && p.type === 'nation' ? `<b>${esc(L.name)}</b> (${esc(p.name)})` : `<b>${esc(p.name)}</b>`; }
   function botName() {
@@ -1639,10 +1673,22 @@ function createGame(opt) {
     if (tick < p.powerReady) return `${P.name} is ready in ${Math.ceil((p.powerReady - tick) / 10)}s`;
     // An effect list like "finish,income:600" works if any part of it does, and a power with lasting
     // modifiers works even when its instant part has nothing to do
-    const errs = P.fx ? P.fx.split(',').map(fx => powerFx(p, fx)) : [];
-    if (errs.length && errs.every(Boolean) && !P.mods) return errs[0];
-    p.powerReady = tick + Math.round(P.cd * (p.type === 'nation' ? D.powerCd : 1));
-    if (P.dur) { p.powerUntil = tick + P.dur; refreshMods(p); }
+    const fire = Q => { const errs = Q.fx ? Q.fx.split(',').map(fx => powerFx(p, fx)) : []; return errs.length && errs.every(Boolean) && !Q.mods ? errs[0] : null; };
+    const L = leaderOf(p);
+    if (L.combo) {
+      // The Dark Emperor's ultimate: both his leaders' powers. It counts if either of them works.
+      const errA = fire(L.long.power), errB = fire(L.short.power);
+      if (errA && errB) return errA;
+      p.powerReady = tick + P.cd;
+      if (L.long.power.dur && !errA) p.powerUntil = tick + L.long.power.dur;
+      if (L.short.power.dur && !errB) p.powerUntil2 = tick + L.short.power.dur;
+      refreshMods(p);
+    } else {
+      const err = fire(P);
+      if (err) return err;
+      p.powerReady = tick + Math.round(P.cd * (p.type === 'nation' ? D.powerCd : 1));
+      if (P.dur) { p.powerUntil = tick + P.dur; refreshMods(p); }
+    }
     ev(p.id, `&#9889; <b>${esc(P.name)}</b>: ${esc(P.desc)}`, 'good', { ttl: 4000 });
     // Warn the players it may be aimed at: neighbours, and anyone at war with them.
     // A secret power stays vague until its leader's hidden agenda is out.
@@ -2140,7 +2186,7 @@ function createGame(opt) {
     }
     for (const p of players) {
       if (!p || !p.alive) continue;
-      if (p.powerOn && tick >= p.powerUntil) refreshMods(p);
+      if (p.powerOn && (p.combo ? (p.longOn && tick >= p.powerUntil) || (p.shortOn && tick >= p.powerUntil2) : tick >= p.powerUntil)) refreshMods(p);
       growPopulation(p);
       p.gold += goldRate(p);
     }
@@ -2256,7 +2302,9 @@ function createGame(opt) {
     state = 'play';
     immunityUntil = tick + IMMUNITY_TICKS;
     // AI nations on easier difficulties also wait longer for their first power
-    for (const p of players) if (p) p.powerReady = immunityUntil + (p.type === 'nation' && leaderOf(p) ? Math.round(leaderOf(p).power.cd * (D.powerCd - 1) * 0.5) : 0);
+    // A power marked instant (Laurier's Sunny Ways) is ready as soon as the game starts
+    for (const p of players) if (p) p.powerReady = leaderOf(p) && leaderOf(p).power.instant ? tick
+      : immunityUntil + (p.type === 'nation' && leaderOf(p) ? Math.round(leaderOf(p).power.cd * (D.powerCd - 1) * 0.5) : 0);
     fair.start = players.filter(p => p && p.alive && p.type !== 'bot').length;
     // Leaders with a free port (Victoria) get it on their first coast
     for (const p of players) if (p) p.freePorts = p.m.freePort;
@@ -2301,9 +2349,22 @@ function createGame(opt) {
     if (troops < 1) return 'Not enough troops';
     const werr = ensureWar(p, o, declare);
     if (werr) return werr;
-    if (touches(p, o, o ? -1 : landBody[t])) { startAttack(p, o, troops); return null; }
-    if (coastal[t]) return sendBoat(p, t, troops, declare);
+    // Bordering a nation somewhere doesn't reach its land on another island: that takes a boat
+    if (touches(p, o, landBody[t])) { startAttack(p, o, troops); return null; }
+    const c = coastal[t] ? t : nearestCoast(t, o);
+    if (c >= 0) return sendBoat(p, c, troops, declare);
     return 'You need to border that land, or click its coast to send a boat';
+  }
+  // The nearest coastal tile of owner o on t's island, or -1
+  function nearestCoast(t, o) {
+    const seen = new Set([t]), q = [t], buf = new Int32Array(4);
+    for (let h = 0; h < q.length && h < 40000; h++) {
+      const u = q[h];
+      if (coastal[u] && owner[u] === o) return u;
+      const c = nb4(u, buf);
+      for (let i = 0; i < c; i++) { const n = buf[i]; if (terrain[n] && landBody[n] === landBody[t] && !seen.has(n)) { seen.add(n); q.push(n); } }
+    }
+    return -1;
   }
   function act(pid, i) {
     const p = players[pid];
@@ -2360,7 +2421,7 @@ function createGame(opt) {
       k: tick, st: state, sl: spawnLeft, im: immunityUntil,
       p: players.map(p => p ? [Math.floor(p.troops), Math.floor(p.gold), p.tiles, p.alive ? 1 : 0, p.traitorUntil, p.cityLevels, p.spawned ? 1 : 0,
         Math.floor(p.civs), Math.round(p.share * 100), p.factories, p.kills, p.powerReady, p.powerUntil, p.freeNukes, p.nukes, p.ports,
-        Math.round(p.tradeIn)] : null),
+        Math.round(p.tradeIn), p.powerUntil2] : null),
       sh: ships.map(s => [s.id, SHIP_KINDS.indexOf(s.kind), s.owner, r1(s.x), r1(s.y), r1(s.ang), Math.floor(s.troops || 0),
         s.kind === 'trade' ? s.src.id : NAVY_MODES.indexOf(s.mode), s.kind === 'trade' ? s.dest.id : s.port ? s.port.id : -1]),
       n: nukes.map(n => [n.owner, n.type === 'atom' ? 0 : 1, n.x0, n.y0, n.tx, n.ty, n.t, n.start, n.dur, n.intercept]),
@@ -2422,7 +2483,7 @@ function createGame(opt) {
     return m;
   }
   function startInfo() {
-    return { cfg, players: players.map(p => p ? { id: p.id, name: p.name, type: p.type, color: p.color, leader: p.leader } : null), landTotal };
+    return { cfg, players: players.map(p => p ? { id: p.id, name: p.name, type: p.type, color: p.color, leader: p.leader, combo: p.combo } : null), landTotal };
   }
 
   // Client side (mirror): apply a server message.
@@ -2453,8 +2514,8 @@ function createGame(opt) {
       p.alive = !!p.alive; p.spawned = !!p.spawned;
       p.civs = d[7] || 0; p.share = d[8] == null ? 1 : d[8] / 100; p.factories = d[9] || 0; p.kills = d[10] || 0;
       p.powerReady = d[11] || 0; p.powerUntil = d[12] || 0; p.freeNukes = d[13] || 0; p.nukes = d[14] || 0; p.ports = d[15] || 0;
-      p.tradeIn = d[16] || 0;
-      if ((p.powerUntil > tick) !== p.powerOn) refreshMods(p);
+      p.tradeIn = d[16] || 0; p.powerUntil2 = d[17] || 0;
+      if ((p.powerUntil > tick || p.powerUntil2 > tick) !== p.powerOn || (p.combo && ((p.powerUntil > tick) !== p.longOn || (p.powerUntil2 > tick) !== p.shortOn))) refreshMods(p);
     });
     if (m.al) m.al.forEach((list, id) => { if (players[id] && list) players[id].allies = new Map(list); });
     if (m.fair) { fair.session = m.fair.s; fair.active = m.fair.a; }
@@ -2493,13 +2554,22 @@ function createGame(opt) {
   // ──────────── Setup ────────────
   genMap();
   if (mirror) {
-    for (const p of opt.players) if (p) makePlayer(p.name, p.type, p.color, p.id, p.leader);
+    for (const p of opt.players) if (p) makePlayer(p.name, p.type, p.color, p.id, p.leader, p.combo);
   } else {
     const humans = opt.humans || [];
-    humans.forEach((h, i) => makePlayer(String(h.name || 'Player').slice(0, 16), 'human', HUMAN_COLORS[i % HUMAN_COLORS.length], 0, h.leader));
-    // Nations get the leaders nobody picked. On a real map, leaders whose capital is on it go first.
-    const taken = new Set(humans.map(h => h.leader));
-    let pool = LEADERS.map((_, i) => i).filter(i => !taken.has(i));
+    // Only one Dark Emperor per game: anyone else who picked him gets a random leader instead
+    let emperors = 0;
+    const leaderFor = h => {
+      if (h.leader !== EMPEROR_ID) return h.leader;
+      if (!emperors++) return EMPEROR_ID;
+      let i; do { i = rand() * EMPEROR_ID | 0; } while (humans.some(x => x.leader === i));
+      return i;
+    };
+    humans.forEach((h, i) => makePlayer(String(h.name || 'Player').slice(0, 16), 'human', HUMAN_COLORS[i % HUMAN_COLORS.length], 0, leaderFor(h), h.combo));
+    // Nations get the leaders nobody picked (never the Dark Emperor). On a real map, leaders whose
+    // capital is on it go first.
+    const taken = new Set(players.filter(Boolean).map(p => p.leader));
+    let pool = LEADERS.map((_, i) => i).filter(i => isLeader(i) && !taken.has(i));
     for (let i = pool.length - 1; i > 0; i--) { const j = rand() * (i + 1) | 0; [pool[i], pool[j]] = [pool[j], pool[i]]; }
     const real = Maps.MAPS[cfg.map];
     if (real) {
@@ -2527,7 +2597,7 @@ function createGame(opt) {
     for (let i = 0; i < count; i++) {
       let hue = (i * 137.508 + 20) % 360;
       if (hue > 195 && hue < 240) hue = (hue + 60) % 360;
-      const L = lineup && LEADERS[lineup[i]] ? lineup[i] : pool[next++ % pool.length], civ = LEADERS[L].civ;
+      const L = lineup && isLeader(lineup[i]) ? lineup[i] : pool[next++ % pool.length], civ = LEADERS[L].civ;
       makePlayer(numbered(civ, seen[civ] || 0), 'nation', hsl2rgb(hue, 62, 52), 0, L);
       seen[civ] = (seen[civ] || 0) + 1;
     }
@@ -2558,7 +2628,7 @@ function createGame(opt) {
 
 const api = {
   createGame, fmt, esc, within, TICK_MS, SPAWN_TICKS, IMMUNITY_TICKS, WIN_SHARE, DEFENSE_RANGE, SAM_RANGE,
-  NUKE, TERR, DIFF, BUILD, BUILD_ORDER, MAP_SIZES, MAP_NAMES, MAP_KINDS, DEFAULT_SHARE, LEADERS, STYLES, attitude, ALLIANCE_TICKS, WAR_TICKS, MAX_NATIONS,
+  NUKE, TERR, DIFF, BUILD, BUILD_ORDER, MAP_SIZES, MAP_NAMES, MAP_KINDS, DEFAULT_SHARE, LEADERS, STYLES, EMPEROR_ID, isLeader, emperorLeader, attitude, ALLIANCE_TICKS, WAR_TICKS, MAX_NATIONS,
   RESOLUTIONS, CANNON_RANGE, CRUISER_RANGE, STACKS, SHIP_MODES, FACTORY_GOLD, CIV_GOLD,
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;

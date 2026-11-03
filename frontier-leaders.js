@@ -414,8 +414,8 @@ const ABILITIES = {
     bonus: { name: 'The Magnificent', desc: 'Cities cost 30% less and hold 50% more troops.', mods: { c_city: 0.7, cityCap: 1.5 } },
     power: { name: 'Grand Vizier', desc: 'For 20 s, cities cost 75% less.', cd: 3000, dur: 200, mods: { c_city: 0.25 }, ai: 'build' } },
   sejong: { style: 'Economy',
-    bonus: { name: 'Hangul', desc: 'Civilians earn double gold, land earns 20% more and factories 25% more.', mods: { civGold: 2, gold: 1.2, factoryGold: 1.25 } },
-    power: { name: 'Hwacha', desc: 'For 45 s, your land is 2.5× harder to take.', cd: 2400, dur: 450, mods: { def: 2.5 }, ai: 'defend' } },
+    bonus: { name: 'Hangul', desc: 'Civilians earn 50% more gold, land earns 10% more and factories 15% more.', mods: { civGold: 1.5, gold: 1.1, factoryGold: 1.15 } },
+    power: { name: 'Hwacha', desc: 'For 40 s, your land is twice as hard to take.', cd: 3000, dur: 400, mods: { def: 2 }, ai: 'defend' } },
   wilhelmina: { style: 'Trade',
     bonus: { name: 'Free Trade', desc: 'Your ports send trade ships twice as often, they earn 50% more, and ports cost 30% less.', mods: { tradeFreq: 2, tradeGold: 1.5, c_port: 0.7 } },
     power: { name: 'Radio Oranje', desc: 'Every port sends out a trade ship now, and for 60 s trade ships earn double.', cd: 3000, dur: 600, fx: 'trade', mods: { tradeGold: 2 }, ai: 'naval' } },
@@ -436,7 +436,8 @@ const ABILITIES = {
     power: { name: 'Byrsa', desc: 'For 60 s, trade ships earn triple.', cd: 3000, dur: 600, mods: { tradeGold: 3 }, ai: 'naval' } },
   laurier: { style: 'Expansion',
     bonus: { name: 'Last, Best West', desc: 'Unclaimed land costs half the troops to take, and you start with more land.', mods: { atkNeutral: 0.5, spawnRadius: 2 } },
-    power: { name: 'Sunny Ways', desc: 'For 60 s, unclaimed land costs 75% fewer troops and your fronts move 50% faster.', cd: 3000, dur: 600, mods: { atkNeutral: 0.25, speed: 1.5 }, ai: 'expand' } },
+    // Ready the moment the game starts: unclaimed land is what it's for, and that goes fast
+    power: { name: 'Sunny Ways', desc: 'For 60 s, unclaimed land costs 75% fewer troops and your fronts move 50% faster. Ready as soon as the game starts.', cd: 3000, dur: 600, mods: { atkNeutral: 0.25, speed: 1.5 }, ai: 'expand', instant: true } },
   menelik: { style: 'Cities',
     bonus: { name: 'Council of Ministers', desc: 'Your cities defend nearby land like defense posts, and hold 20% more troops.', mods: { cityDef: 1, cityCap: 1.2 } },
     power: { name: 'Battle of Adwa', desc: 'For 50 s, attackers lose 2.5× troops on your land and your attacks lose 30% fewer.', cd: 3000, dur: 500, mods: { def: 2.5, atk: 0.7 }, ai: 'defend' } },
@@ -498,7 +499,25 @@ const ABILITIES = {
 for (const L of LEADERS) Object.assign(L, ABILITIES[L.id]);
 const STYLES = [...new Set(LEADERS.map(L => L.style))];
 
-const api = { LEADERS, STYLES };
+// The Dark Emperor: Frontier only (Nations uses LEADERS), never a computer nation, and one per game.
+// Unlocked by winning a game on Impossible, or by playing under the name "Former Coach" (frontier.html).
+// He takes the always-on bonuses of two leaders of his choosing (p.combo), and his ultimate unleashes
+// both their powers at once (frontier-core.js), but his attacks advance 30% slower and his troop cap
+// is 10% lower.
+const EMPEROR = {
+  id: 'emperor', name: 'Dark Emperor', civ: 'Dark Empire', title: 'Emperor of the Dark Empire', home: [0, 0], special: true,
+  agenda: 'conquest', agendaName: 'Dominion', agendaDesc: 'Bows to no one.',
+  t: { aggr: 1, expand: 1, loyal: 0.2, nuke: 0.6, naval: 0.6, econ: 0.6, defense: 0.6, generous: 0.1, grudge: 1 },
+  quote: 'Two crowns rest on my head. Kneel to both.',
+  angry: 'Your end was written the day you crossed me.',
+  look: { emperor: true, skin: '#c9c2d6', hair: 'bald', hairC: '#111', robe: '#14091f', robe2: '#8e44ff' },
+  style: 'Emperor',
+  bonus: { name: 'Two Crowns', desc: 'Takes the always-on bonuses of two leaders you choose. Attacks advance 30% slower and your troop cap is 10% lower.', mods: { speed: 0.7, cap: 0.9 } },
+  power: { name: 'Dark Ascension', desc: 'Unleash the powers of both your chosen leaders at once.', cd: 3000 },
+};
+const FRONTIER_LEADERS = [...LEADERS, EMPEROR], EMPEROR_ID = LEADERS.length;
+
+const api = { LEADERS, STYLES, EMPEROR, EMPEROR_ID, FRONTIER_LEADERS };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.FrontierLeaders = api;
 })(typeof window !== 'undefined' ? window : globalThis);

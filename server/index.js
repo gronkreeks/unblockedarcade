@@ -15,7 +15,7 @@ const Core = require('../frontier-core.js');
 // touch this file (or deploy by hand) or the live server keeps running the old rules. /status
 // reports the rules it loaded so you can check, and players get it on connecting: the page compares it
 // with its own copy of the rules and won't start a game against a server running different ones.
-// Rules version: Frontier v6 (jobs economy removed).
+// Rules version: Frontier v7 (Dark Emperor, Korea nerf, Sunny Ways ready at the start, boats to enemy islands).
 const CORE_HASH = (() => {
   const h = crypto.createHash('sha1');
   for (const f of ['../frontier-core.js', '../frontier-leaders.js', '../frontier-maps.js']) h.update(fs.readFileSync(require.resolve(f)));
@@ -54,7 +54,9 @@ function cleanName(n) {
   if (n && !checkName(n).ok && checkName(n).reason === 'Please pick a different name') return 'Player';
   return n || 'Player';
 }
-const cleanLeader = n => Number.isInteger(n) && n >= 0 && n < Core.LEADERS.length ? n : -1;
+const cleanLeader = n => Number.isInteger(n) && n >= 0 && n < Core.LEADERS.length ? n : -1;   // includes the Dark Emperor
+// The Dark Emperor's two leaders (the game picks random ones if these aren't two different leaders)
+const cleanCombo = c => Array.isArray(c) ? c.slice(0, 2).map(n => n | 0).filter(Core.isLeader) : undefined;
 function cleanCfg(c) {
   c = c || {};
   return {
@@ -64,7 +66,7 @@ function cleanCfg(c) {
     nations: Math.max(0, Math.min(Core.MAX_NATIONS, c.nations | 0)),
     bots: Math.max(0, Math.min(120, c.bots | 0)),
     // Hand-picked leaders, one per nation (repeats allowed, -1 = random)
-    lineup: Array.isArray(c.lineup) ? c.lineup.slice(0, Core.MAX_NATIONS).map(n => cleanLeader(n | 0)) : [],
+    lineup: Array.isArray(c.lineup) ? c.lineup.slice(0, Core.MAX_NATIONS).map(n => Core.isLeader(n | 0) ? n | 0 : -1) : [],
   };
 }
 function lobbyCode() {
@@ -139,7 +141,7 @@ function startGame(room) {
   if (room.isPublic && humans.length > 6) cfg.size = 'large';
   const byPid = new Map();
   const game = Core.createGame({
-    cfg, humans: humans.map(h => ({ name: h.name, leader: h.leader })), spawnTicks: SPAWN_TICKS, track: true,
+    cfg, humans: humans.map(h => ({ name: h.name, leader: h.leader, combo: h.combo })), spawnTicks: SPAWN_TICKS, track: true,
     hooks: {
       event(pid, html, cls, extra) {
         const msg = JSON.stringify({ t: 'ev', html, cls, req: extra && extra.req, offer: extra && extra.offer, ttl: extra && extra.ttl });
@@ -233,7 +235,7 @@ function onMessage(ws, raw) {
       send(ws, { t: 'tick', ...g.full() });
       return;
     }
-    const s = { token: crypto.randomBytes(16).toString('hex'), name: cleanName(m.name), leader: cleanLeader(m.leader), ws, room: null, pid: 0, chatOn: false, chatRate: newRate() };
+    const s = { token: crypto.randomBytes(16).toString('hex'), name: cleanName(m.name), leader: cleanLeader(m.leader), combo: cleanCombo(m.combo), ws, room: null, pid: 0, chatOn: false, chatRate: newRate() };
     sessions.set(s.token, s);
     ws.session = s;
     send(ws, { t: 'welcome', token: s.token, core: CORE_HASH });
@@ -244,7 +246,7 @@ function onMessage(ws, raw) {
   switch (m.t) {
     case 'name':
       s.name = cleanName(m.name);
-      if ('leader' in m) s.leader = cleanLeader(m.leader);
+      if ('leader' in m) { s.leader = cleanLeader(m.leader); s.combo = cleanCombo(m.combo); }
       if (s.room && s.room.state === 'lobby') pushRoom(s.room);
       break;
     case 'joinPublic': {
