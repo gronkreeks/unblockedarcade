@@ -280,8 +280,8 @@
       <p style="font-size:0.82rem;line-height:1.6;opacity:0.82;">Builds <strong>typing speed</strong>, <strong>accuracy</strong> &amp; <strong>keyboard fluency</strong> — each level introduces a new technique, from home-row basics to full-keyboard mastery.</p>
     </div>
     <div style="text-align:center;">
-      <button class="btn btn-primary" onclick="startFromBeginning()">Begin Quest</button>
-      <button class="btn btn-secondary" onclick="resumeQuest()" id="resume-btn" style="display:none;">Continue</button>
+      <button class="btn btn-primary" data-act="startFromBeginning">Begin Quest</button>
+      <button class="btn btn-secondary" data-act="resumeQuest" id="resume-btn" style="display:none;">Continue</button>
     </div>
   </div>
 </div>
@@ -300,8 +300,8 @@
     <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem; flex-wrap:wrap; gap:0.5rem;">
       <span class="wpm-target" id="intro-wpm-target"></span>
       <div>
-        <button class="btn btn-secondary" onclick="showScreen('start')" style="margin-top:0;">Back</button>
-        <button class="btn btn-primary" onclick="startTyping()" style="margin-top:0; margin-left:0.5rem;">Start Level</button>
+        <button class="btn btn-secondary" data-act="showStart" style="margin-top:0;">Back</button>
+        <button class="btn btn-primary" data-act="startTyping" style="margin-top:0; margin-left:0.5rem;">Start Level</button>
       </div>
     </div>
   </div>
@@ -332,7 +332,7 @@
     </div>
     <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar"></div></div>
     <div class="wpm-target" id="typing-wpm-target" style="margin-bottom:0.3rem;"></div>
-    <div class="text-display" id="text-display" onclick="focusInput()"></div>
+    <div class="text-display" id="text-display" data-act="focusInput"></div>
     <p class="hint">Click the text then start typing. Backspace to correct mistakes.</p>
     <a href="index.html" class="home-link">← Back to Home</a>
   </div>
@@ -363,8 +363,8 @@
       </div>
     </div>
     <div class="btn-row">
-      <button class="btn btn-secondary" onclick="retryLevel()">Retry</button>
-      <button class="btn btn-primary" id="next-btn" onclick="nextLevel()">Next Level →</button>
+      <button class="btn btn-secondary" data-act="retryLevel">Retry</button>
+      <button class="btn btn-primary" id="next-btn" data-act="nextLevel">Next Level →</button>
     </div>
     <a href="index.html" class="home-link">← Back to Home</a>
     <div class="congrats" id="congrats-msg"></div>
@@ -372,6 +372,9 @@
 </div>
 
 <script>
+// Everything runs inside this function, so nothing outside the game can replace its functions or read its state.
+(() => {
+'use strict';
 // ── LEVEL DATA ──────────────────────────────────────────────────────────────
 const LEVELS = [
   {
@@ -642,11 +645,16 @@ function updateStats() {
 }
 
 // ── INPUT HANDLING ────────────────────────────────────────────────────────────
+// Only real keystrokes count: text put in by a script (an untrusted event) or pasted is thrown away,
+// and one keystroke can't add more than a few characters at once.
+const MAX_CHARS_PER_KEY = 3;
+['paste', 'drop'].forEach(t => document.getElementById('hidden-input').addEventListener(t, e => e.preventDefault()));
 document.getElementById('hidden-input').addEventListener('input', function(e) {
   if (state.finished) return;
 
   const target = LEVELS[state.level].text;
   const raw = this.value;
+  if (!e.isTrusted || raw.length - state.typed.length > MAX_CHARS_PER_KEY) { this.value = state.typed; return; }
 
   // Start timer on first character
   if (!state.startTime && raw.length > 0) {
@@ -801,6 +809,11 @@ function applyTheme(theme) {
 
 // ── BOOT ──────────────────────────────────────────────────────────────────────
 init();
+
+// The page's buttons call these (no inline onclick, so none of the game has to be global)
+const ACTIONS = { startFromBeginning, resumeQuest, startTyping, focusInput, retryLevel, nextLevel, showStart: () => showScreen('start') };
+document.querySelectorAll('[data-act]').forEach(el => el.addEventListener('click', e => ACTIONS[el.dataset.act](e)));
+})();
 </script>
 
 </body>

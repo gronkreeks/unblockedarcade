@@ -110,7 +110,7 @@
     <p style="font-size:0.62rem;font-weight:900;letter-spacing:2px;text-transform:uppercase;opacity:0.55;margin-bottom:0.35rem;">What you'll learn</p>
     <p style="font-size:0.82rem;line-height:1.6;opacity:0.82;">Develops <strong>critical thinking</strong>, <strong>forward planning</strong> &amp; <strong>logical reasoning</strong> — every move has consequences several steps ahead.</p>
   </div>
-  <button onclick="startGame()">Play!</button>
+  <button data-act="startGame">Play!</button>
   <a class="home-btn" href="index.html">⬅ Back to Home</a>
 </div>
 
@@ -122,6 +122,9 @@
 </div>
 
 <script>
+// Everything runs inside this function, so nothing outside the game can replace its functions or read its state.
+(() => {
+'use strict';
 // ── Constants ─────────────────────────────────────────────────────────────────
 const TILE   = 80;
 const OFFSET = 0;  // no rank/file labels inside canvas — drawn outside
@@ -567,6 +570,11 @@ function startGame() {
   updateStatus();
   draw();
 }
+
+// The page's buttons call these (no inline onclick, so none of the game has to be global)
+const ACTIONS = { startGame: () => startGame() };
+document.querySelectorAll('[data-act]').forEach(el => el.addEventListener('click', e => ACTIONS[el.dataset.act](e)));
+})();
 </script>
 
 </body>

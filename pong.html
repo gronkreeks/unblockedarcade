@@ -89,11 +89,14 @@
             <p><strong>Player 1 (Left):</strong> W/S keys</p>
             <p><strong>Player 2 (Right):</strong> J/M keys</p>
             <p><strong>What you'll learn:</strong> Builds timing, reaction speed and prediction. Read the ball's angle and move to where it will be, not where it is.</p>
-            <button onclick="resetGame()">Reset Game</button>
+            <button data-act="resetGame">Reset Game</button>
         </div>
     </div>
 
     <script>
+    // Everything runs inside this function, so nothing outside the game can replace its functions or read its state.
+    (() => {
+    'use strict';
         const canvas = document.getElementById('pongCanvas');
         const ctx = canvas.getContext('2d');
 
@@ -253,6 +256,11 @@
         }
 
         gameLoop();
+
+        // The page's buttons call these (no inline onclick, so none of the game has to be global)
+        const ACTIONS = { resetGame: () => resetGame() };
+        document.querySelectorAll('[data-act]').forEach(el => el.addEventListener('click', e => ACTIONS[el.dataset.act](e)));
+    })();
     </script>
 </body>
 </html>

@@ -184,8 +184,8 @@
   <a class="back" href="index.html">&#8592; Back</a>
   <h1>TRENCH WARS</h1>
   <div class="hdr-btns">
-    <button class="hdr-btn save" onclick="saveGame()">&#128190; Save</button>
-    <button class="hdr-btn reset" onclick="resetGame()">&#8635; Reset</button>
+    <button class="hdr-btn save" data-act="saveGame">&#128190; Save</button>
+    <button class="hdr-btn reset" data-act="resetGame">&#8635; Reset</button>
   </div>
 </header>
 <div id="save-toast">Game saved!</div>
@@ -231,6 +231,9 @@
 </div>
 
 <script>
+// Everything runs inside this function, so nothing outside the game can replace its functions or read its state.
+(() => {
+'use strict';
 // ── Constants ──────────────────────────────────────────────────────────────
 const COLS = 20, ROWS = 12, CS = 44;
 const OX = 120, OY = 38;
@@ -1671,6 +1674,11 @@ if (localStorage.getItem(SAVE_KEY)) {
 // ── Start ──────────────────────────────────────────────────────────────────
 initGame(); // initialise state so render() works even before overlay is dismissed
 render();
+
+// The page's buttons call these (no inline onclick, so none of the game has to be global)
+const ACTIONS = { saveGame: () => saveGame(), resetGame: () => resetGame() };
+document.querySelectorAll('[data-act]').forEach(el => el.addEventListener('click', e => ACTIONS[el.dataset.act](e)));
+})();
 </script>
 </body>
 </html>

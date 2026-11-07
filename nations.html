@@ -224,8 +224,11 @@
 <script src="nations-core.js?v=2"></script>
 <script src="nations-icons.js?v=1"></script>
 <script>
+// Everything runs inside this function, so nothing outside the game can replace its functions or read its state.
+(() => {
 'use strict';
-const C = NationsCore, { UNITS, BUILDINGS, TECHS, TECH_IDS, PROJECTS, TERRAIN, RESOURCES, RES_IDS, LEADERS, DIFFS, SPEEDS, MAP_SIZES, MAP_TYPES, STYLE_BONUS, ERAS, esc } = C;
+// The rules object is locked, so add-ons can't swap newGame, loadGame or anything else in it
+const C = Object.freeze(window.NationsCore), { UNITS, BUILDINGS, TECHS, TECH_IDS, PROJECTS, TERRAIN, RESOURCES, RES_IDS, LEADERS, DIFFS, SPEEDS, MAP_SIZES, MAP_TYPES, STYLE_BONUS, ERAS, esc } = C;
 const { portraitSVG } = LeaderPortraits;
 const $ = id => document.getElementById(id);
 const store = { get(k, d) { try { const v = localStorage.getItem('nations-' + k); return v === null ? d : v; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('nations-' + k, v); return true; } catch (e) { return false; } }, del(k) { try { localStorage.removeItem('nations-' + k); } catch (e) { } } };
@@ -921,6 +924,7 @@ addEventListener('blur', () => keys.clear());
 
 renderStart();
 if (matchMedia('(hover: none)').matches) addLocalNote('Nations plays best with a mouse and keyboard.', 'warn');
+})();
 </script>
 </body>
 </html>

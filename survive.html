@@ -105,6 +105,8 @@
 </div>
 
 <script>
+// Everything runs inside this function, so nothing outside the game can replace its functions or read its state.
+(() => {
 "use strict";
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -1506,6 +1508,7 @@ function startGame() {
 document.getElementById('startBtn').addEventListener('click', startGame);
 
 requestAnimationFrame(ts => { lastTime = ts; requestAnimationFrame(loop); });
+})();
 </script>
 
 </body>

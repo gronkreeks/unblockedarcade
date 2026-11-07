@@ -117,6 +117,8 @@
 </div>
 
 <script>
+// Everything runs inside this function, so nothing outside the game can replace its functions or read its state.
+(() => {
 "use strict";
 
 const canvas = document.getElementById('c');
@@ -690,6 +692,7 @@ canvas.addEventListener('click', e => {
 });
 
 document.getElementById('ov-btn').addEventListener('click', startGame);
+})();
 </script>
 </body>
 </html>

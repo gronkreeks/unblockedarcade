@@ -103,11 +103,14 @@
     <p style="font-size:0.62rem;font-weight:900;letter-spacing:2px;text-transform:uppercase;opacity:0.55;margin-bottom:0.35rem;">What you'll learn</p>
     <p style="font-size:0.82rem;line-height:1.6;opacity:0.82;">Sharpens <strong>precision</strong>, <strong>patience</strong> &amp; <strong>hand-eye coordination</strong> — pick your moment, aim true, and outthink your opponent.</p>
   </div>
-  <button onclick="startGame()">Start!</button>
+  <button data-act="startGame">Start!</button>
   <a class="home-btn" href="index.html">⬅ Back to Home</a>
 </div>
 
 <script>
+// Everything runs inside this function, so nothing outside the game can replace its functions or read its state.
+(() => {
+'use strict';
 const canvas = document.getElementById('c');
 const ctx    = canvas.getContext('2d');
 const W = canvas.width, H = canvas.height;
@@ -655,6 +658,11 @@ document.addEventListener('keydown', e => {
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' ','/'].includes(e.key)) e.preventDefault();
 });
 document.addEventListener('keyup', e => { keys[e.key] = false; });
+
+// The page's buttons call these (no inline onclick, so none of the game has to be global)
+const ACTIONS = { startGame: () => startGame() };
+document.querySelectorAll('[data-act]').forEach(el => el.addEventListener('click', e => ACTIONS[el.dataset.act](e)));
+})();
 </script>
 
 </body>

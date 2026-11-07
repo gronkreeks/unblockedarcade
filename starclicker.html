@@ -253,28 +253,28 @@
 
 <header>
   <div style="display:flex;align-items:center;gap:0.4rem">
-    <button class="hbtn-tog" id="tog-stats" onclick="toggleStats()" title="Toggle stats">📊</button>
+    <button class="hbtn-tog" id="tog-stats" data-act="toggleStats" title="Toggle stats">📊</button>
     <a href="index.html" class="back">← Arcade</a>
   </div>
   <div class="title">⭐ STAR CLICKER</div>
   <div style="display:flex;align-items:center;gap:0.4rem">
     <div class="hbtns">
-      <button class="hbtn" onclick="saveGame()">💾 Save</button>
-      <button class="hbtn" onclick="confirmReset()">🗑️ Reset</button>
+      <button class="hbtn" data-act="saveGame">💾 Save</button>
+      <button class="hbtn" data-act="confirmReset">🗑️ Reset</button>
     </div>
-    <button class="hbtn-tog" id="tog-shop" onclick="toggleShop()" title="Toggle shop">🏪</button>
+    <button class="hbtn-tog" id="tog-shop" data-act="toggleShop" title="Toggle shop">🏪</button>
   </div>
 </header>
 
 <!-- Mobile backdrop -->
-<div id="mob-bd" onclick="closeAllPanels()"></div>
+<div id="mob-bd" data-act="closeAllPanels"></div>
 
 <div class="main">
 
   <div id="stats">
     <!-- Close arrow -->
     <div class="panel-arrow">
-      <button onclick="toggleStats()" title="Close stats">›</button>
+      <button data-act="toggleStats" title="Close stats">›</button>
     </div>
     <div class="stats-inner">
       <div class="st-row"><div class="st-v" id="s-stars">0</div><div class="st-l">stars</div></div>
@@ -299,15 +299,15 @@
   </div>
 
   <div id="center">
-    <div id="star" onclick="clickStar(event)">⭐</div>
-    <div id="golden" onclick="clickGolden(event)">🌟</div>
+    <div id="star" data-act="clickStar">⭐</div>
+    <div id="golden" data-act="clickGolden">🌟</div>
     <div id="hint">Click the star to earn ⭐</div>
   </div>
 
   <div id="shop">
     <!-- Close arrow -->
     <div class="panel-arrow">
-      <button onclick="toggleShop()" title="Close shop">‹</button>
+      <button data-act="toggleShop" title="Close shop">‹</button>
     </div>
     <div class="shop-inner">
       <div id="upg-sec" style="display:none">
@@ -324,6 +324,9 @@
 </div>
 
 <script>
+// Everything runs inside this function, so nothing outside the game can replace its functions or read its state.
+(() => {
+'use strict';
 // ── Starfield ─────────────────────────────────────────────────────────────────
 (function() {
   const c = document.getElementById('bg');
@@ -522,7 +525,7 @@ function updateShop() {
   sec.style.display = avail.length ? '' : 'none';
   document.getElementById('upg-list').innerHTML = avail.map(({u,i}) => {
     const can = stars >= u.cost;
-    return `<div class="upg-card${can?'':' cant'}" onclick="buyUpgrade(${i})">
+    return `<div class="upg-card${can?'':' cant'}" data-upg="${i}">
       <div class="u-ico">${u.icon}</div>
       <div>
         <div class="u-name">${u.name}</div>
@@ -537,7 +540,7 @@ function updateShop() {
     const cost = bldCost(i);
     const can  = stars >= cost;
     const eff  = (b.sps * bMult[i] * globalMult).toFixed(b.sps*bMult[i]*globalMult<1?2:1);
-    return `<div class="bld-card${can?'':' cant'}" onclick="buyBuilding(${i})">
+    return `<div class="bld-card${can?'':' cant'}" data-bld="${i}">
       <div class="b-ico">${b.e}</div>
       <div class="b-inf">
         <div class="b-name">${b.name}${owned[i]>0?`<span class="b-cnt">×${owned[i]}</span>`:''}</div>
@@ -676,6 +679,14 @@ recalc();
 updateStats();
 updateShop();
 requestAnimationFrame(loop);
+
+// The page's buttons call these (no inline onclick, so none of the game has to be global)
+const ACTIONS = { toggleStats, toggleShop, closeAllPanels, confirmReset, saveGame: () => saveGame(), clickStar, clickGolden };
+document.querySelectorAll('[data-act]').forEach(el => el.addEventListener('click', e => ACTIONS[el.dataset.act](e)));
+// Shop cards are redrawn every 0.2 s, so their clicks are caught on the lists
+document.getElementById('upg-list').addEventListener('click', e => { const c = e.target.closest('[data-upg]'); if (c) buyUpgrade(+c.dataset.upg); });
+document.getElementById('bld-list').addEventListener('click', e => { const c = e.target.closest('[data-bld]'); if (c) buyBuilding(+c.dataset.bld); });
+})();
 </script>
 </body>
 </html>
