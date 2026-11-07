@@ -24,6 +24,7 @@ const CORE_HASH = (() => {
 const { filterMessage, checkName, newRate, rateCheck, createChat } = require('./chat.js');
 const { createImposter } = require('./imposter.js');
 const { createTimberfall } = require('./timberfall.js');
+const { createHttpTransport } = require('./http-transport.js');
 
 const PORT = process.env.PORT || 8080;
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ||
@@ -300,10 +301,13 @@ function onMessage(ws, raw) {
 }
 
 // ──────────── HTTP + WebSocket server ────────────
+// The pages connect over plain HTTP (http-transport.js), because school wifi often blocks
+// WebSockets. WebSockets still work too, for pages opened before the switch.
 const server = http.createServer((req, res) => {
+  if (httpConns.handle(req, res)) return;
   if (req.url === '/status') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-    res.end(JSON.stringify({ ok: true, online: clients.size, games: runningGames(), core: CORE_HASH, lobbies: rooms.size - runningGames(), chat: chat.stats(), imposter: imposter.stats(), timberfall: timberfall.stats() }));
+    res.end(JSON.stringify({ ok: true, online: clients.size, http: httpConns.count(), games: runningGames(), core: CORE_HASH, lobbies: rooms.size - runningGames(), chat: chat.stats(), imposter: imposter.stats(), timberfall: timberfall.stats() }));
     return;
   }
   res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -314,12 +318,18 @@ function originAllowed(origin) {
   if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
   return ALLOWED_ORIGINS.includes(origin);
 }
+const httpConns = createHttpTransport({
+  originAllowed,
+  canOpen: () => clients.size < MAX_CLIENTS,
+  onConnection: (conn, req) => onConnection(conn, req),
+});
 const wss = new WebSocketServer({
   server, maxPayload: 16384,
   perMessageDeflate: { threshold: 512 },
   verifyClient: ({ origin }) => originAllowed(origin) && clients.size < MAX_CLIENTS,
 });
-wss.on('connection', (ws, req) => {
+wss.on('connection', (ws, req) => onConnection(ws, req));
+function onConnection(ws, req) {
   clients.add(ws);
   // Only a hash of the address is kept, used for chat timeouts. The last X-Forwarded-For entry is
   // the one added by the hosting proxy; earlier entries can be faked by the client.
@@ -339,7 +349,7 @@ wss.on('connection', (ws, req) => {
     s.ws = null;
     if (!s.room || s.room.state === 'lobby') { leaveRoom(s); sessions.delete(s.token); }
   });
-});
+}
 // Drop dead connections (phones that lost signal) so they can reconnect cleanly.
 setInterval(() => {
   for (const ws of clients) {
