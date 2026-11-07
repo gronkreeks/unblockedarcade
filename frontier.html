@@ -458,6 +458,9 @@
     .pcard.emp b, .pickInfo.emp .nm { color: #d9b8ff; text-shadow: 0 0 8px rgba(142,68,255,0.8); }
     .pcard.emp img, .pickInfo.emp img { box-shadow: 0 0 14px rgba(142,68,255,0.75); }
     .pcard.emp.locked { filter: grayscale(0.6) brightness(0.75); }
+    .pcard.locked:not(.emp) { filter: grayscale(0.85) brightness(0.6); }
+    .pcard.locked:not(.emp) small { color: #f7d46a; }
+    .pcard .rk-emblem { vertical-align: -3px; margin-right: 2px; }
     .pcard.emp.locked small { color: #f7d46a; }
     @property --empA { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
     @keyframes empSpin { to { --empA: 360deg; } }
@@ -2156,7 +2159,17 @@ function showEnd(winnerId) {
   else lines.push('Your nation has fallen.');
   lines.push(`Time: ${fmtTime(G.tick - (G.immunityUntil - IMMUNITY_TICKS))} · Players eliminated: ${p.kills || 0}`);
   $('endText').innerHTML = lines.join('<br>');
-  if (rankedGame && mode === 'sp') { rankedGame = false; $('endText').innerHTML += '<div style="margin-top:0.9rem">' + RK.resultHTML(RK.record(won)) + '</div>'; }
+  if (rankedGame && mode === 'sp') {
+    rankedGame = false;
+    const r = RK.record(won);
+    let extra = '';
+    if (r.promoted) extra += `<div style="margin-top:0.5rem;color:#f7d46a;font-weight:800">${UNLOCKS[r.to] - UNLOCKS[r.from]} new leaders unlocked! Pick one under Your leader.</div>`;
+    if (r.promoted && r.to === RK.TIERS.length - 1) {
+      try { localStorage.setItem('frontier-emperor', '1'); } catch (e) { }
+      extra += '<div style="margin-top:0.6rem"><b style="color:#d9b8ff;text-shadow:0 0 8px #8e44ff">&#128081; Champion unlocks the Dark Emperor!</b> Choose him under Your leader.</div>';
+    }
+    $('endText').innerHTML += '<div style="margin-top:0.9rem">' + RK.resultHTML(r) + extra + '</div>';
+  }
   $('watchBtn').classList.toggle('hidden', !!winner);
   $('endOv').classList.remove('hidden');
 }
@@ -2291,7 +2304,8 @@ const RANKED_MAPS = ['continents', 'pangaea', 'archipelago', 'twin', 'inland'];
 let rankedGame = false;
 function renderRank() {
   const t = RANKED_CFG[RK.tier];
-  $('rkCard').innerHTML = RK.card();
+  const next = RK.tier < RK.TIERS.length - 1 ? ` Reach ${RK.TIERS[RK.tier + 1].name} for ${(UNLOCKS[RK.tier + 1] - UNLOCKS[RK.tier])} more${RK.tier + 1 === RK.TIERS.length - 1 ? ' and the Dark Emperor' : ''}.` : '';
+  $('rkCard').innerHTML = RK.card(`Leaders unlocked: ${UNLOCKS[RK.tier]} of ${EMP}.${next}`);
   $('rkInfo').textContent = `${RK.tierName} match: ${t.diff[0].toUpperCase() + t.diff.slice(1)} AI · ${t.nations} nations · ${t.bots} tribes · ${t.size} random map`;
 }
 for (const seg of document.querySelectorAll('.seg')) {
@@ -2324,20 +2338,28 @@ $('nameIn').addEventListener('change', () => { showLeaderChoice(); netSend({ t: 
 // ── Leader choice ──
 let myLeader = -1;   // -1 = random
 try { const v = localStorage.getItem('frontier-leader'); if (v !== null && LEADERS[+v]) myLeader = +v; } catch (e) { }
-// The Dark Emperor (last in LEADERS) is unlocked by winning a game on Impossible (kept in this browser),
-// or by playing under the name Former Coach. He picks two leaders whose bonuses and powers he gets.
+// The Dark Emperor (last in LEADERS) is unlocked by winning a game on Impossible or reaching Champion in
+// Ranked (both kept in this browser), or by playing under the name Former Coach. He picks two leaders whose bonuses and powers he gets.
 const EMP = FrontierCore.EMPEROR_ID;
-const emperorWon = () => { try { return localStorage.getItem('frontier-emperor') === '1'; } catch (e) { return false; } };
+const emperorWon = () => { try { return localStorage.getItem('frontier-emperor') === '1' || RK.tier >= RK.TIERS.length - 1; } catch (e) { return false; } };
 const emperorUnlocked = () => emperorWon() || $('nameIn').value.trim() === 'Former Coach';
 let empCombo = [0, 1];
 try { const c = JSON.parse(localStorage.getItem('frontier-emperor-combo')); if (Array.isArray(c) && c.length === 2 && c.every(FrontierCore.isLeader) && c[0] !== c[1]) empCombo = c; } catch (e) { }
-let randomLeader = Math.random() * EMP | 0;   // never the Dark Emperor
-const leaderPick = () => myLeader === EMP && !emperorUnlocked() ? randomLeader : myLeader >= 0 ? myLeader : randomLeader;
+// Leaders you can play as unlock with your Frontier rank: 5 to start, more at every rank, all of them at
+// Champion (with the Dark Emperor). Computer nations can still be anyone.
+const UNLOCK_FIRST = [1, 2, 6, 5, 8];   // Caesar, Cleopatra, Lincoln, Victoria, Qin Shi Huang: easy to learn
+const UNLOCK_ORDER = [...UNLOCK_FIRST, ...LEADERS.slice(0, EMP).map((L, i) => i).filter(i => !UNLOCK_FIRST.includes(i))];
+const UNLOCKS = [5, 12, 20, 30, 40, EMP];   // how many leaders each rank has unlocked
+const unlockRank = i => UNLOCKS.findIndex(n => UNLOCK_ORDER.indexOf(i) < n);   // the rank that unlocks leader i
+const leaderUnlocked = i => i === EMP ? emperorUnlocked() : i >= 0 && unlockRank(i) <= RK.tier;
+const randomUnlocked = () => UNLOCK_ORDER[Math.random() * UNLOCKS[RK.tier] | 0];   // never the Dark Emperor
+let randomLeader = randomUnlocked();
+const leaderPick = () => myLeader >= 0 && leaderUnlocked(myLeader) ? myLeader : randomLeader;
 // What the game and the server are told: the leader, and for the Dark Emperor his two leaders
 const leaderInfo = () => ({ leader: leaderPick(), combo: leaderPick() === EMP ? empCombo : undefined });
 const STYLES = FrontierCore.STYLES;
 function showLeaderChoice() {
-  if (myLeader === EMP && !emperorUnlocked()) myLeader = -1;
+  if (myLeader >= 0 && !leaderUnlocked(myLeader)) myLeader = -1;
   const L = LEADERS[myLeader], emp = myLeader === EMP;
   $('leaderBtn').classList.toggle('emp', emp);
   $('leaderImg').src = picURL(null, myLeader);
@@ -2366,15 +2388,18 @@ function renderPicker() {
         <p>Pick two leaders. You get both their always-on bonuses, and your ultimate, <b>&#9889; ${esc(L.power.name)}</b>, unleashes both their powers at once (it recharges as slowly as the slower one). But your attacks advance <b>30% slower</b> and your troop cap is <b>10% lower</b>. Only one Dark Emperor per game.</p>` +
         (open ? `<div class="empPick"><label>First crown<select id="empA">${opts(empCombo[0])}</select></label><label>Second crown<select id="empB">${opts(empCombo[1])}</select></label></div>
           ${abilityText(FrontierCore.emperorLeader(empCombo))}`
-          : `<p style="color:#f7d46a"><b>Locked.</b> Win a game on Impossible to unlock the Dark Emperor.</p>`)
-      : L ? `<b class="nm">${esc(L.name)}</b> · ${esc(L.civ)} · <span style="color:#f7d46a;font-weight:800">${esc(L.style)}</span>${abilityText(L)}`
-       : '<b class="nm">Random leader</b><p>You get a different leader, with their own bonus and power, every game.</p>') +
-    `</div><button class="dbtn" id="pickGo" ${emp && !open ? 'disabled' : ''}>PLAY AS ${esc(L ? L.name.toUpperCase() : 'RANDOM')}</button>`;
+          : `<p style="color:#f7d46a"><b>Locked.</b> Win a game on Impossible, or reach Champion in Ranked, to unlock the Dark Emperor.</p>`)
+      : L ? `<b class="nm">${esc(L.name)}</b> · ${esc(L.civ)} · <span style="color:#f7d46a;font-weight:800">${esc(L.style)}</span>${abilityText(L)}` +
+        (leaderUnlocked(pickSel) ? '' : `<p style="color:#f7d46a"><b>Locked.</b> ${RK.emblem(unlockRank(pickSel), 18)} Reach <b>${RK.TIERS[unlockRank(pickSel)].name}</b> in Ranked to play as ${esc(L.name)}. You're ${RK.tierName} now.</p>`)
+       : '<b class="nm">Random leader</b><p>You get a different leader from the ones you have unlocked, with their own bonus and power, every game.</p>') +
+    `</div><button class="dbtn" id="pickGo" ${pickSel >= 0 && !leaderUnlocked(pickSel) ? 'disabled' : ''}>PLAY AS ${esc(L ? L.name.toUpperCase() : 'RANDOM')}</button>`;
   const cards = LEADERS.map((L, i) => [L, i]).filter(([L, i]) => i !== EMP && (pickStyle === 'All' || L.style === pickStyle));
   const E = LEADERS[EMP];
   $('pickGrid').innerHTML = (pickStyle === 'All' ? `<button class="pcard ${pickSel < 0 ? 'on' : ''}" data-l="-1"><img src="${picURL(null, -1)}" alt=""><b>Random</b><small>Surprise me</small></button>
-      <button class="pcard emp ${emp ? 'on' : ''} ${open ? '' : 'locked'}" data-l="${EMP}"><img src="${picURL(null, EMP)}" alt=""><b>${esc(E.name)}</b><small>${open ? esc(E.civ) : '&#128274; Win on Impossible'}</small></button>` : '') +
-    cards.map(([L, i]) => `<button class="pcard ${pickSel === i ? 'on' : ''}" data-l="${i}"><img src="${picURL(null, i)}" alt=""><b>${esc(L.name)}</b><small>${esc(L.civ)}</small></button>`).join('');
+      <button class="pcard emp ${emp ? 'on' : ''} ${open ? '' : 'locked'}" data-l="${EMP}"><img src="${picURL(null, EMP)}" alt=""><b>${esc(E.name)}</b><small>${open ? esc(E.civ) : '&#128274; Win on Impossible or reach Champion'}</small></button>` : '') +
+    cards.sort((a, b) => leaderUnlocked(b[1]) - leaderUnlocked(a[1]) || unlockRank(a[1]) - unlockRank(b[1]))
+      .map(([L, i]) => { const open = leaderUnlocked(i), r = unlockRank(i);
+        return `<button class="pcard ${pickSel === i ? 'on' : ''} ${open ? '' : 'locked'}" data-l="${i}"><img src="${picURL(null, i)}" alt=""><b>${esc(L.name)}</b><small>${open ? esc(L.civ) : RK.emblem(r, 13) + ' ' + RK.TIERS[r].name}</small></button>`; }).join('');
 }
 $('pick').addEventListener('change', e => {
   if (e.target.id !== 'empA' && e.target.id !== 'empB') return;
@@ -2390,7 +2415,7 @@ $('pick').onclick = e => {
   if (st) { pickStyle = st.dataset.style; renderPicker(); return; }
   const b = e.target.closest('[data-l]');
   if (b) { pickSel = +b.dataset.l; renderPicker(); return; }
-  if (!e.target.closest('#pickGo') || (pickSel === EMP && !emperorUnlocked())) return;
+  if (!e.target.closest('#pickGo') || (pickSel >= 0 && !leaderUnlocked(pickSel))) return;
   myLeader = pickSel;
   try { if (myLeader >= 0) localStorage.setItem('frontier-leader', myLeader); else localStorage.removeItem('frontier-leader'); } catch (e) { }
   showLeaderChoice();
@@ -2462,7 +2487,7 @@ $('rkStartBtn').onclick = () => {
   const game = FrontierCore.createGame({ cfg, humans: [{ name: playerName(), ...leaderInfo() }], allowStartNow: true, hooks });
   initGame(game, 1, 'sp');
   rankedGame = true;
-  randomLeader = Math.random() * LEADERS.length | 0;
+  randomLeader = randomUnlocked();
 };
 $('startBtn').onclick = () => {
   rankedGame = false;
@@ -2471,7 +2496,7 @@ $('startBtn').onclick = () => {
   paintReady = false;
   const game = FrontierCore.createGame({ cfg, humans: [{ name: playerName(), ...leaderInfo() }], allowStartNow: true, hooks });
   initGame(game, 1, 'sp');
-  randomLeader = Math.random() * LEADERS.length | 0;
+  randomLeader = randomUnlocked();
 };
 $('againBtn').onclick = backToMenu;
 $('watchBtn').onclick = () => $('endOv').classList.add('hidden');
