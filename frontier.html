@@ -2151,11 +2151,7 @@ function showEnd(winnerId) {
   $('endTitle').style.color = won ? '#2ecc71' : '#e74c3c';
   const lines = [];
   if (won) lines.push(`You control ${(p.tiles / G.landTotal * 100).toFixed(1)}% of the land.`);
-  if (won && G.cfg && G.cfg.diff === 'impossible' && !emperorWon()) {
-    try { localStorage.setItem('frontier-emperor', '1'); } catch (e) { }
-    lines.push('<b style="color:#d9b8ff;text-shadow:0 0 8px #8e44ff">&#128081; You unlocked the Dark Emperor!</b> Choose him under Your leader.');
-  }
-  else if (winner) lines.push(`<b>${esc(winner.name)}</b> has conquered the world.`);
+  if (winner) lines.push(`<b>${esc(winner.name)}</b> has conquered the world.`);
   else lines.push('Your nation has fallen.');
   lines.push(`Time: ${fmtTime(G.tick - (G.immunityUntil - IMMUNITY_TICKS))} · Players eliminated: ${p.kills || 0}`);
   $('endText').innerHTML = lines.join('<br>');
@@ -2165,7 +2161,6 @@ function showEnd(winnerId) {
     let extra = '';
     if (r.promoted) extra += `<div style="margin-top:0.5rem;color:#f7d46a;font-weight:800">${UNLOCKS[r.to] - UNLOCKS[r.from]} new leaders unlocked! Pick one under Your leader.</div>`;
     if (r.promoted && r.to === RK.TIERS.length - 1) {
-      try { localStorage.setItem('frontier-emperor', '1'); } catch (e) { }
       extra += '<div style="margin-top:0.6rem"><b style="color:#d9b8ff;text-shadow:0 0 8px #8e44ff">&#128081; Champion unlocks the Dark Emperor!</b> Choose him under Your leader.</div>';
     }
     $('endText').innerHTML += '<div style="margin-top:0.9rem">' + RK.resultHTML(r) + extra + '</div>';
@@ -2338,11 +2333,11 @@ $('nameIn').addEventListener('change', () => { showLeaderChoice(); netSend({ t: 
 // ── Leader choice ──
 let myLeader = -1;   // -1 = random
 try { const v = localStorage.getItem('frontier-leader'); if (v !== null && LEADERS[+v]) myLeader = +v; } catch (e) { }
-// The Dark Emperor (last in LEADERS) is unlocked by winning a game on Impossible or reaching Champion in
-// Ranked (both kept in this browser), or by playing under the name Former Coach. He picks two leaders whose bonuses and powers he gets.
+// The Dark Emperor (last in LEADERS) is unlocked only by reaching Champion in Frontier's Ranked ladder
+// (kept in this browser). Older unlocks (an Impossible win, the Former Coach name) no longer count. He picks two leaders whose bonuses and powers he gets.
 const EMP = FrontierCore.EMPEROR_ID;
-const emperorWon = () => { try { return localStorage.getItem('frontier-emperor') === '1' || RK.tier >= RK.TIERS.length - 1; } catch (e) { return false; } };
-const emperorUnlocked = () => emperorWon() || $('nameIn').value.trim() === 'Former Coach';
+try { localStorage.removeItem('frontier-emperor'); } catch (e) { }   // the old Impossible-win unlock
+const emperorUnlocked = () => RK.tier >= RK.TIERS.length - 1;
 let empCombo = [0, 1];
 try { const c = JSON.parse(localStorage.getItem('frontier-emperor-combo')); if (Array.isArray(c) && c.length === 2 && c.every(FrontierCore.isLeader) && c[0] !== c[1]) empCombo = c; } catch (e) { }
 // Leaders you can play as unlock with your Frontier rank: 5 to start, more at every rank, all of them at
@@ -2388,7 +2383,7 @@ function renderPicker() {
         <p>Pick two leaders. You get both their always-on bonuses, and your ultimate, <b>&#9889; ${esc(L.power.name)}</b>, unleashes both their powers at once (it recharges as slowly as the slower one). But your attacks advance <b>30% slower</b> and your troop cap is <b>10% lower</b>. Only one Dark Emperor per game.</p>` +
         (open ? `<div class="empPick"><label>First crown<select id="empA">${opts(empCombo[0])}</select></label><label>Second crown<select id="empB">${opts(empCombo[1])}</select></label></div>
           ${abilityText(FrontierCore.emperorLeader(empCombo))}`
-          : `<p style="color:#f7d46a"><b>Locked.</b> Win a game on Impossible, or reach Champion in Ranked, to unlock the Dark Emperor.</p>`)
+          : `<p style="color:#f7d46a"><b>Locked.</b> ${RK.emblem(RK.TIERS.length - 1, 18)} Reach <b>Champion</b> in Ranked to unlock the Dark Emperor. You're ${RK.tierName} now.</p>`)
       : L ? `<b class="nm">${esc(L.name)}</b> · ${esc(L.civ)} · <span style="color:#f7d46a;font-weight:800">${esc(L.style)}</span>${abilityText(L)}` +
         (leaderUnlocked(pickSel) ? '' : `<p style="color:#f7d46a"><b>Locked.</b> ${RK.emblem(unlockRank(pickSel), 18)} Reach <b>${RK.TIERS[unlockRank(pickSel)].name}</b> in Ranked to play as ${esc(L.name)}. You're ${RK.tierName} now.</p>`)
        : '<b class="nm">Random leader</b><p>You get a different leader from the ones you have unlocked, with their own bonus and power, every game.</p>') +
@@ -2396,7 +2391,7 @@ function renderPicker() {
   const cards = LEADERS.map((L, i) => [L, i]).filter(([L, i]) => i !== EMP && (pickStyle === 'All' || L.style === pickStyle));
   const E = LEADERS[EMP];
   $('pickGrid').innerHTML = (pickStyle === 'All' ? `<button class="pcard ${pickSel < 0 ? 'on' : ''}" data-l="-1"><img src="${picURL(null, -1)}" alt=""><b>Random</b><small>Surprise me</small></button>
-      <button class="pcard emp ${emp ? 'on' : ''} ${open ? '' : 'locked'}" data-l="${EMP}"><img src="${picURL(null, EMP)}" alt=""><b>${esc(E.name)}</b><small>${open ? esc(E.civ) : '&#128274; Win on Impossible or reach Champion'}</small></button>` : '') +
+      <button class="pcard emp ${emp ? 'on' : ''} ${open ? '' : 'locked'}" data-l="${EMP}"><img src="${picURL(null, EMP)}" alt=""><b>${esc(E.name)}</b><small>${open ? esc(E.civ) : RK.emblem(RK.TIERS.length - 1, 13) + ' Champion'}</small></button>` : '') +
     cards.sort((a, b) => leaderUnlocked(b[1]) - leaderUnlocked(a[1]) || unlockRank(a[1]) - unlockRank(b[1]))
       .map(([L, i]) => { const open = leaderUnlocked(i), r = unlockRank(i);
         return `<button class="pcard ${pickSel === i ? 'on' : ''} ${open ? '' : 'locked'}" data-l="${i}"><img src="${picURL(null, i)}" alt=""><b>${esc(L.name)}</b><small>${open ? esc(L.civ) : RK.emblem(r, 13) + ' ' + RK.TIERS[r].name}</small></button>`; }).join('');
