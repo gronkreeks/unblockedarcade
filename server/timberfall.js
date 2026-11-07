@@ -9,6 +9,7 @@ const Core = require('../timberfall-core.js');
 // Same idea as Frontier's CORE_HASH: the page won't start an online game against a server
 // running different rules. Render only redeploys when server/ changes, so touch this file
 // after editing ../timberfall-core.js.
+// Rules version: Timberfall v2 (bot mix weights for ranked).
 const CORE_HASH = crypto.createHash('sha1').update(fs.readFileSync(require.resolve('../timberfall-core.js'))).digest('hex').slice(0, 8);
 
 const MAX_HUMANS = 8;

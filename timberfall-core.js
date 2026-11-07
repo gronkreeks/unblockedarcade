@@ -303,7 +303,8 @@ function applyFull(W, f) {
 }
 
 // ──────────── Game ────────────
-// cfg: { mode: 'solo'|'duo'|'squad', diff: one of DIFFS or 'mixed', teamUp: humans share teams }
+// cfg: { mode: 'solo'|'duo'|'squad', diff: one of DIFFS or 'mixed', teamUp: humans share teams,
+//        mix: optional [easy, medium, hard, impossible] weights for 'mixed' (ranked uses these) }
 // humans: [{ name }]. The first humans get player ids 1, 2, …
 function cleanCfg(c) {
   c = c || {};
@@ -311,6 +312,7 @@ function cleanCfg(c) {
     mode: TEAM_SIZES[c.mode] ? c.mode : 'solo',
     diff: DIFFS.includes(c.diff) || c.diff === 'mixed' ? c.diff : 'medium',
     teamUp: c.teamUp !== false,
+    mix: Array.isArray(c.mix) && c.mix.length === DIFFS.length && c.mix.every(n => typeof n === 'number' && n >= 0 && n <= 100) && c.mix.some(n => n > 0) ? c.mix.slice() : undefined,
   };
 }
 function createGame({ seed, cfg, humans, hooks }) {
@@ -346,7 +348,11 @@ function createGame({ seed, cfg, humans, hooks }) {
   });
   for (let t = 1; t <= nTeams; t++) while (teamCount[t] < size) {
     let key = cfg.diff;
-    if (key === 'mixed') { let x = rnd() * 100; key = DIFFS[MIXED_WEIGHTS.findIndex(w => (x -= w) < 0)] || 'medium'; }
+    if (key === 'mixed') {
+      const wts = cfg.mix || MIXED_WEIGHTS;
+      let x = rnd() * wts.reduce((a, b) => a + b, 0);
+      key = DIFFS[wts.findIndex(w => (x -= w) < 0)] || 'medium';
+    }
     addPlayer(names[players.length % names.length], t, { ...BOT[key], key });
   }
 
