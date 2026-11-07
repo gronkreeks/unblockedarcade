@@ -19,16 +19,80 @@
   const modded = () => { try { return !!(window.EduMod || window.EduModBind || window.EduModActive) || Object.keys(window).some(k => /^__edu/i.test(k)); } catch (e) { return false; } };
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-  // Shield emblem with the rank's letter (a crown for Champion)
+  // Rank emblems (original designs). Each rank has its own silhouette and gets more elaborate as you
+  // climb: plain shield → finned shield → laurel crest → winged crest with a gem → cut diamond with
+  // crystal shards → crowned, winged crest on a starburst. Metal gradient, a focal piece, a top shine,
+  // and a dark outline so they read at any size and on any background.
+  const EM = [
+    { m1: '#ffd2a6', m2: '#c77a3a', m3: '#7a4119', ink: '#3b1d08' },              // bronze
+    { m1: '#ffffff', m2: '#c3ccd8', m3: '#6e7a8a', ink: '#2a323d' },              // silver
+    { m1: '#fff3b0', m2: '#f2c230', m3: '#a86f00', ink: '#4a3000' },              // gold
+    { m1: '#e6fffb', m2: '#7fe3d6', m3: '#1d8a80', ink: '#073a36', g1: '#ffffff', g2: '#3fd6c6', g3: '#0f7a71' },   // platinum
+    { m1: '#eef6ff', m2: '#8fb8ff', m3: '#2f5bd6', ink: '#0d2463', g1: '#ffffff', g2: '#9cc8ff', g3: '#3466e8' },   // diamond
+    { m1: '#fff3c4', m2: '#ffc93a', m3: '#c27a00', ink: '#2c0b4d', g1: '#fff0fb', g2: '#ff7ccc', g3: '#8a2fd6', s1: '#c05cff', s2: '#5a1aa8' }, // champion
+  ];
   function emblem(tier, size) {
-    const t = TIERS[tier], id = 'rkg' + tier + '_' + (Math.random() * 1e6 | 0);
-    const mark = tier === TOP
-      ? '<path d="M15 31 L13 20 L19 25 L24 16 L29 25 L35 20 L33 31 Z" fill="#fff" stroke="rgba(0,0,0,0.35)" stroke-width="1.2" stroke-linejoin="round"/>'
-      : `<text x="24" y="31" text-anchor="middle" font-family="'Arial Black', Arial, sans-serif" font-size="17" font-weight="900" fill="#fff" stroke="rgba(0,0,0,0.35)" stroke-width="1" paint-order="stroke">${t.name[0]}</text>`;
-    return `<svg class="rk-emblem" width="${size}" height="${size}" viewBox="0 0 48 48" aria-hidden="true">
-      <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${t.a}"/><stop offset="1" stop-color="${t.b}"/></linearGradient></defs>
-      <path d="M24 3 L42 9 V23 C42 34 34 41 24 45 C14 41 6 34 6 23 V9 Z" fill="url(#${id})" stroke="rgba(255,255,255,0.75)" stroke-width="2"/>
-      ${mark}</svg>`;
+    const c = EM[tier], u = 'rk' + tier + '_' + (Math.random() * 1e9 | 0);
+    const lin = (id, a, b, cc, x2, y2) => `<linearGradient id="${u}${id}" x1="0" y1="0" x2="${x2 || 0}" y2="${y2 == null ? 1 : y2}"><stop offset="0" stop-color="${a}"/><stop offset="0.5" stop-color="${b}"/><stop offset="1" stop-color="${cc}"/></linearGradient>`;
+    const M = `url(#${u}m)`, D = `url(#${u}d)`, G = `url(#${u}g)`;
+    const defs = lin('m', c.m1, c.m2, c.m3) + lin('d', c.m3, c.m2, c.m3, 1, 1) + (c.g1 ? lin('g', c.g1, c.g2, c.g3, 1, 1) : '') +
+      (c.s1 ? lin('s', c.s1, c.s2, c.s2) : '');
+    const ink = c.ink, line = `stroke="${ink}" stroke-width="2.2" stroke-linejoin="round"`;
+    const mirror = s => `${s}<g transform="translate(64 0) scale(-1 1)">${s}</g>`;
+    const shield = (d, inner) => `<path d="${d}" fill="${M}" ${line}/>` + (inner ? `<path d="${inner}" fill="${D}" opacity="0.55"/>` : '');
+    const SH = 'M32 7 L50 13 V29 C50 41 42 50 32 56 C22 50 14 41 14 29 V13 Z';
+    const SH_IN = 'M32 12.5 L45 17 V29 C45 38 39.5 45 32 49.5 C24.5 45 19 38 19 29 V17 Z';
+    const shine = '<path d="M17 14.6 L32 9.6 V19 C25 20.5 20 22.5 17 25 Z" fill="#fff" opacity="0.28"/>';
+    const chev = y => `<path d="M23 ${y} L32 ${y + 6} L41 ${y} V${y + 5.5} L32 ${y + 11.5} L23 ${y + 5.5} Z" fill="${c.m1}" ${line} stroke-width="1.6"/>`;
+    const star = (cx, cy, r, fill, sw) => {
+      let p = '';
+      for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, rr = k % 2 ? r * 0.45 : r; p += (k ? 'L' : 'M') + (cx + rr * Math.cos(a)).toFixed(2) + ' ' + (cy + rr * Math.sin(a)).toFixed(2); }
+      return `<path d="${p}Z" fill="${fill}" stroke="${ink}" stroke-width="${sw}" stroke-linejoin="round"/>`;
+    };
+    const gem = (cx, cy, w, h) => `<path d="M${cx} ${cy - h} L${cx + w} ${cy - h * 0.15} L${cx} ${cy + h} L${cx - w} ${cy - h * 0.15} Z" fill="${G}" stroke="${ink}" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M${cx - w} ${cy - h * 0.15} H${cx + w} M${cx} ${cy - h} L${cx - w * 0.4} ${cy - h * 0.15} L${cx} ${cy + h} L${cx + w * 0.4} ${cy - h * 0.15} Z" fill="none" stroke="${ink}" stroke-width="0.8" opacity="0.55"/>
+      <path d="M${cx} ${cy - h} L${cx - w * 0.4} ${cy - h * 0.15} L${cx - w} ${cy - h * 0.15} Z" fill="#fff" opacity="0.55"/>`;
+    const wing = (o) => mirror(`<path d="M${17 + o} 24 C10 18 4 18 1.5 23 C6 23.5 8.5 25 10.5 27 C5 27.5 2.5 31 2 35 C6.5 33 9.5 33 12.5 34 C8 36.5 6.5 40 7 44 C11 40.5 14.5 39.5 ${18 + o} 39.5 Z" fill="${M}" ${line} stroke-width="1.8"/>`);
+    let body = '';
+    switch (tier) {
+      case 0:   // Bronze: plain shield, one chevron
+        body = shield(SH, SH_IN) + chev(27) + shine +
+          [[20.5, 17.5], [43.5, 17.5], [32, 46]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.7" fill="${c.m1}" stroke="${ink}" stroke-width="1"/>`).join(''); break;
+      case 1:   // Silver: shield with side fins, two chevrons and a spark on top
+        body = mirror(`<path d="M15 16 L5 11 L8 24 L14 30 Z" fill="${M}" ${line} stroke-width="1.8"/>`) +
+          shield(SH, SH_IN) + chev(22) + chev(31) + shine + star(32, 7.5, 5, c.m1, 1.4); break;
+      case 2: { // Gold: laurel wreath around a shield with a star
+        // Leaves along an arc round the left side (mirrored for the right), each turned to follow the curve
+        let leaves = '';
+        for (const deg of [112, 136, 160, 184, 208]) {
+          const a = deg * Math.PI / 180, x = (32 + 25 * Math.cos(a)).toFixed(2), y = (33 + 25 * Math.sin(a)).toFixed(2);
+          leaves += `<ellipse cx="${x}" cy="${y}" rx="3.2" ry="7" transform="rotate(${deg} ${x} ${y})" fill="${M}" stroke="${ink}" stroke-width="1.4"/>`;
+        }
+        body = mirror(leaves) + shield(SH, SH_IN) + star(32, 31, 10, c.m1, 1.7) + shine; break;
+      }
+      case 3:   // Platinum: angular crest with wings and a cut gem
+        body = wing(0) + shield('M32 5 L50 13 V33 L32 58 L14 33 V13 Z', 'M32 10.5 L45 16.5 V32 L32 51 L19 32 V16.5 Z') +
+          gem(32, 31, 9, 13) + '<path d="M16.6 14.8 L32 8 V18 L16.6 25 Z" fill="#fff" opacity="0.28"/>'; break;
+      case 4:   // Diamond: a cut diamond with crystal shards
+        body = mirror(`<path d="M15 24 L3 15 L8 30 Z" fill="${G}" ${line} stroke-width="1.6"/><path d="M17 33 L5 38 L19 41 Z" fill="${G}" ${line} stroke-width="1.6"/>`) +
+          `<path d="M13 23 L22 10 H42 L51 23 L32 58 Z" fill="${G}" ${line}/>
+          <path d="M22 10 L27 23 L32 10 L37 23 L42 10 M13 23 H51 M27 23 L32 58 L37 23" fill="none" stroke="${ink}" stroke-width="1.1" opacity="0.6"/>
+          <path d="M22 10 L27 23 H13 Z M32 10 L27 23 H37 Z" fill="#fff" opacity="0.5"/><path d="M13 23 H27 L32 58 Z" fill="#fff" opacity="0.18"/>` +
+          star(46, 9, 4.5, '#fff', 1); break;
+      case 5: { // Champion: starburst, wings, crowned crest with a gem
+        // A 12-point starburst behind everything, with long and short rays
+        let rays = '';
+        for (let k = 0; k < 24; k++) { const a = -Math.PI / 2 + k * Math.PI / 12, r = k % 2 ? 15 : (k % 4 ? 26 : 31); rays += (k ? 'L' : 'M') + (32 + r * Math.cos(a)).toFixed(2) + ' ' + (33 + r * Math.sin(a)).toFixed(2); }
+        body = `<path d="${rays}Z" fill="${G}" stroke="${ink}" stroke-width="1.2" stroke-linejoin="round"/>` + wing(2) +
+          `<path d="M32 17 L46 22.5 V35 C46 44 40 50 32 55 C24 50 18 44 18 35 V22.5 Z" fill="url(#${u}s)" ${line}/>` +
+          gem(32, 35, 7.5, 11) +
+          `<path d="M20 20 L21.5 7 L27 12.5 L32 3 L37 12.5 L42.5 7 L44 20 Z" fill="${M}" ${line} stroke-width="1.8"/>
+          <circle cx="21.5" cy="7" r="2" fill="${c.g2}" stroke="${ink}" stroke-width="1"/><circle cx="32" cy="3.4" r="2.2" fill="${c.g2}" stroke="${ink}" stroke-width="1"/><circle cx="42.5" cy="7" r="2" fill="${c.g2}" stroke="${ink}" stroke-width="1"/>
+          <path d="M21 16 H43" stroke="${ink}" stroke-width="1.2" opacity="0.5"/>`;
+        break;
+      }
+    }
+    return `<svg class="rk-emblem" width="${size}" height="${size}" viewBox="0 0 64 64" aria-hidden="true"><defs>${defs}</defs>${body}</svg>`;
   }
 
   const CSS = `
