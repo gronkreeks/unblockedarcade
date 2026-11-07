@@ -237,6 +237,25 @@
 
     .section { display: flex; flex-direction: column; align-items: center; }
     .section + .section { margin-top: 2.6rem; }
+    /* ── Ranked profile ── */
+    .rkp { margin-top: 2.8rem; display: flex; flex-direction: column; align-items: center; scroll-margin-top: 1rem; }
+    .rkp-box { width: 100%; max-width: 1000px; background: var(--navy-3); border: 1px solid var(--line); border-radius: 20px; padding: 1rem 1.1rem 0.8rem; }
+    .rkp-sum { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1.4rem; justify-content: center; font-size: 0.82rem; font-weight: 700; color: var(--muted); margin-bottom: 0.9rem; text-align: center; }
+    .rkp-sum b { color: #fff; }
+    .rkp-sum .rk-emblem { vertical-align: -5px; margin-right: 3px; }
+    .rkp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.7rem; }
+    .rkp-tile { display: flex; align-items: center; gap: 0.7rem; padding: 0.7rem 0.8rem; border-radius: 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--line); text-decoration: none; color: #fff; transition: transform 0.15s, background 0.15s; min-width: 0; }
+    .rkp-tile:hover { transform: translateY(-3px); background: rgba(255,255,255,0.09); }
+    .rkp-tile .rk-emblem { flex: none; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.35)); }
+    .rkp-tile.new .rk-emblem { opacity: 0.4; filter: grayscale(0.7); }
+    .rkp-info { min-width: 0; }
+    .rkp-game { font-size: 0.66rem; font-weight: 900; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+    .rkp-rank { font-weight: 900; font-size: 1.05rem; line-height: 1.2; }
+    .rkp-meta { font-size: 0.72rem; font-weight: 700; color: var(--muted); margin-top: 0.1rem; }
+    .rkp-pips { display: flex; gap: 3px; margin-top: 0.35rem; }
+    .rkp-pips i { width: 16px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.18); }
+    .rkp-pips i.on { background: var(--c); box-shadow: 0 0 5px var(--c); }
+    .rkp-note { text-align: center; font-size: 0.7rem; font-weight: 700; color: var(--muted); margin-top: 0.7rem; opacity: 0.75; }
     .section-label { color: rgba(255,255,255,0.6); font-size: 0.78rem; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; text-align: center; margin-bottom: 1.3rem; }
     .more {
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.35rem;
@@ -467,6 +486,7 @@
     <div class="hero-btns">
       <a class="btn btn-gold" href="#games"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg>Play now</a>
       <a class="btn btn-glass" href="mission.html">Our Mission</a>
+      <a class="btn btn-glass" href="#profile">Ranked profile</a>
       <a class="btn btn-glass" href="#chatroom"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg>Chatroom</a>
     </div>
     <div class="hero-facts"><span>17 free games</span><span>No login</span><span>No downloads</span></div>
@@ -625,6 +645,15 @@
           </button>
         </div>
       </section>
+
+      <div class="rkp" id="profile">
+        <h2 class="section-label">Your Ranked Profile</h2>
+        <div class="rkp-box">
+          <div class="rkp-sum" id="rkpSum"></div>
+          <div class="rkp-grid" id="rkpGrid"></div>
+          <p class="rkp-note">Your ranks are saved in this browser.</p>
+        </div>
+      </div>
     </div>
   </main>
 
@@ -832,6 +861,24 @@
     pill.querySelector('.rk-pill-t').textContent = played ? rk.tierName : 'Ranked';
     pill.title = played ? `Your rank: ${rk.tierName}` : 'Ranked: climb from Bronze to Champion';
   }
+
+  // Ranked profile: every ranked game at a glance. Wins needed per rank match each game's Ranked.create.
+  const GAMES = [['volley', 'Volley', [2, 3, 3, 4, 5]], ['boxing', 'Boxing', [2, 3, 3, 4, 5]], ['timberfall', 'Timberfall', [1, 2, 2, 2, 3]],
+    ['frontier', 'Frontier', [1, 2, 2, 2, 3]], ['chess', 'Chess', [1, 2, 2, 3, 3]]];
+  const T = Ranked.TIERS, TOP = T.length - 1;
+  let best = -1, wins = 0, played = 0;
+  document.getElementById('rkpGrid').innerHTML = GAMES.map(([id, name, need]) => {
+    const rk = Ranked.create(id, { wins: need }), st = rk.state, has = st.w + st.l > 0, t = rk.tier, c = T[t].a;
+    if (has) { played++; wins += st.w; best = Math.max(best, t); }
+    const pips = has && st.need ? `<div class="rkp-pips" style="--c:${c}">${Array.from({ length: st.need }, (_, i) => `<i class="${i < st.wins ? 'on' : ''}"></i>`).join('')}</div><div class="rkp-meta">${st.wins}/${st.need} wins to ${T[t + 1].name}</div>`
+      : has ? `<div class="rkp-meta">${st.champ} Champion win${st.champ === 1 ? '' : 's'}</div>` : '';
+    const meta = has ? `${st.w} W · ${st.l} L` : 'Not played yet';
+    return `<a class="rkp-tile ${has ? '' : 'new'}" href="${id}.html">${rk.emblem(t, 46)}<div class="rkp-info"><div class="rkp-game">${name}</div>
+      <div class="rkp-rank" style="color:${has ? c : 'rgba(255,255,255,0.7)'}">${has ? rk.tierName : 'Unranked'}</div><div class="rkp-meta">${meta}</div>${pips}</div></a>`;
+  }).join('');
+  document.getElementById('rkpSum').innerHTML = played
+    ? `<span>Highest rank: ${Ranked.emblem(best, 22)}<b style="color:${T[best].a}">${T[best].name}</b></span><span>Ranked wins: <b>${wins}</b></span><span>Games ranked: <b>${played} of ${GAMES.length}</b></span>`
+    : '<span>Play a <b>Ranked</b> match in any of these games to start climbing from Bronze to Champion.</span>';
 })();
 </script>
 <script src="chat-alerts.js"></script>
