@@ -9,8 +9,6 @@
 -->
 <html lang="en">
 <head>
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9603713606760464"
-     crossorigin="anonymous"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="icon" href="favicon.ico">
@@ -299,7 +297,6 @@
     .chatBell { background: none; border: none; cursor: pointer; font-size: 0.75rem; padding: 0 0.4rem; opacity: 0.8; }
     .chatBell:hover { opacity: 1; }
     .chatErr { color: #ffb08a; font-size: 0.68rem; font-weight: 700; min-height: 0.9rem; margin-top: 0.2rem; }
-    .chatGate { font-size: 0.75rem; line-height: 1.5; color: rgba(255,255,255,0.7); display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start; }
     @media (max-width: 760px) { .chat.float { bottom: 186px; width: min(240px, calc(100% - 20px)); } .chat.float .chatLog { height: 80px; } }
 
     /* Leader portraits */
@@ -731,11 +728,7 @@
       <div id="chat" class="chat">
         <div class="chatHd" id="chatHd"><span>Chat</span><span><button class="chatBell" id="chatBell"></button><span id="chatTog">&#9662;</span></span></div>
         <div id="chatBody">
-          <div id="chatGate" class="chatGate">
-            Chat is only for players aged 13 and older. Be kind, and never share personal info like your full name, school, address or social accounts.
-            <button class="mpbtn" id="chatEnable">I'M 13 OR OLDER · TURN ON CHAT</button>
-          </div>
-          <div id="chatMain" class="hidden">
+          <div id="chatMain">
             <div id="chatLog" class="chatLog"></div>
             <div class="chatRow"><input id="chatIn" maxlength="200" placeholder="Type a message…" autocomplete="off"><button class="mpbtn" id="chatSend">SEND</button></div>
             <div id="chatErr" class="chatErr"></div>
@@ -2333,11 +2326,11 @@ $('nameIn').addEventListener('change', () => { showLeaderChoice(); netSend({ t: 
 // ── Leader choice ──
 let myLeader = -1;   // -1 = random
 try { const v = localStorage.getItem('frontier-leader'); if (v !== null && LEADERS[+v]) myLeader = +v; } catch (e) { }
-// The Dark Emperor (last in LEADERS) is unlocked only by reaching Champion in Frontier's Ranked ladder
-// (kept in this browser). Older unlocks (an Impossible win, the Former Coach name) no longer count. He picks two leaders whose bonuses and powers he gets.
+// The Dark Emperor (last in LEADERS) is unlocked by reaching Champion in Frontier's Ranked ladder (kept in
+// this browser), or by playing under the name Former Coach. An old Impossible win no longer counts. He picks two leaders whose bonuses and powers he gets.
 const EMP = FrontierCore.EMPEROR_ID;
 try { localStorage.removeItem('frontier-emperor'); } catch (e) { }   // the old Impossible-win unlock
-const emperorUnlocked = () => RK.tier >= RK.TIERS.length - 1;
+const emperorUnlocked = () => RK.tier >= RK.TIERS.length - 1 || $('nameIn').value.trim() === 'Former Coach';
 let empCombo = [0, 1];
 try { const c = JSON.parse(localStorage.getItem('frontier-emperor-combo')); if (Array.isArray(c) && c.length === 2 && c.every(FrontierCore.isLeader) && c[0] !== c[1]) empCombo = c; } catch (e) { }
 // Leaders you can play as unlock with your Frontier rank: 5 to start, more at every rank, all of them at
@@ -2644,11 +2637,10 @@ function renderRoom() {
 }
 
 // ════════════════ Chat ════════════════
-// Lobby and in-game chat for multiplayer. The server filters every message and only delivers
-// chat to players who confirmed they're 13+ and switched it on.
-let chatOn = false, chatErrT = null;
+// Lobby and in-game chat for multiplayer. No content rules or age check: the server only tidies messages
+// (length, spacing) and delivers them to everyone in the room.
+let chatOn = true, chatErrT = null;   // chat is always on
 const chatMuted = new Set();
-try { chatOn = sessionStorage.getItem('frontier-chat') === '1'; } catch (e) { }
 function chatPlace(where) {
   const c = $('chat');
   if (where === 'hud') { $('hud').appendChild(c); c.classList.add('float'); }
@@ -2656,8 +2648,6 @@ function chatPlace(where) {
   chatRender();
 }
 function chatRender() {
-  $('chatGate').classList.toggle('hidden', chatOn);
-  $('chatMain').classList.toggle('hidden', !chatOn);
 }
 function chatClear() { $('chatLog').innerHTML = ''; }
 function chatError(msg) {
@@ -2709,13 +2699,6 @@ function chatBell() {
 }
 $('chatBell').onclick = e => { e.stopPropagation(); ChatAlerts.setEnabled(!ChatAlerts.enabled); chatBell(); };
 chatBell();
-$('chatEnable').onclick = () => {
-  if (ChatAlerts.enabled) ChatAlerts.askPermission();
-  chatOn = true;
-  try { sessionStorage.setItem('frontier-chat', '1'); } catch (e) { }
-  netSend({ t: 'chatOn', on: true });
-  chatRender();
-};
 $('chatSend').onclick = chatSendNow;
 $('chatHd').onclick = () => { $('chat').classList.toggle('min'); $('chatTog').innerHTML = $('chat').classList.contains('min') ? '&#9656;' : '&#9662;'; };
 $('chatIn').addEventListener('keydown', e => {

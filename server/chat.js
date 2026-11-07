@@ -1,87 +1,30 @@
 // Chat for EduArcade: the site-wide chatroom (index.html) and in-game chat for Frontier.
 // Nothing is written to disk. Rooms and their last few messages live in memory only and are
 // cleared when a room empties.
-// The chatroom is end-to-end encrypted (c_emsg): the server relays ciphertext it can't read, and the
-// safety filter runs in every sender's and recipient's browser (chat-safety.js). Plain c_msg from
-// older pages and Frontier chat still go through the filter here.
+// The chatroom is end-to-end encrypted (c_emsg): the server relays ciphertext it can't read. There are no
+// content rules or age limit; messages are only tidied (see tidy below).
 'use strict';
 const crypto = require('crypto');
 
-// ──────────── Safety filter ────────────
-// Roots are caught anywhere inside a word ("fucking", "bullshit"); whole words only match exactly,
-// because they hide inside normal words ("class", "grape", "peacock").
-// Everyday swearing (fuck, shit, damn…) is allowed. Slurs, sexual words and "kys"-style harassment are not.
-const ROOTS = ['cunt', 'nigg', 'nigga', 'fagg', 'whore', 'slut', 'pussy', 'wank', 'twat', 'retard', 'porn', 'penis',
-  'vagina', 'jizz', 'dildo', 'cocksuck', 'blowjob', 'handjob', 'tranny', 'kike', 'wetback', 'beaner', 'chink',
-  'faggot', 'boner', 'hentai'];
-const WORDS = new Set(['dick', 'dicks', 'cum', 'fag', 'fags', 'hoe', 'hoes', 'tit', 'tits', 'titty', 'titties',
-  'boob', 'boobs', 'sex', 'sexy', 'sexting', 'rape', 'raped', 'raping', 'cock', 'cocks', 'kys', 'nude', 'nudes',
-  'horny', 'milf', 'rapist', 'rapists', 'spic', 'coon', 'gook', 'dyke', 'nazi', 'thot', 'pedo', 'skank']);
-const SHORT_ROOTS = ['cunt', 'nigg', 'fagg', 'whore', 'slut', 'pussy', 'porn', 'dick', 'cock', 'kys'];
-const LEET = { '0': 'o', '1': 'i', '!': 'i', '|': 'i', '3': 'e', '4': 'a', '@': 'a', '5': 's', '$': 's', '7': 't', '+': 't', '8': 'b', '9': 'g' };
-const squash = w => w.replace(/(.)\1+/g, '$1');
-function core(token) {
-  return token.toLowerCase().replace(/[0-9!|@$+]/g, c => LEET[c] || c).replace(/[^a-z]/g, '');
-}
-function isBad(word) {
-  if (!word) return false;
-  const sq = squash(word);
-  if (WORDS.has(word) || WORDS.has(sq)) return true;
-  return ROOTS.some(r => word.includes(r) || sq.includes(squash(r)));
-}
-
-const URL_RE = /\b(?:https?:\/\/|www\.)\S+/gi;
-const DOMAIN_RE = /\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|gg|me|tv|co|xyz|ly|app|dev|info|biz|us|uk|au|ca|nz|link|site|online|club|fun|live|ru|cn|to|cc)\b(?:\/\S*)?/gi;
-const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/g;
-const PHONE_RE = /(?:\+?\d[\s().-]*){8,}/g;
-const TAG_RE = /\b\S+#\d{4}\b/g;
-const CONTACT_RE = /\b(snap ?chat|snap|insta(?:gram)?|discord|tik ?tok|whats ?app|kik|telegram|wechat|imessage|facetime|phone|cell|mobile|email|e-mail|socials?)\b/i;
-const ADDRESS_RE = /\b(my|your|ur|home|street|house) address\b|\bwhere do (you|u) live\b|\bwhat school do (you|u) go\b/i;
-const INTENT_RE = /\b(add|my|dm|dms|text|call|hmu|message me|pm|msg|send|whats|what's|whats your|give)\b/i;
-
+// ──────────── Text clean-up ────────────
+// No content rules: messages and names are only tidied (invisible characters stripped, spaces collapsed,
+// length capped). Nothing is filtered or blocked for what it says.
 function tidy(raw, max) {
   return String(raw == null ? '' : raw)
     .normalize('NFKC')
-    .replace(/[\u0000-\u001f\u007f​-‏‪-‮⁠-⁤﻿]/g, '')
+    .replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]/g, '')
     .replace(/\s+/g, ' ').trim().slice(0, max);
 }
 const MAX_MSG = 200;
 // Returns { ok, text } or { ok: false, reason }.
 function filterMessage(raw) {
-  // Squash runs of the same character ("!!!!!!!!", "loooooool") to 4 before applying the length cap
-  let text = tidy(String(raw == null ? '' : raw).slice(0, MAX_MSG * 4).replace(/(.)\1{4,}/gu, '$1$1$1$1'), MAX_MSG);
-  if (!text) return { ok: false, reason: 'Type a message first' };
-  if ((CONTACT_RE.test(text) && INTENT_RE.test(text)) || ADDRESS_RE.test(text)) {
-    return { ok: false, reason: "For safety, sharing contact details or social accounts isn't allowed here" };
-  }
-  text = text.replace(EMAIL_RE, '[removed]').replace(URL_RE, '[link removed]').replace(DOMAIN_RE, '[link removed]')
-    .replace(PHONE_RE, '[number removed] ').replace(TAG_RE, '[removed]').trim();
-  // Spelled-out words like "f u c k" or "s.h.i.t"
-  const letters = text.split(/[\s.,_*-]+/);
-  for (let i = 0; i < letters.length; i++) {
-    let run = '';
-    for (let j = i; j < letters.length && letters[j].length === 1; j++) run += letters[j];
-    if (run.length >= 3 && SHORT_ROOTS.some(r => core(run).includes(r))) return { ok: false, reason: 'That message was blocked by the language filter' };
-  }
-  text = text.split(/(\s+)/).map(tok => {
-    if (/^\s+$/.test(tok)) return tok;
-    return isBad(core(tok)) ? '*'.repeat(Math.min(8, Math.max(3, tok.length))) : tok;
-  }).join('');
-  if (!text.replace(/[*\s]/g, '')) return { ok: false, reason: 'That message was blocked by the language filter' };
-  // Shouting: mostly-caps long messages are lowered
-  const caps = text.replace(/[^A-Z]/g, '').length, lets = text.replace(/[^A-Za-z]/g, '').length;
-  if (lets > 12 && caps / lets > 0.7) text = text.toLowerCase();
-  return { ok: true, text };
+  const text = tidy(raw, MAX_MSG);
+  return text ? { ok: true, text } : { ok: false, reason: 'Type a message first' };
 }
-const RESERVED = /\b(admin|administrator|mod|moderator|staff|system|server|eduarcade|official|owner|teacher)\b/i;
 // Returns { ok, name } or { ok: false, reason }.
 function checkName(raw) {
-  const name = tidy(raw, 16).replace(/[^\p{L}\p{N} _.\-]/gu, '').trim();
-  if (name.length < 2) return { ok: false, reason: 'Names need at least 2 letters' };
-  if (RESERVED.test(name)) return { ok: false, reason: 'Please pick a different name' };
-  if (/\d{4,}/.test(name)) return { ok: false, reason: "Names can't contain long numbers" };
-  if (name.split(/\s+/).some(w => isBad(core(w))) || isBad(core(name))) return { ok: false, reason: 'Please pick a different name' };
-  return { ok: true, name };
+  const name = tidy(raw, 16);
+  return name.length < 2 ? { ok: false, reason: 'Names need at least 2 characters' } : { ok: true, name };
 }
 
 // Per-person flood control: short gap between messages, a burst cap, and a timeout for repeat offenders.
@@ -197,7 +140,6 @@ function createChat({ send, now, log }) {
     if (m.t === 'c_hello') {
       const until = timeouts.get(ws.ipKey) || 0;
       if (until > t) return send(ws, { t: 'c_denied', msg: `You're in a timeout for ${Math.ceil((until - t) / 60000)} more minutes.` });
-      if (m.over13 !== true) return send(ws, { t: 'c_denied', msg: 'The chatroom is only for people aged 13 and older.' });
       const nm = checkName(m.name);
       if (!nm.ok) return send(ws, { t: 'c_denied', msg: nm.reason, name: true });
       if (ws.chat) leave(ws.chat);

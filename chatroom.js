@@ -1,7 +1,7 @@
 // EduArcade Chatroom. Connects only when you press "Enter Chatroom".
 // Messages are end-to-end encrypted. Each visit makes a fresh P-256 key pair. Every message gets its
 // own AES-GCM key, wrapped separately for each person in the room with a key derived from ECDH, so the
-// server only relays ciphertext it can't read. The safety filter (chat-safety.js) runs before a message
+// server only relays ciphertext it can't read. chat-text.js tidies each message (no content rules) before a message
 // is sent and again on every message received. Reporting a message hands its key to the server so the
 // report can be checked. Nothing is saved.
 (() => {
@@ -67,12 +67,12 @@
       return td.decode(pt);
     } catch (e) { return null; }
   }
-  // Every received message goes through the safety filter before it's shown
+  // Received messages are tidied (spaces, length) before they're shown
   async function reveal(x) {
     const raw = await open(x, room.id);
     if (raw == null) return { ...x, sys: true, text: `A message from ${x.from} couldn't be decrypted` };
-    const f = ChatSafety.filterMessage(raw);
-    if (!f.ok) return { ...x, sys: true, text: `A message from ${x.from} was hidden by the safety filter` };
+    const f = ChatText.filterMessage(raw);
+    if (!f.ok) return { ...x, sys: true, text: `${x.from} sent an empty message` };
     return { ...x, text: f.text, enc: true };
   }
   function lock() {
@@ -91,6 +91,7 @@
   const err = (id, t, ok) => { $(id).textContent = t || ''; $(id).classList.toggle('ok', !!ok); };
   const hue = s => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 360; };
   const send = m => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); };
+  // over13 is still sent for servers that haven't redeployed since the age check was removed
   const hello = () => send({ t: 'c_hello', name: $('crName').value.trim(), over13: true, pub: E2E.pub || undefined });
 
   function connect() {
@@ -263,7 +264,7 @@
     if (!t) return;
     if (!ws || ws.readyState !== 1) { err('crChatErr', 'Not connected right now'); return; }
     if (E2E.on) {
-      const f = ChatSafety.filterMessage(t);
+      const f = ChatText.filterMessage(t);
       if (!f.ok) { err('crChatErr', f.reason); return; }
       try { send({ t: 'c_emsg', ...(await seal(f.text)) }); }
       catch (e) { err('crChatErr', "That message couldn't be encrypted"); return; }
@@ -277,7 +278,6 @@
   $('crEnter').onclick = async () => {
     const name = $('crName').value.trim();
     if (name.length < 2) return err('crJoinErr', 'Pick a name with at least 2 characters');
-    if (!$('crAge').checked) return err('crJoinErr', 'You need to be 13 or older to use the chatroom');
     err('crJoinErr', '');
     if (ChatAlerts.enabled) ChatAlerts.askPermission();
     try { await makeKeys(); } catch (e) { E2E.pair = null; E2E.pub = null; }

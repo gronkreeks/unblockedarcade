@@ -14,8 +14,6 @@
   <title>EduArcade</title>
   <meta name="description" content="Free educational browser games that build real skills: coordination, strategy, typing and more. No downloads, no login, no data stored.">
   <link rel="icon" href="favicon.ico">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9603713606760464"
-     crossorigin="anonymous"></script>
  <!-- Open Graph / Discord / iMessage embed -->
   <meta property="og:type"        content="website">
   <meta property="og:url"         content="https://unblockedarcade.org/">
@@ -365,7 +363,6 @@
     .cr-head h2 { font-size: 1.35rem; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; }
     .cr-head p { font-size: 0.88rem; font-weight: 600; color: var(--muted); margin-top: 0.25rem; }
     .cr-badges { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-    .cr-age { background: var(--gold); color: #000; font-weight: 900; font-size: 0.75rem; letter-spacing: 1px; padding: 0.3rem 0.8rem; border-radius: 20px; }
     .cr-e2e { display: inline-flex; align-items: center; gap: 0.35rem; background: rgba(39,174,96,0.15); border: 1.5px solid rgba(127,224,168,0.5); color: var(--mint); font-weight: 900; font-size: 0.72rem; letter-spacing: 1px; text-transform: uppercase; padding: 0.28rem 0.8rem; border-radius: 20px; }
     .cr-more-row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: flex-start; margin-bottom: 1rem; }
     .cr-more { flex: 1 1 300px; background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 14px; }
@@ -386,8 +383,6 @@
     .cr-in:focus { border-color: #5dade2; }
     .cr-code { text-transform: uppercase; letter-spacing: 6px; font-weight: 900; }
     .cr-hint { font-size: 0.78rem; font-weight: 600; color: rgba(255,255,255,0.55); line-height: 1.5; margin-bottom: 0.4rem; }
-    .cr-check { display: flex; align-items: center; gap: 0.5rem; font-size: 0.88rem; font-weight: 800; cursor: pointer; margin: 0.2rem 0 0.4rem; }
-    .cr-check input { width: 17px; height: 17px; accent-color: var(--green); }
     .cr-btn { font-family: inherit; font-size: 0.8rem; font-weight: 900; letter-spacing: 1px; color: #fff; border: none; border-radius: 20px; padding: 0.55rem 1.3rem; cursor: pointer; background: var(--green); white-space: nowrap; box-shadow: 0 3px 0 #1b7a43; transition: transform 0.12s, filter 0.12s; }
     .cr-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
     .cr-btn:active { transform: translateY(1px); box-shadow: 0 1px 0 #1b7a43; }
@@ -395,8 +390,6 @@
     .cr-link { background: none; border: 1.5px solid rgba(255,255,255,0.25); color: #fff; border-radius: 20px; padding: 0.28rem 0.85rem; font-family: inherit; font-size: 0.75rem; font-weight: 800; cursor: pointer; }
     .cr-link:hover { background: rgba(255,255,255,0.1); }
     .cr-link.on { color: var(--gold); border-color: rgba(245,197,24,0.5); }
-    .cr-rules { background: rgba(0,0,0,0.2); border-radius: 12px; padding: 0.85rem 1rem; font-size: 0.8rem; font-weight: 600; line-height: 1.6; color: rgba(255,255,255,0.75); }
-    .cr-rules ul { padding-left: 1.1rem; margin-top: 0.3rem; }
     .cr-err { color: #ff9a8a; font-size: 0.8rem; font-weight: 800; min-height: 1.1rem; margin-top: 0.4rem; }
     .cr-err.ok { color: var(--mint); }
     .cr-bar { display: flex; justify-content: space-between; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.9rem; font-size: 0.88rem; }
@@ -667,51 +660,26 @@
       </div>
       <div class="cr-badges">
         <span class="cr-e2e"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg>End-to-end encrypted</span>
-        <span class="cr-age" title="For people aged 13 and older">13+</span>
       </div>
     </div>
 
     <div class="cr-more-row">
       <details class="cr-more">
-        <summary>Why is the chatroom educational?</summary>
-        <ul>
-          <li><b>Digital citizenship.</b> Practise being kind, disagreeing respectfully and thinking before you post.</li>
-          <li><b>Staying safe online.</b> Use a nickname, keep personal details private, and know when to mute, report and tell an adult.</li>
-          <li><b>Clear writing.</b> The 200-character limit rewards getting your point across in a few good words.</li>
-          <li><b>Teamwork.</b> Swap tactics, explain your thinking and help others with games and homework.</li>
-        </ul>
-      </details>
-      <details class="cr-more">
         <summary>How are messages protected?</summary>
         <ul>
           <li><b>Encrypted.</b> Each message is locked with a key only the people in the room have. The server can’t read it.</li>
-          <li><b>Filtered.</b> The safety filter runs on every screen, so personal details and slurs stay hidden.</li>
           <li><b>Not saved.</b> Messages disappear when a room empties. Reporting shares only that one message so it can be checked.</li>
         </ul>
       </details>
     </div>
 
-    <!-- Step 1: name + age -->
+    <!-- Step 1: pick a name -->
     <div class="cr-card" id="crJoin">
-      <div class="cr-cols">
-        <div class="cr-form">
-          <label class="cr-lbl" for="crName">Pick a chat name</label>
-          <input class="cr-in" id="crName" maxlength="16" placeholder="e.g. PixelFox" autocomplete="off" spellcheck="false">
-          <p class="cr-hint">Use a nickname, not your real name.</p>
-          <label class="cr-check"><input type="checkbox" id="crAge"> I am 13 years old or older</label>
-          <button class="cr-btn" id="crEnter">Enter Chatroom</button>
-          <div class="cr-err" id="crJoinErr"></div>
-        </div>
-        <div class="cr-rules">
-          <b>Chat rules</b>
-          <ul>
-            <li>Be kind. No bullying, hate or sexual talk.</li>
-            <li>Never share personal info: your real name, school, address, phone number or social accounts.</li>
-            <li>No links. They're removed automatically.</li>
-            <li>If anyone makes you uncomfortable, mute or report them and tell a trusted adult.</li>
-            <li>Messages aren't saved. People who get reported by several others are removed.</li>
-          </ul>
-        </div>
+      <div class="cr-form">
+        <label class="cr-lbl" for="crName">Pick a chat name</label>
+        <input class="cr-in" id="crName" maxlength="16" placeholder="e.g. PixelFox" autocomplete="off" spellcheck="false" style="max-width:360px">
+        <button class="cr-btn" id="crEnter">Enter Chatroom</button>
+        <div class="cr-err" id="crJoinErr"></div>
       </div>
     </div>
 
@@ -882,9 +850,9 @@
 })();
 </script>
 <script src="chat-alerts.js"></script>
-<script src="chat-safety.js"></script>
+<script src="chat-text.js"></script>
 <script src="net.js?v=1"></script>
-<script src="chatroom.js?v=2"></script>
+<script src="chatroom.js?v=3"></script>
 
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "f19965aca353444c9351b9a951d995e7"}'></script><!-- End Cloudflare Web Analytics -->
 
