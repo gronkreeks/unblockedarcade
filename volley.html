@@ -1228,13 +1228,13 @@ function predictBall(S, steps) {
 //  CPU OPPONENT
 // ════════════════════════════════════════════════════════════════════════════
 const AI_LV = {
-  easy:   { jit: 7, react: 22, err: 34, spike: 0.35, block: 0,    grab: 0,    dash: false, tech: 0,    super: 0.25, jumpServe: 0.15, variety: 0.2, adapt: 0 },
-  normal: { jit: 5, react: 10, err: 16, spike: 0.8,  block: 0.35, grab: 0.25, dash: true,  tech: 0.35, super: 0.7,  jumpServe: 0.5,  variety: 0.6, adapt: 0 },
-  hard:   { jit: 2, react: 5,  err: 6,  spike: 1,    block: 0.7,  grab: 0.5,  dash: true,  tech: 0.85, super: 1,    jumpServe: 0.85, variety: 1, adapt: 0.55 },
+  easy:   { jit: 7, react: 22, err: 34, spike: 0.35, block: 0,    grab: 0,    dash: false, tech: 0,    super: 0.25, jumpServe: 0.15, variety: 0.2, adapt: 0, slip: 0.6 },
+  normal: { jit: 5, react: 10, err: 16, spike: 0.8,  block: 0.35, grab: 0.25, dash: true,  tech: 0.35, super: 0.7,  jumpServe: 0.5,  variety: 0.6, adapt: 0, slip: 0.42 },
+  hard:   { jit: 2, react: 5,  err: 6,  spike: 1,    block: 0.7,  grab: 0.5,  dash: true,  tech: 0.85, super: 1,    jumpServe: 0.85, variety: 1, adapt: 0.55, slip: 0.27 },
 };
 // Ranked: one CPU per rank (rank0 = Bronze … rank5 = Champion), blended from the three above.
 // Champion goes a little past Hard. Diamond and Champion learn and counter the most.
-Ranked.blendLevels(AI_LV.easy, AI_LV.normal, AI_LV.hard).forEach((l, t) => { AI_LV['rank' + t] = l; });
+Ranked.blendLevels(AI_LV.easy, AI_LV.normal, AI_LV.hard, [0, 0.45, 0.9, 1.35, 1.75, 2.15]).forEach((l, t) => { AI_LV['rank' + t] = l; });
 function newAI(level) {
   return { level, cid: -1, until: 0, plan: null, prev: 0, mv: 0, jumpHold: 0, dashSeq: [], err: 0, roll: 0,
     spikeVar: null, serve: null, serveHigh: false, holdT: 0, techRoll: false, tapF: {},
@@ -1315,6 +1315,16 @@ function aiThink(S, i, ai) {
     ai.cid = S.cid; ai.until = S.f + L.react + ((Math.random() * 4) | 0);
     ai.err = (Math.random() - 0.5) * 2 * L.err; ai.plan = null; ai.roll = Math.random(); ai.spikeVar = null;
     ai.jit = (Math.random() * (L.jit + 1)) | 0;
+    // Human mistakes (L.slip = chance per touch). Real players misjudge where the ball lands right up to
+    // contact, react late, or swing too early, even at a high level. err above shrinks as the ball
+    // arrives; these don't.
+    ai.slip = null;
+    if (Math.random() < (L.slip || 0)) {
+      const r = Math.random();
+      if (r < 0.4) ai.slip = { k: 'misread', off: (Math.random() < 0.5 ? -1 : 1) * (30 + Math.random() * 40) };
+      else if (r < 0.7) { ai.slip = { k: 'late' }; ai.until += 12 + ((Math.random() * 14) | 0); }
+      else ai.slip = { k: 'early', by: 5 + ((Math.random() * 7) | 0) };
+    }
   }
   if (S.f < ai.until) { mv = ai.mv; return finish(); }
 
@@ -1341,7 +1351,7 @@ function aiThink(S, i, ai) {
     }
     if (k < 0) { go(own(landX) ? landX - f * 16 : home, 6); return; }
     const q = path[k];
-    const sx = q.x - f * 16 + ai.err * Math.min(1, k / 30);
+    const sx = q.x - f * 16 + ai.err * Math.min(1, k / 30) + (ai.slip && ai.slip.k === 'misread' ? ai.slip.off : 0);
     const dist = Math.abs(sx - p.x);
     if (L.dash && dist > 170 && !p.air && p.st === 'free' && k > 12 && !ai.dashSeq.length) {
       const d = sx > p.x ? IN_R : IN_L; ai.dashSeq = [0, d, 0, d];
@@ -1353,7 +1363,7 @@ function aiThink(S, i, ai) {
       if (Math.abs(dq.x - p.x) < 75 && dq.y > FLOOR - 90) { tap |= IN_A; ovr = IN_D | ((dq.x - p.x) * f >= 0 ? fwdB : backB); }
       return;
     }
-    if (k <= 3 + ai.jit && dist < 20) {
+    if (k <= 3 + ai.jit + (ai.slip && ai.slip.k === 'early' ? ai.slip.by : 0) && dist < 20) {
       if (plan === 'grab') tap |= IN_C;
       else { tap |= IN_A; ovr = plan === 'over' ? fwdB : 0; }
     }
@@ -1381,7 +1391,7 @@ function aiThink(S, i, ai) {
     }
     if (k < 0 || minY > FLOOR - 190) { ground('over'); return; }
     const q = path[k];
-    const sx = q.x - f * 22 + ai.err * 0.4;
+    const sx = q.x - f * 22 + ai.err * 0.4 + (ai.slip && ai.slip.k === 'misread' ? ai.slip.off * 0.6 : 0);
     if (!p.air) {
       go(sx, 4);
       if (p.st === 'free' && k <= 23 && k >= 15 && Math.abs(sx - p.x) < 40) { tap |= IN_U; ai.jumpHold = 18; }
@@ -1392,7 +1402,8 @@ function aiThink(S, i, ai) {
         const la = 4 + ai.jit, kk = Math.min(path.length - 1, la), bq = path[kk];
         const px = p.x + p.vx * la, py = p.y + p.vy * la + P_GRAV * la * la / 2;
         const dx = bq.x - (px + f * 18), dy = bq.y - (py - 94);
-        if (dx * dx + dy * dy < 46 * 46) {
+        const reach = 46 + (ai.slip && ai.slip.k === 'early' ? ai.slip.by * 7 : 0);   // an early swing fires from too far away
+        if (dx * dx + dy * dy < reach * reach) {
           tap |= IN_B;
           if (!ai.spikeVar) { ai.spikeVar = chooseVar(); lm.aiSpk = lm.aiSpk * 0.85 + 1; lm.blk *= 0.85; ai.watch = S.f + 30; }
           const v = ai.spikeVar;
