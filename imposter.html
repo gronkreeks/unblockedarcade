@@ -899,7 +899,7 @@ function viewMode() {
 const SERVER = (() => {
   // Only encrypted connections, except a test server on this computer
   const p = new URLSearchParams(location.search).get("server");
-  return p && /^(wss:\/\/|ws:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$))/.test(p) ? p : "wss://frontier-server.onrender.com";
+  return p && /^(wss:\/\/|ws:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$))/.test(p) ? p : "wss://api.unblockedarcade.org";
 })();
 const SESSION = "imposter-online-v1";
 const NAME_STORE = "imposter-online-name";

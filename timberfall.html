@@ -217,7 +217,7 @@ const store = {
 };
 const SERVER = (() => {
   const p = new URLSearchParams(location.search).get('server');
-  return p && /^(wss:\/\/|ws:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$))/.test(p) ? p : 'wss://frontier-server.onrender.com';
+  return p && /^(wss:\/\/|ws:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$))/.test(p) ? p : 'wss://api.unblockedarcade.org';
 })();
 const esc = C.esc;
 const cv = $('cv'), ctx = cv.getContext('2d');
