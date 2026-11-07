@@ -97,7 +97,7 @@
     if (ws && ws.readyState <= 1) return;
     clearTimeout(retryT);
     status('Connecting… the chat server can take up to a minute to wake up.');
-    try { ws = new WebSocket(SERVER); } catch (e) { status("Couldn't reach the chat server."); return; }
+    try { ws = new EduSocket(SERVER); } catch (e) { status("Couldn't reach the chat server."); return; }
     ws.onopen = () => {
       retry = 1000; status('Connected');
       hello();
