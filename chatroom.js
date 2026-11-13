@@ -441,7 +441,7 @@
       if (x.owner) line.appendChild(el('span', 'tagt', 'TEAM'));
       const crs = crGames(x.cr);
       if (crs.length) {
-        const tag = el('span', 'tagc'); tag.innerHTML = Ranked.emblem(Ranked.CHALLENGER, 15);
+        const tag = el('span', 'tagc'); tag.innerHTML = Ranked.emblem(Ranked.CHALLENGER, 13);
         tag.appendChild(document.createTextNode('CHALLENGER'));
         tag.title = 'Challenger (top 3 on the leaderboard) in ' + crs.map(g => Ranked.CR_GAMES[g].name).join(', ');
         line.appendChild(tag);
