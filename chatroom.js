@@ -13,7 +13,9 @@
   const SERVER = param && /^(wss:\/\/|ws:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$))/.test(param) ? param : 'wss://api.eduarcade.online';
   const $ = id => document.getElementById(id);
   const KEEP_MS = 24 * 3600000, KEEP_N = 200;
-  const MAX = ChatText.MAX_MSG;
+  const MAX = ChatText.MAX_MSG, NEWS_MAX = 4000;   // team announcements can be long (server/chat.js)
+  const longPost = () => cur === 'c:news' && owner;
+  const maxNow = () => longPost() ? NEWS_MAX : MAX;
   const GIFS = typeof PwcGifs !== 'undefined' ? PwcGifs : { list: [], byId: {} };   // chat-gifs.js
 
   // ── Saved state ──
@@ -180,6 +182,12 @@
         if (ping || (m.ch === 'news' && !x.mine)) ChatAlerts.notify(x.from, x.text || 'sent a GIF', '#' + chName(m.ch));
         break;
       }
+      case 'c_deleted': {
+        const id = 'c:' + m.ch;
+        if (chLogs[id]) chLogs[id] = chLogs[id].filter(x => x.id !== m.id);
+        if (cur === id) openConv(cur, true);
+        break;
+      }
       case 'c_purge':
         for (const id of Object.keys(chLogs)) chLogs[id] = chLogs[id].filter(x => x.uid !== m.uid);
         if (cur.startsWith('c:')) openConv(cur, true);
@@ -282,12 +290,12 @@
   // ── Sending ──
   async function sendMsg(gif) {
     const input = $('ecMsg');
-    const text = gif ? '' : input.value.trim();
+    const text = gif ? '' : (longPost() ? input.value : input.value.replace(/\s+/g, ' ')).trim();
     if (!gif && !text) return;
     if (!ws || ws.readyState !== 1) return err('Not connected right now');
     const reply = replyTo ? { id: replyTo.id || 0, from: replyTo.from, text: (replyTo.text || (replyTo.gif ? '[GIF]' : '')).slice(0, 80) } : undefined;
     if (cur.startsWith('c:')) {
-      if (!gif) { const f = ChatText.filterMessage(text); if (!f.ok) return err(f.reason); }
+      if (!gif && !longPost()) { const f = ChatText.filterMessage(text); if (!f.ok) return err(f.reason); }
       send({ t: 'c_say', ch: cur.slice(2), text, gif, reply });
     } else {
       if (!subtle || !K.priv) return err("This browser can't encrypt messages, so it can't send DMs.");
@@ -299,7 +307,7 @@
       pending.set(cid, p);
       addTo(cur, p.msg);
     }
-    input.value = ''; left(); setReply(null);
+    input.value = ''; left(); grow(); setReply(null);
   }
   async function sealAndSend(p) {
     try {
@@ -405,6 +413,9 @@
       btn('Leave', () => { if (confirm(`Leave ${g.name}?`)) leaveGroup(cur.slice(2)); });
     }
     const ro = cur === 'c:news' && !owner;
+    $('ecMsg').maxLength = maxNow();
+    $('ecMsg').placeholder = longPost() ? 'Write an announcement (Shift+Enter for a new line)' : 'Message';
+    left(); grow();
     $('ecSendRow').classList.toggle('ec-hidden', ro);
     $('ecRO').classList.toggle('ec-hidden', !ro);
     $('ecRO').textContent = ro ? 'Only the EduArcade team can post announcements.' : '';
@@ -451,11 +462,12 @@
       nm.onclick = () => { if (!x.mine) mention(x.from); };
       line.appendChild(nm);
       if (x.gif && GIFS.byId[x.gif]) { const pre = el('pre', 'ec-gif'); pre.dataset.gif = x.gif; pre.textContent = GIFS.byId[x.gif].frames[0]; line.appendChild(pre); startGifs(); }
-      else { const span = el('span'); ChatAlerts.renderText(span, x.text || '', me.name); line.appendChild(span); }
+      else { const span = el('span', 'txt'); ChatAlerts.renderText(span, x.text || '', me.name); line.appendChild(span); }
       if (!x.mine && ChatAlerts.mentions(x.text, me.name)) line.classList.add('ping');
       const acts = el('span', 'mact');
       const a = (t, f) => { const b = el('button', '', t); b.type = 'button'; b.onclick = f; acts.appendChild(b); };
       if (!x.pending) a('Reply', () => setReply(x));
+      if (owner && cur === 'c:news' && x.id) a('Delete', () => { if (confirm('Delete this announcement for everyone?')) send({ t: 'c_del', ch: 'news', id: x.id }); });
       if (!x.mine && x.uid) {
         if (cur.startsWith('c:') && !friends[x.uid]) a('Add friend', () => send({ t: 'c_freq', to: x.uid }));
         if (cur.startsWith('c:')) a('Report', () => { if (confirm(`Report this message from ${x.from}?\n\n"${x.text || '[GIF]'}"`)) send({ t: 'c_report', ch: cur.slice(2), id: x.id }); });
@@ -599,9 +611,12 @@
   $('ecSend').onclick = () => sendMsg();
   $('ecGifBtn').onclick = gifPicker;
   $('ecReplyX').onclick = () => setReply(null);
-  $('ecMsg').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); sendMsg(); } else if (e.key === 'Escape') setReply(null); });
-  const left = () => { const n = MAX - $('ecMsg').value.length; $('ecLeft').textContent = n <= 50 ? n : ''; $('ecLeft').classList.toggle('low', n <= 15); };
-  $('ecMsg').addEventListener('input', left);
+  // Enter sends; Shift+Enter adds a line (only announcements keep line breaks)
+  $('ecMsg').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); } else if (e.key === 'Escape') setReply(null); });
+  function left() { const n = maxNow() - $('ecMsg').value.length; $('ecLeft').textContent = n <= 50 ? n : ''; $('ecLeft').classList.toggle('low', n <= 15); }
+  // The box grows with what you type, up to 40% of the screen
+  function grow() { const i = $('ecMsg'); if (!i.offsetParent) { i.style.height = ''; return; } i.style.height = 'auto'; i.style.height = i.scrollHeight + 2 + 'px'; }
+  $('ecMsg').addEventListener('input', () => { left(); grow(); });
   document.addEventListener('pointerdown', e => { if (!e.target.closest('#ecGifs, #ecGifBtn')) $('ecGifs').classList.add('ec-hidden'); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !cur.startsWith('c:') && convos[cur] && convos[cur].unread) openConv(cur, true); });
   function bell() {

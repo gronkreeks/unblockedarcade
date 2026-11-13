@@ -465,7 +465,9 @@
     .ec-reply { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.9rem; font-size: 0.75rem; font-weight: 700; color: var(--muted); border-top: 1px solid var(--line); background: rgba(255,255,255,0.03); }
     .ec-reply span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ec-reply button { background: none; border: none; color: #fff; cursor: pointer; font-weight: 900; }
-    .ec-send { display: flex; gap: 0.4rem; align-items: center; padding: 0.6rem 0.9rem 0.7rem; border-top: 1px solid var(--line); position: relative; }
+    #ecMsg { resize: none; overflow-y: auto; max-height: 40vh; line-height: 1.35; display: block; }
+    .ec-log .m .txt { white-space: pre-wrap; }
+    .ec-send { display: flex; gap: 0.4rem; align-items: flex-end; padding: 0.6rem 0.9rem 0.7rem; border-top: 1px solid var(--line); position: relative; }
     .ec-left { font-size: 0.72rem; font-weight: 900; color: rgba(255,255,255,0.4); min-width: 2rem; text-align: right; font-variant-numeric: tabular-nums; }
     .ec-left.low { color: #ffb08a; }
     .ec-left:empty { display: none; }
@@ -759,7 +761,7 @@
         <div class="ec-send" id="ecSendRow">
           <div class="ec-gifs ec-hidden" id="ecGifs"></div>
           <button class="ec-gifbtn" id="ecGifBtn" type="button" title="Send an ASCII GIF">GIF</button>
-          <input class="ec-in" id="ecMsg" maxlength="200" placeholder="Message" autocomplete="off">
+          <textarea class="ec-in" id="ecMsg" maxlength="200" rows="1" placeholder="Message" autocomplete="off"></textarea>
           <span class="ec-left" id="ecLeft"></span>
           <button class="ec-btn" id="ecSend" type="button">Send</button>
         </div>
@@ -922,7 +924,7 @@
 <script src="chat-text.js"></script>
 <script src="net.js?v=1"></script>
 <script src="chat-gifs.js?v=1"></script>
-<script src="chatroom.js?v=6"></script>
+<script src="chatroom.js?v=7"></script>
 
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "f19965aca353444c9351b9a951d995e7"}'></script><!-- End Cloudflare Web Analytics -->
 

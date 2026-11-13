@@ -63,6 +63,16 @@ const CHANNELS = [
   { id: 'homework', name: 'Homework Help', desc: 'Ask and answer school questions' },
 ];
 const HISTORY = 50, NEWS_KEEP = 30;
+// Team announcements have no 200-character limit and keep their line breaks (patch notes). This cap only
+// keeps a message inside the connection's 16 KB message size.
+const NEWS_MAX = 4000;
+function tidyLong(raw, max) {
+  return String(raw == null ? '' : raw).normalize('NFKC')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u0000-\u0009\u000b-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]/g, '')
+    .split('\n').map(l => l.replace(/[ \t]+/g, ' ').trim()).join('\n')
+    .replace(/\n{3,}/g, '\n\n').trim().slice(0, max);
+}
 const QUEUE_TTL = 24 * 3600000, QUEUE_MAX = 300, REQ_TTL = 7 * 24 * 3600000;
 const MAX_GROUP = 12, MAX_FRIENDS = 200;
 const REPORTS_TO_REMOVE = 3, REPORT_WINDOW_MS = 10 * 60000, TIMEOUT_MS = 15 * 60000;
@@ -130,13 +140,12 @@ function createChat({ send, now, log, crTitles }) {
   let countT = null;
   const countSoon = () => { if (!countT) countT = setTimeout(() => { countT = null; everyone({ t: 'c_online', n: onlineCount() }); }, 3000); };
 
-  function say(u, ch, m) {
-    const text = m.gif ? '' : filterMessage(m.text);
-    if (!m.gif && !text.ok) return send(u.ws, { t: 'c_err', msg: text.reason });
+  // text: the tidied message (already checked by the caller)
+  function say(u, ch, m, text) {
     const gif = typeof m.gif === 'string' && /^[a-z0-9-]{1,24}$/.test(m.gif) ? m.gif : undefined;
     if (m.gif && !gif) return;
     const reply = m.reply && typeof m.reply === 'object' ? { id: +m.reply.id || 0, from: tidy(m.reply.from, 16), text: tidy(m.reply.text, 80) } : undefined;
-    const msg = { t: 'c_said', ch, id: ++seq, uid: u.uid, from: u.name, text: gif ? '' : text.text, gif, reply, at: now(), owner: u.owner || undefined, cr: crOf(u) };
+    const msg = { t: 'c_said', ch, id: ++seq, uid: u.uid, from: u.name, text: gif ? '' : text, gif, reply, at: now(), owner: u.owner || undefined, cr: crOf(u) };
     const h = hist.get(ch); h.push(msg); if (h.length > keep(ch)) h.shift();
     if (redis) redis(['LPUSH', 'chat:' + ch, JSON.stringify(msg)]).then(() => redis(['LTRIM', 'chat:' + ch, 0, keep(ch) - 1])).catch(e => log('chat: save failed: ' + e.message));
     everyone(msg);
@@ -197,9 +206,22 @@ function createChat({ send, now, log, crTitles }) {
         const ch = CHANNELS.find(c => c.id === m.ch);
         if (!ch) return;
         if (ch.readonly && !u.owner) return err('Only the EduArcade team can post here');
-        if (!m.gif) { const f = filterMessage(m.text); if (!f.ok) return err(f.reason); const l = rateCheck(u.rate, f.text, t); if (l) return err(l); }
-        else if (limited()) return;
-        say(u, ch.id, m);
+        let text = '';
+        if (!m.gif) {
+          if (ch.id === 'news') { text = tidyLong(m.text, NEWS_MAX); if (!text) return err('Type a message first'); }
+          else { const f = filterMessage(m.text); if (!f.ok) return err(f.reason); text = f.text; }
+          const l = rateCheck(u.rate, text, t); if (l) return err(l);
+        } else if (limited()) return;
+        say(u, ch.id, m, text);
+        break;
+      }
+      case 'c_del': {   // the team can delete announcements
+        if (!u.owner || m.ch !== 'news') return err('Only the EduArcade team can delete announcements');
+        const h = hist.get('news'), i = h.findIndex(x => x.id === m.id);
+        if (i < 0) return;
+        h.splice(i, 1);
+        saveHist('news');
+        everyone({ t: 'c_deleted', ch: 'news', id: m.id });
         break;
       }
       case 'c_report': {
