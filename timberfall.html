@@ -222,7 +222,7 @@
 
 <script src="timberfall-core.js?v=2"></script>
 <script src="net.js?v=1"></script>
-<script src="ranked.js?v=3"></script>
+<script src="ranked.js?v=4"></script>
 <script>
 // Everything runs inside this function, so nothing outside the game can replace its functions or read its state.
 (() => {
@@ -295,7 +295,7 @@ function setTab(t) {
 $('tabSp').onclick = () => setTab('sp');
 $('tabMp').onclick = () => setTab('mp');
 $('tabRk').onclick = () => setTab('rk');
-$('rkPlayBtn').onclick = () => startSolo(RANKED_BOTS[RK.tier]);
+$('rkPlayBtn').onclick = () => startSolo(RANKED_BOTS[RK.botTier]);
 $('playBtn').onclick = () => startSolo(null);
 if (matchMedia('(hover: none)').matches) $('touchNote').hidden = false;
 
@@ -391,7 +391,7 @@ const RANKED_BOTS = [
 ];
 function renderRank() {
   $('rkCard').innerHTML = RK.card();
-  $('rkInfo').textContent = `${RK.tierName} match: ${RANKED_BOTS[RK.tier].label}`;
+  $('rkInfo').textContent = `${RK.placing ? RK.matchLabel : RK.tierName + ' match'}: ${RANKED_BOTS[RK.botTier].label}`;
 }
 function startSolo(rk) {
   const seed = Math.random() * 2 ** 31 | 0;
@@ -691,7 +691,7 @@ function showEnd() {
   mouse.down = false;
 }
 $('endSpec').onclick = () => { $('endBox').hidden = true; };
-$('endAgain').onclick = () => { if (G.mode === 'sp') startSolo(G.ranked ? RANKED_BOTS[RK.tier] : null); else netSend({ t: 'r_lobby' }); };
+$('endAgain').onclick = () => { if (G.mode === 'sp') startSolo(G.ranked ? RANKED_BOTS[RK.botTier] : null); else netSend({ t: 'r_lobby' }); };
 $('endMenu').onclick = () => toMenu();
 
 // ══════════════ Drawing ══════════════

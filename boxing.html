@@ -293,7 +293,7 @@
   </div>
 </div>
 
-<script src="ranked.js?v=3"></script>
+<script src="ranked.js?v=4"></script>
 <script>
 // Everything runs inside this function, so nothing outside the game can replace its functions or read its state.
 (() => {
@@ -1456,7 +1456,7 @@ function drawHitboxes() {
 
 // ── HUD ────────────────────────────────────────────────────────────────────
 function names() {
-  if (mode === 'cpu') return ['YOU', 'CPU · ' + (ranked ? RK.tierName : settings.cpu).toUpperCase()];
+  if (mode === 'cpu') return ['YOU', 'CPU · ' + (ranked ? RK.TIERS[RK.botTier].name : settings.cpu).toUpperCase()];
   if (mode === 'train') return ['YOU', 'DUMMY'];
   if (mode === 'demo') return ['CPU', 'CPU'];
   return ['PLAYER 1', 'PLAYER 2'];
@@ -1582,7 +1582,7 @@ let ranked = false;
 function renderRank() {
   document.getElementById('rankBox').innerHTML = RK.card('Ranked uses standard rules: best of 3, 60 s rounds.');
   const st = RK.state;
-  document.getElementById('rankSub').textContent = RK.tierName + (st.need ? ` · ${st.wins} of ${st.need} wins to rank up` : ' · top of the ladder');
+  document.getElementById('rankSub').textContent = RK.placing ? RK.matchLabel + ' · win all 5 to start at Champion' : RK.tierName + (st.need ? ` · ${st.wins} of ${st.need} wins to rank up` : ' · top of the ladder');
 }
 renderRank();
 
@@ -1608,7 +1608,7 @@ function beginMatch(m) {
     m === 'demo' ? { timer: 0, hp: 150, rounds: 3 } : {});
   mode = m; S = newState(set, (Math.random() * 1e9) | 0); paused = false; resultsShown = false; FX.length = 0; acc = 0; PREV = null;
   resetRender();
-  if (m === 'cpu') AIS = [null, newAI(ranked ? 'rank' + RK.tier : settings.cpu)];
+  if (m === 'cpu') AIS = [null, newAI(ranked ? 'rank' + RK.botTier : settings.cpu)];
   if (m === 'cpu' && ranked) RK.begin();
   else if (m === 'demo') AIS = [newAI('hard'), newAI('normal')];
   else AIS = [null, null];
@@ -1704,7 +1704,7 @@ function frame(ts) {
     if (mode === 'demo') { if (R.matchEndT > 3) beginMatch('demo'); }
     else if (!resultsShown && R.matchEndT > 1.8) showResults();
   }
-  if (mode === 'cpu') setStatus(ranked ? 'RANKED · ' + RK.tierName.toUpperCase() : 'VS CPU · ' + settings.cpu.toUpperCase());
+  if (mode === 'cpu') setStatus(ranked ? 'RANKED · ' + RK.matchLabel.toUpperCase() : 'VS CPU · ' + settings.cpu.toUpperCase());
   else if (mode === 'local') setStatus('2 PLAYERS' + (pads.length ? ` · ${pads.length} PAD${pads.length > 1 ? 'S' : ''}` : ''));
   else if (mode === 'train') setStatus('TRAINING');
   else setStatus('');

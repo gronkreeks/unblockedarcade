@@ -224,7 +224,7 @@
 </div>
 
 <script src="chess-core.js?v=2"></script>
-<script src="ranked.js?v=3"></script>
+<script src="ranked.js?v=4"></script>
 <script>
 // Everything runs inside this function, so nothing outside the game can replace its functions or read its state.
 (() => {
@@ -279,6 +279,7 @@ const sfx = {
 
 // ── State ──
 const RK = Ranked.create('chess', { wins: [1, 2, 2, 3, 3] });
+let rkLabel = '';
 let G = null;   // { pos, mode: 'ranked'|'bot'|'pvp', me: 1|-1 (bot games), level, autoFlip, history: [{m, san, cap, fen}], over }
 let flipped = false, sel = -1, legal = [], drag = null, botTimer = 0;
 
@@ -353,7 +354,7 @@ function renderStatus() {
   if (G.over) t = G.over.text;
   else if (G.mode === 'pvp') t = `${who} to move`;
   else t = side === G.me ? 'Your move' : 'Bot is thinking…';
-  $('status').innerHTML = `${t}${check && !G.over ? '<small>Check!</small>' : G.mode === 'ranked' ? `<small>Ranked · ${RK.tierName}</small>` : ''}`;
+  $('status').innerHTML = `${t}${check && !G.over ? '<small>Check!</small>' : G.mode === 'ranked' ? `<small>Ranked · ${rkLabel || RK.tierName}</small>` : ''}`;
   $('undoBtn').disabled = G.mode === 'ranked' || !G.history.length || !!G.over || (G.mode === 'bot' && G.pos.side !== G.me);
   $('resignBtn').disabled = !!G.over;
 }
@@ -469,7 +470,7 @@ function finish(st, resigned) {
   if (G.mode === 'pvp' || draw || winner === G.me) sfx.win(); else sfx.lose();
   $('rkRes').innerHTML = '';
   if (G.mode === 'ranked') {
-    if (draw) $('rkRes').innerHTML = `<p style="color:var(--muted);font-weight:700">Draws don't change your rank (${RK.tierName}).</p>`;
+    if (draw) $('rkRes').innerHTML = `<p style="color:var(--muted);font-weight:700">Draws don't count${RK.placing ? ' as a placement match: play it again' : ` and don't change your rank (${RK.tierName})`}.</p>`;
     else $('rkRes').innerHTML = RK.resultHTML(RK.record(winner === G.me, { moves: G.history.filter(h => Math.sign(h.mover) === G.me).length }));
   }
   $('againBtn').textContent = G.mode === 'ranked' ? 'Next ranked game' : 'Play again';
@@ -478,7 +479,8 @@ function finish(st, resigned) {
 }
 function startRanked() {
   const st = RK.state, color = (st.w + st.l) % 2 === 0 ? 1 : -1;   // alternate colours
-  newGame('ranked', { level: RK.tier, color });
+  rkLabel = RK.matchLabel;   // "Placement 2/5 · Diamond bot" during placements
+  newGame('ranked', { level: RK.botTier, color });
   RK.begin();
 }
 let botLevel = +store.get('level', '2'), botColor = +store.get('color', '1'), pvpFlip = store.get('flip', '1') === '1';
@@ -492,7 +494,7 @@ segInit('segColor', botColor, v => { botColor = v; store.set('color', v); });
 segInit('segFlip', pvpFlip ? 1 : 0, v => { pvpFlip = !!v; store.set('flip', v); });
 // Estimated Elo of each ranked bot (chess-core.js LEVELS), measured against Stockfish
 function eloTable() {
-  const cells = C.LEVELS.map((L, i) => `<div class="${i === RK.tier ? 'cur' : ''}">${RK.emblem(i, 24)}<span><b>${L.name}</b>~${L.elo}</span></div>`).join('');
+  const cells = C.LEVELS.map((L, i) => `<div class="${i === RK.botTier ? 'cur' : ''}">${RK.emblem(i, 24)}<span><b>${L.name}</b>~${L.elo}</span></div>`).join('');
   return `<details class="elo"><summary>Bot strength (estimated Elo)</summary><div class="elo-grid">${cells}</div>
     <p>Gold and up were measured in games against Stockfish at set ratings; Bronze and Silver are estimated from games against the other bots. Roughly comparable to online ratings for quick games.</p></details>`;
 }

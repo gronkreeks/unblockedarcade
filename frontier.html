@@ -785,7 +785,7 @@
 <script src="frontier-core.js?v=7"></script>
 <script src="chat-alerts.js"></script>
 <script src="net.js?v=1"></script>
-<script src="ranked.js?v=3"></script>
+<script src="ranked.js?v=4"></script>
 <script>
 // Everything runs inside this function, so nothing outside the game can replace its functions or read its state.
 (() => {
@@ -2291,10 +2291,10 @@ const RANKED_CFG = [
 const RANKED_MAPS = ['continents', 'pangaea', 'archipelago', 'twin', 'inland'];
 let rankedGame = false;
 function renderRank() {
-  const t = RANKED_CFG[RK.tier];
-  const next = RK.tier < RK.TIERS.length - 1 ? ` Reach ${RK.TIERS[RK.tier + 1].name} for ${(UNLOCKS[RK.tier + 1] - UNLOCKS[RK.tier])} more${RK.tier + 1 === RK.TIERS.length - 1 ? ' and the Dark Emperor' : ''}.` : '';
+  const t = RANKED_CFG[RK.botTier];
+  const next = RK.placing ? ' Placements decide your starting rank, and the leaders that come with it.' : RK.tier < RK.TIERS.length - 1 ? ` Reach ${RK.TIERS[RK.tier + 1].name} for ${(UNLOCKS[RK.tier + 1] - UNLOCKS[RK.tier])} more${RK.tier + 1 === RK.TIERS.length - 1 ? ' and the Dark Emperor' : ''}.` : '';
   $('rkCard').innerHTML = RK.card(`Leaders unlocked: ${UNLOCKS[RK.tier]} of ${EMP}.${next}`);
-  $('rkInfo').textContent = `${RK.tierName} match: ${t.diff[0].toUpperCase() + t.diff.slice(1)} AI · ${t.nations} nations · ${t.bots} tribes · ${t.size} random map`;
+  $('rkInfo').textContent = `${RK.placing ? RK.matchLabel : RK.tierName + ' match'}: ${t.diff[0].toUpperCase() + t.diff.slice(1)} AI · ${t.nations} nations · ${t.bots} tribes · ${t.size} random map`;
 }
 for (const seg of document.querySelectorAll('.seg')) {
   seg.addEventListener('click', e => {
@@ -2376,9 +2376,9 @@ function renderPicker() {
         <p>Pick two leaders. You get both their always-on bonuses, and your ultimate, <b>&#9889; ${esc(L.power.name)}</b>, unleashes both their powers at once (it recharges as slowly as the slower one). But your attacks advance <b>30% slower</b> and your troop cap is <b>10% lower</b>. Only one Dark Emperor per game.</p>` +
         (open ? `<div class="empPick"><label>First crown<select id="empA">${opts(empCombo[0])}</select></label><label>Second crown<select id="empB">${opts(empCombo[1])}</select></label></div>
           ${abilityText(FrontierCore.emperorLeader(empCombo))}`
-          : `<p style="color:#f7d46a"><b>Locked.</b> ${RK.emblem(RK.TIERS.length - 1, 18)} Reach <b>Champion</b> in Ranked to unlock the Dark Emperor. You're ${RK.tierName} now.</p>`)
+          : `<p style="color:#f7d46a"><b>Locked.</b> ${RK.emblem(RK.TIERS.length - 1, 18)} Reach <b>Champion</b> in Ranked to unlock the Dark Emperor. You're ${RK.placing ? 'still in placements' : RK.tierName} now.</p>`)
       : L ? `<b class="nm">${esc(L.name)}</b> · ${esc(L.civ)} · <span style="color:#f7d46a;font-weight:800">${esc(L.style)}</span>${abilityText(L)}` +
-        (leaderUnlocked(pickSel) ? '' : `<p style="color:#f7d46a"><b>Locked.</b> ${RK.emblem(unlockRank(pickSel), 18)} Reach <b>${RK.TIERS[unlockRank(pickSel)].name}</b> in Ranked to play as ${esc(L.name)}. You're ${RK.tierName} now.</p>`)
+        (leaderUnlocked(pickSel) ? '' : `<p style="color:#f7d46a"><b>Locked.</b> ${RK.emblem(unlockRank(pickSel), 18)} Reach <b>${RK.TIERS[unlockRank(pickSel)].name}</b> in Ranked to play as ${esc(L.name)}. You're ${RK.placing ? 'still in placements' : RK.tierName} now.</p>`)
        : '<b class="nm">Random leader</b><p>You get a different leader from the ones you have unlocked, with their own bonus and power, every game.</p>') +
     `</div><button class="dbtn" id="pickGo" ${pickSel >= 0 && !leaderUnlocked(pickSel) ? 'disabled' : ''}>PLAY AS ${esc(L ? L.name.toUpperCase() : 'RANDOM')}</button>`;
   const cards = LEADERS.map((L, i) => [L, i]).filter(([L, i]) => i !== EMP && (pickStyle === 'All' || L.style === pickStyle));
@@ -2469,7 +2469,7 @@ $('lineOv').addEventListener('pointerdown', e => { if (e.target === $('lineOv'))
 showLineup();
 
 $('rkStartBtn').onclick = () => {
-  const t = RANKED_CFG[RK.tier];
+  const t = RANKED_CFG[RK.botTier];
   const cfg = { map: RANKED_MAPS[Math.random() * RANKED_MAPS.length | 0], size: t.size, diff: t.diff, nations: t.nations, bots: t.bots, seed: (Math.random() * 2 ** 31) | 0, lineup: [] };
   paintReady = false;
   const game = FrontierCore.createGame({ cfg, humans: [{ name: playerName(), ...leaderInfo() }], allowStartNow: true, hooks });

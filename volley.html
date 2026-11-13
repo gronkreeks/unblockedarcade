@@ -347,7 +347,7 @@
   </div>
 </div>
 
-<script src="ranked.js?v=3"></script>
+<script src="ranked.js?v=4"></script>
 <script>
 // Everything runs inside this function, so nothing outside the game can replace its functions or read its state.
 (() => {
@@ -2365,7 +2365,7 @@ function drawHitboxes() {
 // ── HUD ────────────────────────────────────────────────────────────────────
 function shortName(i) { return names()[i].split(' · ')[0]; }
 function names() {
-  if (mode === 'cpu') return ['YOU', 'CPU · ' + (ranked ? RK.tierName : settings.cpu).toUpperCase()];
+  if (mode === 'cpu') return ['YOU', 'CPU · ' + (ranked ? RK.TIERS[RK.botTier].name : settings.cpu).toUpperCase()];
   if (mode === 'online') return RB && RB.me === 0 ? ['YOU', 'RIVAL'] : ['RIVAL', 'YOU'];
   if (mode === 'demo') return ['CPU', 'CPU'];
   return ['PLAYER 1', 'PLAYER 2'];
@@ -2899,7 +2899,7 @@ const matchSet = () => ranked ? Object.assign({}, DEFAULTS, { hp: 100, rounds: 2
 function renderRank() {
   document.getElementById('rankBox').innerHTML = RK.card('Ranked uses standard rules: best of 3, 60 s rounds, no wind.');
   const st = RK.state;
-  document.getElementById('rankSub').textContent = RK.tierName + (st.need ? ` · ${st.wins} of ${st.need} wins to rank up` : ' · top of the ladder');
+  document.getElementById('rankSub').textContent = RK.placing ? RK.matchLabel + ' · win all 5 to start at Champion' : RK.tierName + (st.need ? ` · ${st.wins} of ${st.need} wins to rank up` : ' · top of the ladder');
 }
 renderRank();
 
@@ -2917,7 +2917,7 @@ function resetRender() {
 function beginMatch(m, state) {
   mode = m; S = state; paused = false; resultsShown = false; FX.length = 0; acc = 0; PREV = null;
   resetRender();
-  if (m === 'cpu') AIS = [null, newAI(ranked ? 'rank' + RK.tier : settings.cpu)];
+  if (m === 'cpu') AIS = [null, newAI(ranked ? 'rank' + RK.botTier : settings.cpu)];
   if (m === 'cpu' && ranked) RK.begin();
   else if (m === 'demo') AIS = [newAI('hard'), newAI('normal')];
   else AIS = [null, null];
@@ -3081,7 +3081,7 @@ function frame(ts) {
     if (now - NET.pingT > 1000) { NET.pingT = now; netSend({ t: 'ping', ts: now }); }
     if (now - NET.lastRecv > 6000) netLost('Lost connection to your opponent.');
     setStatus(RB ? `ONLINE · ${Math.round(NET.rtt / 10) * 10} ms${RB.cur - RB.remoteConf > MAXRB ? ' · WAITING' : ''}` : '');
-  } else if (mode === 'cpu') setStatus(ranked ? 'RANKED · ' + RK.tierName.toUpperCase() : 'VS CPU · ' + settings.cpu.toUpperCase());
+  } else if (mode === 'cpu') setStatus(ranked ? 'RANKED · ' + RK.matchLabel.toUpperCase() : 'VS CPU · ' + settings.cpu.toUpperCase());
   else if (mode === 'local') setStatus('2 PLAYERS' + (pads.length ? ` · ${pads.length} PAD${pads.length > 1 ? 'S' : ''}` : ''));
   else setStatus('');
   renderInterp(dt);

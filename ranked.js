@@ -2,9 +2,13 @@
 // Bronze → Silver → Gold → Platinum → Diamond → Champion. Win the number of matches a game asks for
 // in your rank to move up; each rank's bots are tougher. Losses never knock you down a rank.
 // Each game keeps its own ladder in this browser (localStorage 'ranked-<game>').
+// Placements: your first 5 ranked matches in a game test you against ascending bots. Match 1 is the
+// Platinum bot; each win sends you up a rank for the next match, each loss down one. Win all 5 and you
+// start at Champion; otherwise you start at the hardest bot you beat (Diamond at most), or Bronze.
 // Above Champion is Challenger: the top 3 on each game's online leaderboard (see Challenger below).
 //   const RK = Ranked.create('volley', { wins: [2, 3, 3, 4, 5] });
-//   RK.tier → 0..5 · RK.card() → HTML · RK.begin() when a ranked match starts
+//   RK.tier → 0..5 (your rank) · RK.botTier → the bot to play next (differs during placements)
+//   RK.card() → HTML · RK.begin() when a ranked match starts · RK.matchLabel → e.g. "Placement 2/5 · Diamond bot"
 //   RK.record(won, stats) → result · RK.resultHTML(result) → HTML
 (function () {
   'use strict';
@@ -138,6 +142,15 @@
   .rk-res .rk-pips { justify-content: center; }
   @keyframes rk-pop { from { transform: scale(0.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   @media (prefers-reduced-motion: reduce) { .rk-res .rk-up { animation: none; } }
+  .rk-pl { display: flex; gap: 6px; margin-top: 0.45rem; }
+  .rk-res .rk-pl { justify-content: center; }
+  .rk-pl i { width: 14px; height: 14px; border-radius: 50%; background: rgba(255,255,255,0.14); border: 1.5px solid rgba(255,255,255,0.3); }
+  .rk-pl i.w { background: #2ecc71; border-color: #a8f0c4; box-shadow: 0 0 6px rgba(46,204,113,0.7); }
+  .rk-pl i.l { background: #e74c3c; border-color: #ffb3a8; }
+  .rk-test { position: relative; flex: none; }
+  .rk-test .rk-emblem { filter: grayscale(0.55) brightness(0.8) drop-shadow(0 3px 6px rgba(0,0,0,0.4)); }
+  .rk-test b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; font-weight: 900; color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,0.8); }
+  .rk-placing .rk-name { color: #fff; }
   .chl-line { margin-top: 0.35rem; }
   .chl-btn { display: inline-flex; align-items: center; gap: 0.35rem; margin-top: 0.45rem; padding: 0.3rem 0.7rem 0.3rem 0.45rem; border-radius: 999px; border: 1px solid rgba(255,155,94,0.55);
     background: linear-gradient(135deg, rgba(196,20,43,0.55), rgba(255,155,94,0.3)); color: #fff; font: inherit; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.5px; cursor: pointer; }
@@ -269,18 +282,27 @@
     let st = { tier: 0, wins: 0, w: 0, l: 0, champ: 0 };
     try { Object.assign(st, JSON.parse(localStorage.getItem(key) || '{}')); } catch (e) { }
     st.tier = Math.max(0, Math.min(TOP, st.tier | 0)); st.wins = Math.max(0, st.wins | 0);
+    // Placements for anyone who hasn't played ranked in this game yet (players from before keep their rank)
+    if (!st.placed && !st.pl) { if (st.w + st.l > 0) st.placed = true; else st.pl = newPlacement(); }
     const save = () => { try { localStorage.setItem(key, JSON.stringify(st)); } catch (e) { } };
     const needNow = () => st.tier >= TOP ? 0 : need[st.tier];
     const hasCR = !!CR_GAMES[game];
     let run = null;           // Promise of the server's run token for the Champion match being played
     const crResults = {};     // finished Challenger posts, by result id
 
+    const placing = () => !!st.pl;
+    function plDots(res) {
+      let h = '';
+      for (let i = 0; i < PLACEMENTS; i++) h += `<i class="${res[i] === 1 ? 'w' : res[i] === 0 ? 'l' : ''}" title="Placement ${i + 1}${res[i] === 1 ? ': win' : res[i] === 0 ? ': loss' : ''}"></i>`;
+      return `<div class="rk-pl">${h}</div>`;
+    }
     function pips(have, of) {
       let h = '';
       for (let i = 0; i < of; i++) h += `<i class="${i < have ? 'on' : ''}"></i>`;
       return `<div class="rk-pips">${h}</div>`;
     }
     function progressText() {
+      if (placing()) return `Placement match ${st.pl.n + 1} of ${PLACEMENTS}: you'll play the ${TIERS[st.pl.lv].name} bot`;
       if (st.tier >= TOP) return `Top of the ladder · ${st.champ} Champion win${st.champ === 1 ? '' : 's'}`;
       const left = needNow() - st.wins;
       return `Win ${left} more to reach ${TIERS[st.tier + 1].name}`;
@@ -298,16 +320,31 @@
     const self = {
       TIERS,
       get tier() { return st.tier; },
-      get tierName() { return TIERS[st.tier].name; },
+      get tierName() { return placing() ? 'Placements' : TIERS[st.tier].name; },
+      // The bot to play next: during placements, the one you're being tested against
+      get botTier() { return placing() ? st.pl.lv : st.tier; },
+      get placing() { return placing(); },
+      get matchLabel() { return placing() ? `Placement ${st.pl.n + 1}/${PLACEMENTS} · ${TIERS[st.pl.lv].name} bot` : TIERS[st.tier].name; },
       get state() { return { ...st, need: needNow() }; },
       // True while you hold Challenger in this game (one of the top 3 on its leaderboard)
       get challenger() { const s = hasCR && st.tier >= TOP && crStatus(game); return !!(s && s.challenger); },
-      get rankName() { return self.challenger ? CR.name : TIERS[st.tier].name; },
-      emblem: (t, size) => emblem(t == null ? (self.challenger ? CHALLENGER : st.tier) : t, size || 40),
+      get rankName() { return placing() ? 'Placements' : self.challenger ? CR.name : TIERS[st.tier].name; },
+      emblem: (t, size) => emblem(t == null ? (self.challenger ? CHALLENGER : self.botTier) : t, size || 40),
       // Card for the menu: emblem, rank, progress, and the whole ladder
       card(extra) {
         injectCSS();
         lastExtra = extra || '';
+        if (placing()) {
+          const p = st.pl;
+          let lad = '';
+          for (let i = 0; i <= TOP; i++) lad += emblem(i, 20).replace('class="rk-emblem"', `class="rk-emblem ${i === p.lv ? 'cur' : ''}"`);
+          return `<div class="rk-card rk-placing" data-rk-game="${game}" style="--rk-a:${TIERS[p.lv].a}"><div class="rk-test">${emblem(p.lv, 56)}<b>?</b></div><div class="rk-info">
+            <div class="rk-name">Placements</div>
+            <div class="rk-sub">${esc(progressText())}.${extra ? '<br>' + extra : ''}</div>
+            ${plDots(p.res)}
+            <div class="rk-sub">${p.n ? '' : 'Your first 5 ranked matches find your starting rank. '}Win and the next bot is a rank tougher, lose and it's a rank easier. <b>Win all 5 to start at Champion.</b></div>
+            <div class="rk-ladder" title="The bot you'll play next is lit">${lad}</div></div></div>`;
+        }
         const isCR = self.challenger, t = isCR ? CR : TIERS[st.tier];
         let ladder = '';
         for (let i = 0; i <= TOP; i++) ladder += emblem(i, 20).replace('class="rk-emblem"', `class="rk-emblem ${i < st.tier ? 'done' : i === st.tier ? 'cur' : ''}"`);
@@ -333,6 +370,7 @@
       record(won, stats) {
         const myRun = run; run = null;
         if (modded()) return { blocked: true, won, to: st.tier, wins: st.wins, need: needNow() };
+        if (placing()) return recordPlacement(won);
         const before = st.tier;
         if (won) {
           st.w++;
@@ -361,6 +399,7 @@
       resultHTML(r) {
         injectCSS();
         const t = TIERS[r.to];
+        if (r.pl) return placementHTML(r);
         if (r.blocked) return `<div class="rk-res">${emblem(r.to, 40)}<div class="rk-line">A mod menu is running on this page, so this ranked result wasn't saved.</div></div>`;
         if (r.promoted) {
           return `<div class="rk-res" style="--rk-a:${t.a}"><div class="rk-up">${emblem(r.to, 64)}</div>
@@ -373,8 +412,41 @@
         const cr = r.crId ? `<div class="chl-res" id="${r.crId}">${crResults[r.crId] || '<div class="rk-line">Posting your Challenger score…</div>'}</div>` : '';
         return `<div class="rk-res" style="--rk-a:${t.a}">${emblem(r.to, 40)}<div class="rk-line">${esc(line)}</div>${r.to < TOP ? pips(r.wins, r.need) : ''}${cr}</div>`;
       },
-      reset() { st = { tier: 0, wins: 0, w: 0, l: 0, champ: 0 }; save(); },
+      reset() { st = { tier: 0, wins: 0, w: 0, l: 0, champ: 0, pl: newPlacement() }; save(); },
     };
+    function recordPlacement(won) {
+      const p = st.pl, played = p.lv;
+      if (won) { st.w++; p.best = Math.max(p.best, played); } else st.l++;
+      p.res.push(won ? 1 : 0); p.n++;
+      p.lv = Math.max(0, Math.min(TOP, played + (won ? 1 : -1)));
+      const r = { won, pl: { played, n: p.n, res: p.res.slice(), next: p.lv, done: p.n >= PLACEMENTS }, promoted: false, from: 0, to: 0, wins: 0, need: need[0] };
+      if (r.pl.done) {
+        // Champion only for a perfect 5; otherwise the hardest bot you beat, at most Diamond
+        const allWon = p.res.every(x => x === 1);
+        st.tier = allWon ? TOP : p.best < 0 ? 0 : Math.min(p.best, TOP - 1);
+        st.wins = 0; st.placed = true; delete st.pl;
+        Object.assign(r, { promoted: st.tier > 0, to: st.tier, need: needNow(), allWon });
+      }
+      save();
+      return r;
+    }
+    function placementHTML(r) {
+      const p = r.pl, played = TIERS[p.played];
+      if (!p.done) {
+        const nx = TIERS[p.next];
+        return `<div class="rk-res" style="--rk-a:${played.a}">${emblem(p.played, 40)}
+          <div class="rk-big" style="color:${r.won ? '#7fe0a8' : '#ff9a8a'}">Placement ${p.n}/${PLACEMENTS}: ${r.won ? 'Win!' : 'Loss'}</div>
+          <div class="rk-line">${r.won ? `You beat the ${played.name} bot.` : `The ${played.name} bot won this one.`} Next up: the <b style="color:${nx.a}">${nx.name}</b> bot.</div>
+          ${plDots(p.res)}</div>`;
+      }
+      const t = TIERS[r.to];
+      const line = r.allWon
+        ? (hasCR ? '5 straight wins: straight to Champion! Every win from now on posts a Challenger score.' : '5 straight wins: straight to Champion!')
+        : r.to > 0 ? `You beat the ${t.name} bot. Win ${r.need} to reach ${TIERS[r.to + 1].name}.` : `You start at Bronze. Win ${r.need} to reach Silver.`;
+      return `<div class="rk-res" style="--rk-a:${t.a}"><div class="rk-up">${emblem(r.to, 64)}</div>
+        <div class="rk-big" style="color:${t.a}">Placed in ${t.name}!</div>
+        <div class="rk-line">${line}</div>${plDots(p.res)}</div>`;
+    }
     function crResultHTML(j, was) {
       const g = CR_GAMES[game], you = j.board.you;
       const head = j.challenger
@@ -396,6 +468,8 @@
     return self;
   }
   const TOP_CR = 3;
+  const PLACEMENTS = 5, PLACE_START = 3;   // 5 placement matches, the first against the Platinum bot
+  const newPlacement = () => ({ n: 0, res: [], lv: PLACE_START, best: -1 });
 
   // Leaderboard window: one tab per game, the top 25 there, your row, and your leaderboard name.
   let boardEl = null;
