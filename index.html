@@ -240,7 +240,9 @@
     .rkp-box { width: 100%; max-width: 1000px; background: var(--navy-3); border: 1px solid var(--line); border-radius: 20px; padding: 1rem 1.1rem 0.8rem; }
     .rkp-sum { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1.4rem; justify-content: center; font-size: 0.82rem; font-weight: 700; color: var(--muted); margin-bottom: 0.9rem; text-align: center; }
     .rkp-sum b { color: #fff; }
-    .rkp-sum .rk-emblem { vertical-align: -5px; margin-right: 3px; }
+    /* Each item centres its own emblem and text, so an item with an emblem sits level with the ones without */
+    .rkp-sum > span { display: inline-flex; align-items: center; gap: 0.3rem; }
+    .rkp-sum .rk-emblem { flex: none; }
     .rkp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.7rem; }
     .rkp-tile { display: flex; align-items: center; gap: 0.7rem; padding: 0.7rem 0.8rem; border-radius: 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--line); text-decoration: none; color: #fff; transition: transform 0.15s, background 0.15s; min-width: 0; }
     .rkp-tile:hover { transform: translateY(-3px); background: rgba(255,255,255,0.09); }
