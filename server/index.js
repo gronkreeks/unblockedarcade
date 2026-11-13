@@ -3,7 +3,8 @@
 // WebSockets. Players only send intents ("attack this tile", "build a city here"), so nobody
 // can cheat by editing their own copy of the game.
 // It also hosts the EduArcade chatroom and Frontier's lobby/in-game chat (see chat.js),
-// Imposter games played on several devices (see imposter.js) and Timberfall (see timberfall.js).
+// Imposter games played on several devices (see imposter.js), Timberfall (see timberfall.js) and the
+// Challenger leaderboards (see challenger.js; set UPSTASH_REDIS_REST_URL / _TOKEN on Render to keep them).
 'use strict';
 const http = require('http');
 const crypto = require('crypto');
@@ -25,6 +26,7 @@ const { filterMessage, checkName, newRate, rateCheck, createChat } = require('./
 const { createImposter } = require('./imposter.js');
 const { createTimberfall } = require('./timberfall.js');
 const { createHttpTransport } = require('./http-transport.js');
+const { createChallenger } = require('./challenger.js');
 
 const PORT = process.env.PORT || 8080;
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ||
@@ -304,15 +306,24 @@ function onMessage(ws, raw) {
 // The pages connect over plain HTTP (http-transport.js), because school wifi often blocks
 // WebSockets. WebSockets still work too, for pages opened before the switch.
 const server = http.createServer((req, res) => {
+  if (challenger.handle(req, res, ipKeyOf(req))) return;
   if (httpConns.handle(req, res)) return;
   if (req.url === '/status') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-    res.end(JSON.stringify({ ok: true, online: clients.size, http: httpConns.count(), games: runningGames(), core: CORE_HASH, lobbies: rooms.size - runningGames(), chat: chat.stats(), imposter: imposter.stats(), timberfall: timberfall.stats() }));
+    res.end(JSON.stringify({ ok: true, online: clients.size, http: httpConns.count(), games: runningGames(), core: CORE_HASH, lobbies: rooms.size - runningGames(), chat: chat.stats(), imposter: imposter.stats(), timberfall: timberfall.stats(), challenger: challenger.stats() }));
     return;
   }
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('Frontier multiplayer and EduArcade chat server is running.\n');
 });
+// Only a hash of the address is kept, used for chat timeouts and the Challenger rate limit. The last
+// X-Forwarded-For entry is the one added by the hosting proxy; earlier entries can be faked by the client.
+function ipKeyOf(req) {
+  const fwd = String(req.headers['x-forwarded-for'] || '').split(',').map(x => x.trim()).filter(Boolean);
+  const ip = String(req.headers['cf-connecting-ip'] || '') || fwd[fwd.length - 1] || (req.socket && req.socket.remoteAddress) || '';
+  return crypto.createHash('sha256').update(ip + 'eduarcade-chat').digest('hex').slice(0, 16);
+}
+const challenger = createChallenger({ originAllowed, log: (...a) => log(...a) });
 function originAllowed(origin) {
   if (!origin || origin === 'null') return true;   // opened from a file, or a non-browser client
   if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
@@ -331,11 +342,7 @@ const wss = new WebSocketServer({
 wss.on('connection', (ws, req) => onConnection(ws, req));
 function onConnection(ws, req) {
   clients.add(ws);
-  // Only a hash of the address is kept, used for chat timeouts. The last X-Forwarded-For entry is
-  // the one added by the hosting proxy; earlier entries can be faked by the client.
-  const fwd = String(req.headers['x-forwarded-for'] || '').split(',').map(x => x.trim()).filter(Boolean);
-  const ip = String(req.headers['cf-connecting-ip'] || '') || fwd[fwd.length - 1] || req.socket.remoteAddress || '';
-  ws.ipKey = crypto.createHash('sha256').update(ip + 'eduarcade-chat').digest('hex').slice(0, 16);
+  ws.ipKey = ipKeyOf(req);
   ws.rateStart = now(); ws.rateCount = 0; ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
   ws.on('message', raw => onMessage(ws, raw));

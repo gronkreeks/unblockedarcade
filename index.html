@@ -254,6 +254,26 @@
     .rkp-pips i { width: 16px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.18); }
     .rkp-pips i.on { background: var(--c); box-shadow: 0 0 5px var(--c); }
     .rkp-note { text-align: center; font-size: 0.7rem; font-weight: 700; color: var(--muted); margin-top: 0.7rem; opacity: 0.75; }
+    .rkp-tile.cr { background: linear-gradient(135deg, rgba(196,20,43,0.3), rgba(255,155,94,0.08)); border-color: rgba(255,155,94,0.45); }
+    /* ── Hall of Challengers ── */
+    .crh { width: 100%; max-width: 1000px; margin-top: 1rem; background: linear-gradient(160deg, #2a0d18, var(--navy-3) 60%); border: 1px solid rgba(255,155,94,0.35); border-radius: 20px; padding: 1rem 1.1rem; }
+    .crh-head { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.9rem; flex-wrap: wrap; }
+    .crh-head > div { flex: 1; min-width: 200px; }
+    .crh-head h3 { margin: 0; font-size: 1.05rem; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: #ff9b5e; }
+    .crh-head p { margin: 0.2rem 0 0; font-size: 0.78rem; font-weight: 600; color: var(--muted); line-height: 1.4; }
+    .crh-em { display: inline-flex; filter: drop-shadow(0 3px 8px rgba(196,20,43,0.5)); }
+    .crh-btn { padding: 0.5rem 0.95rem; border-radius: 999px; border: 0; background: linear-gradient(135deg, #c4142b, #ff7a3d); color: #fff; font: inherit; font-size: 0.8rem; font-weight: 900; cursor: pointer; }
+    .crh-btn:hover { filter: brightness(1.1); }
+    .crh-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.6rem; }
+    .crh-game { background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 14px; padding: 0.6rem 0.7rem; min-width: 0; cursor: pointer; text-align: left; color: #fff; font: inherit; }
+    .crh-game:hover { background: rgba(255,255,255,0.08); }
+    .crh-game h4 { margin: 0 0 0.35rem; font-size: 0.66rem; font-weight: 900; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+    .crh-row { display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 800; padding: 0.15rem 0; min-width: 0; }
+    .crh-row b { width: 1.1em; color: #ff9b5e; }
+    .crh-row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .crh-row.me span { color: #ffcf4a; }
+    .crh-row small { font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .crh-empty { font-size: 0.75rem; font-weight: 600; color: var(--muted); }
     .section-label { color: rgba(255,255,255,0.6); font-size: 0.78rem; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; text-align: center; margin-bottom: 1.3rem; }
     .more {
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.35rem;
@@ -644,7 +664,13 @@
         <div class="rkp-box">
           <div class="rkp-sum" id="rkpSum"></div>
           <div class="rkp-grid" id="rkpGrid"></div>
-          <p class="rkp-note">Your ranks are saved in this browser.</p>
+          <p class="rkp-note">Your ranks are saved in this browser. Challenger scores are kept online.</p>
+        </div>
+        <div class="crh">
+          <div class="crh-head"><span class="crh-em" id="crhEm"></span><div><h3>Hall of Challengers</h3>
+            <p>Challenger is the rank above Champion. Champions race the Champion bot, and the top 3 scores in each game hold Challenger.</p></div>
+            <button type="button" class="crh-btn" data-cr-open="chess">Full leaderboards</button></div>
+          <div class="crh-grid" id="crhGrid"></div>
         </div>
       </div>
     </div>
@@ -819,34 +845,55 @@
 })();
 </script>
 
-<script src="ranked.js?v=2"></script>
+<script src="ranked.js?v=3"></script>
 <script>
 // Ranked pills show your rank in each game (ranked.js keeps the ladders in this browser)
 (() => {
-  for (const pill of document.querySelectorAll('.rk-pill[data-game]')) {
-    const rk = Ranked.create(pill.dataset.game), st = rk.state, played = st.w + st.l > 0;
-    pill.querySelector('.rk-pill-em').innerHTML = rk.emblem(rk.tier, 18);
-    pill.querySelector('.rk-pill-t').textContent = played ? rk.tierName : 'Ranked';
-    pill.title = played ? `Your rank: ${rk.tierName}` : 'Ranked: climb from Bronze to Champion';
-  }
-
-  // Ranked profile: every ranked game at a glance. Wins needed per rank match each game's Ranked.create.
+  // Wins needed per rank match each game's Ranked.create.
   const GAMES = [['volley', 'Volley', [2, 3, 3, 4, 5]], ['boxing', 'Boxing', [2, 3, 3, 4, 5]], ['timberfall', 'Timberfall', [1, 2, 2, 2, 3]],
     ['frontier', 'Frontier', [1, 2, 2, 2, 3]], ['chess', 'Chess', [1, 2, 2, 3, 3]]];
-  const T = Ranked.TIERS, TOP = T.length - 1;
-  let best = -1, wins = 0, played = 0;
-  document.getElementById('rkpGrid').innerHTML = GAMES.map(([id, name, need]) => {
-    const rk = Ranked.create(id, { wins: need }), st = rk.state, has = st.w + st.l > 0, t = rk.tier, c = T[t].a;
-    if (has) { played++; wins += st.w; best = Math.max(best, t); }
-    const pips = has && st.need ? `<div class="rkp-pips" style="--c:${c}">${Array.from({ length: st.need }, (_, i) => `<i class="${i < st.wins ? 'on' : ''}"></i>`).join('')}</div><div class="rkp-meta">${st.wins}/${st.need} wins to ${T[t + 1].name}</div>`
-      : has ? `<div class="rkp-meta">${st.champ} Champion win${st.champ === 1 ? '' : 's'}</div>` : '';
-    const meta = has ? `${st.w} W · ${st.l} L` : 'Not played yet';
-    return `<a class="rkp-tile ${has ? '' : 'new'}" href="${id}.html">${rk.emblem(t, 46)}<div class="rkp-info"><div class="rkp-game">${name}</div>
-      <div class="rkp-rank" style="color:${has ? c : 'rgba(255,255,255,0.7)'}">${has ? rk.tierName : 'Unranked'}</div><div class="rkp-meta">${meta}</div>${pips}</div></a>`;
-  }).join('');
-  document.getElementById('rkpSum').innerHTML = played
-    ? `<span>Highest rank: ${Ranked.emblem(best, 22)}<b style="color:${T[best].a}">${T[best].name}</b></span><span>Ranked wins: <b>${wins}</b></span><span>Games ranked: <b>${played} of ${GAMES.length}</b></span>`
-    : '<span>Play a <b>Ranked</b> match in any of these games to start climbing from Bronze to Champion.</span>';
+  const NEED = Object.fromEntries(GAMES.map(g => [g[0], g[2]]));
+  const T = Ranked.TIERS, CRT = Ranked.CR;
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function render() {
+    for (const pill of document.querySelectorAll('.rk-pill[data-game]')) {
+      const rk = Ranked.create(pill.dataset.game, { wins: NEED[pill.dataset.game] }), st = rk.state, played = st.w + st.l > 0;
+      pill.querySelector('.rk-pill-em').innerHTML = rk.emblem(null, 18);
+      pill.querySelector('.rk-pill-t').textContent = played ? rk.rankName : 'Ranked';
+      pill.title = played ? `Your rank: ${rk.rankName}` : 'Ranked: climb from Bronze to Champion, then race for Challenger';
+    }
+    // Ranked profile: every ranked game at a glance
+    let best = -1, wins = 0, played = 0;
+    document.getElementById('rkpGrid').innerHTML = GAMES.map(([id, name, need]) => {
+      const rk = Ranked.create(id, { wins: need }), st = rk.state, has = st.w + st.l > 0, t = rk.tier, cr = rk.challenger, c = cr ? CRT.a : T[t].a;
+      if (has) { played++; wins += st.w; best = Math.max(best, cr ? Ranked.CHALLENGER : t); }
+      const crs = Ranked.crStatus(id);
+      const pips = has && st.need ? `<div class="rkp-pips" style="--c:${c}">${Array.from({ length: st.need }, (_, i) => `<i class="${i < st.wins ? 'on' : ''}"></i>`).join('')}</div><div class="rkp-meta">${st.wins}/${st.need} wins to ${T[t + 1].name}</div>`
+        : has ? `<div class="rkp-meta">${crs ? (cr ? `Best score ${crs.score.toLocaleString('en-US')}` : `Leaderboard #${crs.rank}`) : `${st.champ} Champion win${st.champ === 1 ? '' : 's'}`}</div>` : '';
+      const meta = has ? `${st.w} W · ${st.l} L` : 'Not played yet';
+      return `<a class="rkp-tile ${has ? '' : 'new'} ${cr ? 'cr' : ''}" href="${id}.html">${rk.emblem(null, 46)}<div class="rkp-info"><div class="rkp-game">${name}</div>
+        <div class="rkp-rank" style="color:${has ? c : 'rgba(255,255,255,0.7)'}">${has ? (cr ? `Challenger #${crs.rank}` : rk.tierName) : 'Unranked'}</div><div class="rkp-meta">${meta}</div>${pips}</div></a>`;
+    }).join('');
+    const bestT = best === Ranked.CHALLENGER ? CRT : T[best];
+    document.getElementById('rkpSum').innerHTML = played
+      ? `<span>Highest rank: ${Ranked.emblem(best, 22)}<b style="color:${bestT.a}">${bestT.name}</b></span><span>Ranked wins: <b>${wins}</b></span><span>Games ranked: <b>${played} of ${GAMES.length}</b></span>`
+      : '<span>Play a <b>Ranked</b> match in any of these games to start climbing from Bronze to Champion.</span>';
+  }
+  render();
+  Ranked.onStatus(render);
+
+  // Hall of Challengers: the top 3 in each game, from the server
+  document.getElementById('crhEm').innerHTML = Ranked.emblem(Ranked.CHALLENGER, 48);
+  const grid = document.getElementById('crhGrid');
+  const hall = (boards, msg) => {
+    grid.innerHTML = GAMES.map(([id, name]) => {
+      const b = boards && boards[id], top = b ? b.board.slice(0, 3) : [];
+      const rows = top.map(r => `<div class="crh-row ${b.you && b.you.id === r.id ? 'me' : ''}"><b>${r.rank}</b><span>${esc(r.name)}</span><small>${r.score.toLocaleString('en-US')}</small></div>`).join('');
+      return `<button type="button" class="crh-game" data-cr-open="${id}"><h4>${name}</h4>${rows || `<div class="crh-empty">${msg || 'No Challengers yet. Be the first!'}</div>`}</button>`;
+    }).join('');
+  };
+  hall(null, 'Loading…');
+  Ranked.syncAll(true).then(j => hall(j && j.boards, j ? '' : 'Leaderboard offline right now.'));
 })();
 </script>
 <script src="chat-alerts.js"></script>

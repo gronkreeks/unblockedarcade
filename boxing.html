@@ -293,7 +293,7 @@
   </div>
 </div>
 
-<script src="ranked.js?v=2"></script>
+<script src="ranked.js?v=3"></script>
 <script>
 // Everything runs inside this function, so nothing outside the game can replace its functions or read its state.
 (() => {
@@ -1609,6 +1609,7 @@ function beginMatch(m) {
   mode = m; S = newState(set, (Math.random() * 1e9) | 0); paused = false; resultsShown = false; FX.length = 0; acc = 0; PREV = null;
   resetRender();
   if (m === 'cpu') AIS = [null, newAI(ranked ? 'rank' + RK.tier : settings.cpu)];
+  if (m === 'cpu' && ranked) RK.begin();
   else if (m === 'demo') AIS = [newAI('hard'), newAI('normal')];
   else AIS = [null, null];
   if (m !== 'demo') hideOverlay();
@@ -1636,7 +1637,7 @@ function showResults() {
     `<tr><td class="a">${nms[0]}</td><td class="k"></td><td class="b">${nms[1]}</td></tr>` +
     rows.map(r => `<tr><td class="a">${r[1]}</td><td class="k">${r[0]}</td><td class="b">${r[2]}</td></tr>`).join('');
   document.getElementById('rematchBtn').textContent = ranked ? 'Next ranked match' : 'Rematch';
-  document.getElementById('rankResult').innerHTML = ranked && mode === 'cpu' ? RK.resultHTML(RK.record(S.matchWinner === 0)) : '';
+  document.getElementById('rankResult').innerHTML = ranked && mode === 'cpu' ? RK.resultHTML(RK.record(S.matchWinner === 0, { dealt: Math.round(a.dmg), taken: Math.round(b.dmg), rl: S.p[1].rounds })) : '';
   showPanel('pResult');
 }
 document.querySelectorAll('.mode').forEach(b => b.addEventListener('click', () => { sfx('ui'); ranked = b.dataset.mode === 'ranked'; beginMatch(ranked ? 'cpu' : b.dataset.mode); }));

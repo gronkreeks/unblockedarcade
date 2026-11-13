@@ -785,7 +785,7 @@
 <script src="frontier-core.js?v=7"></script>
 <script src="chat-alerts.js"></script>
 <script src="net.js?v=1"></script>
-<script src="ranked.js?v=2"></script>
+<script src="ranked.js?v=3"></script>
 <script>
 // Everything runs inside this function, so nothing outside the game can replace its functions or read its state.
 (() => {
@@ -2150,7 +2150,7 @@ function showEnd(winnerId) {
   $('endText').innerHTML = lines.join('<br>');
   if (rankedGame && mode === 'sp') {
     rankedGame = false;
-    const r = RK.record(won);
+    const r = RK.record(won, { kills: p.kills || 0, land: p.tiles / G.landTotal * 100 });
     let extra = '';
     if (r.promoted) extra += `<div style="margin-top:0.5rem;color:#f7d46a;font-weight:800">${UNLOCKS[r.to] - UNLOCKS[r.from]} new leaders unlocked! Pick one under Your leader.</div>`;
     if (r.promoted && r.to === RK.TIERS.length - 1) {
@@ -2475,6 +2475,7 @@ $('rkStartBtn').onclick = () => {
   const game = FrontierCore.createGame({ cfg, humans: [{ name: playerName(), ...leaderInfo() }], allowStartNow: true, hooks });
   initGame(game, 1, 'sp');
   rankedGame = true;
+  RK.begin();
   randomLeader = randomUnlocked();
 };
 $('startBtn').onclick = () => {

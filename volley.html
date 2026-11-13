@@ -347,7 +347,7 @@
   </div>
 </div>
 
-<script src="ranked.js?v=2"></script>
+<script src="ranked.js?v=3"></script>
 <script>
 // Everything runs inside this function, so nothing outside the game can replace its functions or read its state.
 (() => {
@@ -2918,6 +2918,7 @@ function beginMatch(m, state) {
   mode = m; S = state; paused = false; resultsShown = false; FX.length = 0; acc = 0; PREV = null;
   resetRender();
   if (m === 'cpu') AIS = [null, newAI(ranked ? 'rank' + RK.tier : settings.cpu)];
+  if (m === 'cpu' && ranked) RK.begin();
   else if (m === 'demo') AIS = [newAI('hard'), newAI('normal')];
   else AIS = [null, null];
   if (m !== 'demo') hideOverlay();
@@ -2955,7 +2956,7 @@ function showResults() {
   document.getElementById('rematchStatus').textContent = '';
   document.getElementById('rematchBtn').disabled = false;
   document.getElementById('rematchBtn').textContent = ranked ? 'Next ranked match' : 'Rematch';
-  document.getElementById('rankResult').innerHTML = ranked && mode === 'cpu' ? RK.resultHTML(RK.record(S.matchWinner === 0)) : '';
+  document.getElementById('rankResult').innerHTML = ranked && mode === 'cpu' ? RK.resultHTML(RK.record(S.matchWinner === 0, { pf: a.points, pa: b.points, rl: S.p[1].rounds })) : '';
   showPanel('pResult');
   try {
     const best = +localStorage.getItem('volley_best_combo') || 0;

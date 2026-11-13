@@ -323,13 +323,16 @@
   // Bot levels, built to play like people: a search depth, plus "noise" (how far off its judgement of
   // each move is, in centipawns) and a blunder chance (sometimes it just plays a plausible worse move
   // that loses up to `margin`). Even the top level keeps a little of both.
+  // elo: estimated rating, from 680 games (Nov 2026) against Stockfish 19 at fixed UCI_Elo (1320-2200,
+  // 200 ms a move) and against each other. Gold and up are anchored on Stockfish; Stockfish can't play
+  // below 1320, so Bronze and Silver are extrapolated from their games against the higher bots.
   const LEVELS = [
-    { name: 'Bronze',   depth: 1, noise: 190, blunder: 0.36, margin: 800 },
-    { name: 'Silver',   depth: 2, noise: 120, blunder: 0.24, margin: 500 },
-    { name: 'Gold',     depth: 2, noise: 65,  blunder: 0.13, margin: 320 },
-    { name: 'Platinum', depth: 3, noise: 45,  blunder: 0.09, margin: 250 },
-    { name: 'Diamond',  depth: 3, noise: 28,  blunder: 0.06, margin: 180 },
-    { name: 'Champion', depth: 4, noise: 16,  blunder: 0.035, margin: 130 },
+    { name: 'Bronze',   depth: 1, noise: 190, blunder: 0.36, margin: 800, elo: 300 },
+    { name: 'Silver',   depth: 2, noise: 120, blunder: 0.24, margin: 500, elo: 650 },
+    { name: 'Gold',     depth: 2, noise: 65,  blunder: 0.13, margin: 320, elo: 950 },
+    { name: 'Platinum', depth: 3, noise: 45,  blunder: 0.09, margin: 250, elo: 1200 },
+    { name: 'Diamond',  depth: 3, noise: 28,  blunder: 0.06, margin: 180, elo: 1350 },
+    { name: 'Champion', depth: 4, noise: 16,  blunder: 0.035, margin: 130, elo: 1600 },
   ];
   const gauss = r => { let u = 0, v = 0; while (!u) u = r(); while (!v) v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
   function botMove(pos, level, random) {

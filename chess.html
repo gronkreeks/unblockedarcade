@@ -96,6 +96,16 @@
     .mode { border-radius: 16px; padding: 0.85rem 0.95rem; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.05); }
     .mode h3 { font-size: 1rem; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; display: flex; align-items: center; gap: 0.4rem; }
     .mode p { color: var(--muted); font-size: 0.8rem; font-weight: 700; margin: 0.15rem 0 0.6rem; }
+    .elo { margin-top: 0.6rem; font-size: 0.75rem; font-weight: 700; color: var(--muted); }
+    .elo summary { cursor: pointer; font-weight: 900; color: rgba(255,255,255,0.85); }
+    .elo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.35rem; margin-top: 0.45rem; }
+    .elo-grid div { display: flex; align-items: center; gap: 0.35rem; background: rgba(0,0,0,0.2); border-radius: 9px; padding: 0.3rem 0.4rem; min-width: 0; }
+    .elo-grid b { display: block; color: #fff; font-size: 0.74rem; }
+    .elo-grid span { font-variant-numeric: tabular-nums; }
+    .elo-grid div.cur { outline: 1.5px solid #f5c518; }
+    .elo p { margin: 0.45rem 0 0 !important; font-size: 0.7rem !important; }
+    @media (max-width: 420px) { .elo-grid { grid-template-columns: repeat(2, 1fr); } }
+    .seg button small { display: block; font-size: 0.6rem; font-weight: 700; opacity: 0.7; }
     .mode.rk { background: linear-gradient(135deg, rgba(245,179,1,0.22), rgba(154,74,8,0.22)); border-color: rgba(245,197,24,0.55); }
     .row { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
     .seg { display: inline-flex; background: rgba(0,0,0,0.25); border-radius: 10px; padding: 3px; gap: 2px; flex-wrap: wrap; }
@@ -213,8 +223,8 @@
   </div>
 </div>
 
-<script src="chess-core.js?v=1"></script>
-<script src="ranked.js?v=2"></script>
+<script src="chess-core.js?v=2"></script>
+<script src="ranked.js?v=3"></script>
 <script>
 // Everything runs inside this function, so nothing outside the game can replace its functions or read its state.
 (() => {
@@ -313,9 +323,9 @@ function replace() { for (const [s, el] of els) place(el, s); }
 // ── Players, captures, moves, status ──
 function barInfo(side) {
   if (G.mode === 'pvp') return { name: side > 0 ? 'White' : 'Black', av: pieceSVG(6 * side) };
-  if (side === G.me) return { name: 'You', av: G.mode === 'ranked' ? RK.emblem(RK.tier, 26) : pieceSVG(6 * side) };
+  if (side === G.me) return { name: 'You', av: G.mode === 'ranked' ? RK.emblem(null, 26) : pieceSVG(6 * side) };
   const L = C.LEVELS[G.level];
-  return { name: G.mode === 'ranked' ? `${L.name} bot` : `Bot · ${['Easy', '', 'Medium', '', 'Hard', 'Max'][G.level]}`, av: G.mode === 'ranked' ? RK.emblem(G.level, 26) : pieceSVG(6 * side) };
+  return { name: G.mode === 'ranked' ? `${L.name} bot · ~${L.elo}` : `Bot · ${['Easy', '', 'Medium', '', 'Hard', 'Max'][G.level]} · ~${L.elo}`, av: G.mode === 'ranked' ? RK.emblem(G.level, 26) : pieceSVG(6 * side) };
 }
 function renderBars() {
   const bottom = flipped ? -1 : 1, top = -bottom;
@@ -460,7 +470,7 @@ function finish(st, resigned) {
   $('rkRes').innerHTML = '';
   if (G.mode === 'ranked') {
     if (draw) $('rkRes').innerHTML = `<p style="color:var(--muted);font-weight:700">Draws don't change your rank (${RK.tierName}).</p>`;
-    else $('rkRes').innerHTML = RK.resultHTML(RK.record(winner === G.me));
+    else $('rkRes').innerHTML = RK.resultHTML(RK.record(winner === G.me, { moves: G.history.filter(h => Math.sign(h.mover) === G.me).length }));
   }
   $('againBtn').textContent = G.mode === 'ranked' ? 'Next ranked game' : 'Play again';
   setTimeout(() => { if (G && G.over) $('endOv').classList.remove('hidden'); }, 700);
@@ -469,6 +479,7 @@ function finish(st, resigned) {
 function startRanked() {
   const st = RK.state, color = (st.w + st.l) % 2 === 0 ? 1 : -1;   // alternate colours
   newGame('ranked', { level: RK.tier, color });
+  RK.begin();
 }
 let botLevel = +store.get('level', '2'), botColor = +store.get('color', '1'), pvpFlip = store.get('flip', '1') === '1';
 function segInit(id, val, set) {
@@ -479,10 +490,17 @@ function segInit(id, val, set) {
 segInit('segLevel', botLevel, v => { botLevel = v; store.set('level', v); });
 segInit('segColor', botColor, v => { botColor = v; store.set('color', v); });
 segInit('segFlip', pvpFlip ? 1 : 0, v => { pvpFlip = !!v; store.set('flip', v); });
+// Estimated Elo of each ranked bot (chess-core.js LEVELS), measured against Stockfish
+function eloTable() {
+  const cells = C.LEVELS.map((L, i) => `<div class="${i === RK.tier ? 'cur' : ''}">${RK.emblem(i, 24)}<span><b>${L.name}</b>~${L.elo}</span></div>`).join('');
+  return `<details class="elo"><summary>Bot strength (estimated Elo)</summary><div class="elo-grid">${cells}</div>
+    <p>Gold and up were measured in games against Stockfish at set ratings; Bronze and Silver are estimated from games against the other bots. Roughly comparable to online ratings for quick games.</p></details>`;
+}
+for (const b of $('segLevel').children) b.insertAdjacentHTML('beforeend', `<small>~${C.LEVELS[+b.dataset.v].elo}</small>`);
 function showMenu() {
   clearTimeout(botTimer);
   const st = RK.state;
-  $('rkCard').innerHTML = RK.card();
+  $('rkCard').innerHTML = RK.card() + eloTable();
   $('rkNote').textContent = `You play ${(st.w + st.l) % 2 === 0 ? 'White' : 'Black'} next. Draws don't count; resigning is a loss.`;
   $('endOv').classList.add('hidden'); $('menuOv').classList.remove('hidden');
 }
