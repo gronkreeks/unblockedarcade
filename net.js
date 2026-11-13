@@ -1,5 +1,5 @@
 // EduSocket: works like a WebSocket, but over plain HTTP, so it gets through school wifi that
-// blocks WebSockets. new EduSocket('wss://api.unblockedarcade.org') gives the usual readyState,
+// blocks WebSockets. new EduSocket('wss://api.eduarcade.online') gives the usual readyState,
 // send(), close(), onopen, onmessage (e.data) and onclose.
 // Messages come down as a streamed page (Server-Sent Events). If a filter holds the stream back,
 // it switches to asking every moment instead (long-polling) and remembers that for 12 hours.

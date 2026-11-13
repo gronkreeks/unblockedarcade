@@ -7,7 +7,7 @@
 (() => {
   // Only encrypted connections, except a test server on this computer
   const param = new URLSearchParams(location.search).get('server');
-  const SERVER = param && /^(wss:\/\/|ws:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$))/.test(param) ? param : 'wss://api.unblockedarcade.org';
+  const SERVER = param && /^(wss:\/\/|ws:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$))/.test(param) ? param : 'wss://api.eduarcade.online';
   const $ = id => document.getElementById(id);
   let ws = null, me = null, room = null, wantRoom = null, retry = 1000, retryT = null, active = false, refreshT = null, helloT = null;
   let queue = Promise.resolve();

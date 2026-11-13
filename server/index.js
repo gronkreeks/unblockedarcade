@@ -28,7 +28,7 @@ const { createHttpTransport } = require('./http-transport.js');
 
 const PORT = process.env.PORT || 8080;
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ||
-  'https://unblockedarcade.org,https://www.unblockedarcade.org,https://gronkreeks.github.io').split(',').map(s => s.trim()).filter(Boolean);
+  'https://eduarcade.online,https://www.eduarcade.online,https://unblockedarcade.org,https://www.unblockedarcade.org,https://gronkreeks.github.io').split(',').map(s => s.trim()).filter(Boolean);
 const MAX_GAMES = +process.env.MAX_GAMES || 4;          // free Render instances have little CPU
 const MAX_CLIENTS = +process.env.MAX_CLIENTS || 300;
 const MAX_HUMANS = 16;
