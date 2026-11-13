@@ -3,8 +3,9 @@
 //
 // The site-wide chat works like privatewebchat:
 //   Channels   Announcements (only the owners in CHAT_OWNERS can post), General, Games, Homework.
-//              Public, so not end-to-end encrypted: the last few messages are kept in memory so people
-//              who arrive see what's going on, and reports can be checked.
+//              Public, so not end-to-end encrypted: the last 50 messages of each are kept so people who
+//              arrive see what's going on, and reports can be checked. In Upstash Redis when it's set up
+//              (they survive restarts), otherwise in memory only.
 //   Friends    added by friend code (or by clicking a name). Both sides have to agree.
 //   DMs        between friends only, end-to-end encrypted: the server relays ciphertext it can't read.
 //   Groups     any of your friends, end-to-end encrypted the same way.
@@ -95,10 +96,22 @@ function createChat({ send, now, log }) {
   // Message ids carry on from the clock, so they never repeat after a restart (browsers use them to drop duplicates)
   let seq = Date.now();
 
-  // Announcements are kept in Upstash too (when it's set up), so they survive restarts
-  if (redis) redis(['LRANGE', 'chat:news', 0, NEWS_KEEP - 1]).then(list => {
-    hist.set('news', (list || []).map(x => { try { return JSON.parse(x); } catch (e) { return null; } }).filter(Boolean).reverse());
-  }).catch(e => log('chat: could not load announcements: ' + e.message));
+  // Channel history is kept in Upstash too (when it's set up), so it survives restarts and sleep.
+  // Each channel is a list, newest first: chat:news, chat:general, ...
+  const keep = ch => ch === 'news' ? NEWS_KEEP : HISTORY;
+  if (redis) for (const c of CHANNELS) {
+    redis(['LRANGE', 'chat:' + c.id, 0, keep(c.id) - 1]).then(list => {
+      const loaded = (list || []).map(x => { try { return JSON.parse(x); } catch (e) { return null; } }).filter(Boolean).reverse();
+      hist.set(c.id, loaded.concat(hist.get(c.id)).slice(-keep(c.id)));   // anything said while loading stays
+      for (const m of loaded) if (m.id > seq) seq = m.id;
+    }).catch(e => log(`chat: could not load #${c.id}: ${e.message}`));
+  }
+  const saveHist = ch => {
+    if (!redis) return;
+    const h = hist.get(ch);
+    redis(['DEL', 'chat:' + ch]).then(() => h.length && redis(['RPUSH', 'chat:' + ch, ...h.slice().reverse().map(m => JSON.stringify(m))]))
+      .catch(e => log('chat: save failed: ' + e.message));
+  };
 
   const sendU = (u, msg) => { const s = typeof msg === 'string' ? msg : JSON.stringify(msg); for (const ws of u.conns) send(ws, s); };
   // Deliver to someone now, or keep it until they connect (up to 24 hours)
@@ -122,8 +135,8 @@ function createChat({ send, now, log }) {
     if (m.gif && !gif) return;
     const reply = m.reply && typeof m.reply === 'object' ? { id: +m.reply.id || 0, from: tidy(m.reply.from, 16), text: tidy(m.reply.text, 80) } : undefined;
     const msg = { t: 'c_said', ch, id: ++seq, uid: u.uid, from: u.name, text: gif ? '' : text.text, gif, reply, at: now(), owner: u.owner || undefined };
-    const h = hist.get(ch); h.push(msg); if (h.length > (ch === 'news' ? NEWS_KEEP : HISTORY)) h.shift();
-    if (ch === 'news' && redis) redis(['LPUSH', 'chat:news', JSON.stringify(msg)]).then(() => redis(['LTRIM', 'chat:news', 0, NEWS_KEEP - 1])).catch(e => log('chat: save failed: ' + e.message));
+    const h = hist.get(ch); h.push(msg); if (h.length > keep(ch)) h.shift();
+    if (redis) redis(['LPUSH', 'chat:' + ch, JSON.stringify(msg)]).then(() => redis(['LTRIM', 'chat:' + ch, 0, keep(ch) - 1])).catch(e => log('chat: save failed: ' + e.message));
     everyone(msg);
   }
   function timeOut(u, why) {
@@ -199,7 +212,11 @@ function createChat({ send, now, log }) {
         if (new Set(list.map(x => x.by)).size >= needed) {
           reports.delete(author.ipKey);
           timeOut(author, 'reports');
-          for (const h of hist.values()) for (let i = h.length - 1; i >= 0; i--) if (h[i].uid === author.uid) h.splice(i, 1);
+          for (const [ch, h] of hist) {
+            const n = h.length;
+            for (let i = h.length - 1; i >= 0; i--) if (h[i].uid === author.uid) h.splice(i, 1);
+            if (h.length !== n) saveHist(ch);
+          }
           everyone({ t: 'c_purge', uid: author.uid });
         }
         break;
