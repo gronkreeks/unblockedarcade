@@ -17,6 +17,7 @@
 //   POST /cr/name   { key, name }                    → { ok, name }
 'use strict';
 const crypto = require('crypto');
+const { redis, signer, same } = require('./secret.js');
 
 const TOP_N = 3;          // Challengers per game
 const BOARD_SIZE = 25;    // rows sent to pages
@@ -57,13 +58,6 @@ const playerId = key => crypto.createHash('sha256').update('eduarcade-cr|' + key
 const validKey = key => typeof key === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(key);
 
 function createStore() {
-  const url = (process.env.UPSTASH_REDIS_REST_URL || '').replace(/\/+$/, ''), token = process.env.UPSTASH_REDIS_REST_TOKEN || '';
-  const redis = url && token ? async cmd => {
-    const r = await fetch(url, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(cmd) });
-    const j = await r.json();
-    if (j.error) throw new Error(j.error);
-    return j.result;
-  } : null;
   return {
     persistent: !!redis,
     async load(game) {
@@ -80,13 +74,12 @@ function createStore() {
 function createChallenger(opts) {
   const log = (opts && opts.log) || console.log;
   const store = createStore();
-  const secret = process.env.CR_SECRET || (process.env.UPSTASH_REDIS_REST_TOKEN ? crypto.createHash('sha256').update('cr|' + process.env.UPSTASH_REDIS_REST_TOKEN).digest('hex') : crypto.randomBytes(32).toString('hex'));
   const boards = {};                 // game → Map(id → { name, score, t, stats, at, runs })
   let ready = Promise.all(Object.keys(GAMES).map(async g => {
     try { boards[g] = await store.load(g); } catch (e) { log('challenger: could not load ' + g + ': ' + e.message); boards[g] = new Map(); }
   })).then(() => log(`challenger: boards ready (${store.persistent ? 'Upstash' : 'memory only'})`));
 
-  const sign = s => crypto.createHmac('sha256', secret).update(s).digest('base64url').slice(0, 32);
+  const sign = signer('challenger-run');
   function newRun(game) {
     const body = `${game}.${Date.now()}.${crypto.randomBytes(6).toString('base64url')}`;
     return body + '.' + sign(body);
@@ -95,8 +88,7 @@ function createChallenger(opts) {
     const parts = String(run || '').split('.');
     if (parts.length !== 4) return null;
     const body = parts.slice(0, 3).join('.');
-    const want = Buffer.from(sign(body)), got = Buffer.from(parts[3]);
-    if (want.length !== got.length || !crypto.timingSafeEqual(want, got)) return null;
+    if (!same(sign(body), parts[3])) return null;
     return { game: parts[0], start: +parts[1], nonce: parts[2] };
   }
   const usedRuns = new Map();        // nonce → expiry, so one win can't be posted twice (while awake)

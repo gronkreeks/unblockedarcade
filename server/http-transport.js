@@ -9,8 +9,15 @@
 //   POST /s/send?id=        Messages up: a JSON array of strings, sent in order, one request at a time.
 //   POST /s/close?id=       Closes a connection straight away.
 // Everything is a simple CORS request (GET, or POST with a text/plain body), so there is no preflight.
+// Streams and bigger polls are gzipped when the browser accepts it (Render bills outbound bandwidth).
+// A stream keeps one gzip context for its whole life and flushes after every message, so repeated game
+// updates compress very well and still arrive straight away.
 'use strict';
 const crypto = require('crypto');
+const zlib = require('zlib');
+const acceptsGzip = req => /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''));
+// Small window and memory level: a few tens of KB per stream instead of ~256 KB
+const GZ_OPTS = { flush: zlib.constants.Z_SYNC_FLUSH, level: 5, windowBits: 14, memLevel: 6 };
 const { EventEmitter } = require('events');
 
 const POLL_HOLD_MS = 25000;
@@ -39,7 +46,8 @@ class HttpConn extends EventEmitter {
     this.poll = null; clearTimeout(this.pollT);
     const body = '[' + this.queue.map(s => JSON.stringify(s)).join(',') + ']';
     this.queue = [];
-    res.end(body);
+    if (this.pollGz && body.length > 1024) { res.setHeader('Content-Encoding', 'gzip'); res.end(zlib.gzipSync(body, { level: 5 })); }
+    else res.end(body);
   }
   // The server's heartbeat calls ping() every 20 s and drops connections that don't answer with 'pong'
   ping() {
@@ -93,13 +101,19 @@ function createHttpTransport(opts) {
       case '/s/stream': {
         if (req.method !== 'GET') break;
         if (!opts.canOpen()) { res.writeHead(503).end(); return true; }
-        res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'X-Accel-Buffering': 'no', Connection: 'keep-alive' });
+        const gz = acceptsGzip(req) ? zlib.createGzip(GZ_OPTS) : null;
+        res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'X-Accel-Buffering': 'no', Connection: 'keep-alive', ...(gz ? { 'Content-Encoding': 'gzip' } : {}) });
         res.socket && res.socket.setNoDelay(true);
+        // Writes go through gzip when it's on. The padding is random when gzipped, so it still fills a
+        // couple of KB on the wire for proxies that hold the start of a response.
+        let out = res;
+        if (gz) { gz.pipe(res); gz.on('error', () => res.destroy()); out = { write: d => gz.write(d), end: () => gz.end(), res }; }
         const c = newConn('stream', req);
-        res.write(STREAM_PAD + 'retry: 86400000\nevent: hello\ndata: ' + c.id + '\n\n');
-        c.stream = res;
+        const pad = gz ? ':' + crypto.randomBytes(1600).toString('base64') + '\n\n' : STREAM_PAD;
+        out.write(pad + 'retry: 86400000\nevent: hello\ndata: ' + c.id + '\n\n');
+        c.stream = out;
         for (const m of c.queue.splice(0)) c.send(m);   // anything said during 'connection'
-        res.on('close', () => { if (c.stream === res) { c.stream = null; c.close(); } });
+        res.on('close', () => { if (c.stream === out) { c.stream = null; c.close(); } });
         return true;
       }
       case '/s/open': {
@@ -113,6 +127,7 @@ function createHttpTransport(opts) {
         if (req.method !== 'GET') break;
         if (!conn || conn.mode !== 'poll') { res.writeHead(410).end(); return true; }
         conn.lastSeen = Date.now();
+        conn.pollGz = acceptsGzip(req);
         if (conn.poll) { const old = conn.poll; conn.poll = null; clearTimeout(conn.pollT); old.end('[]'); }
         res.setHeader('Content-Type', 'application/json');
         conn.poll = res;
