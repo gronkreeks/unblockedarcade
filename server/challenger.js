@@ -201,7 +201,14 @@ function createChallenger(opts) {
     return true;
   }
 
-  return { handle, stats: () => ({ persistent: store.persistent, players: Object.fromEntries(Object.entries(boards).map(([g, m]) => [g, m.size])) }) };
+  // The games where this player key is in the top 3 right now (for the Challenger tag in chat)
+  function titles(key) {
+    if (!validKey(key)) return [];
+    const id = playerId(key);
+    return Object.keys(GAMES).filter(g => boards[g] && boards[g].has(id) && sorted(g).slice(0, TOP_N).some(e => e.id === id));
+  }
+
+  return { handle, titles, stats: () => ({ persistent: store.persistent, players: Object.fromEntries(Object.entries(boards).map(([g, m]) => [g, m.size])) }) };
 }
 
 module.exports = { createChallenger, GAMES, TOP_N };

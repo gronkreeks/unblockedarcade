@@ -117,7 +117,8 @@
   const err = (t, ok) => { const e = $('ecErr'); e.textContent = t || ''; e.classList.toggle('ok', !!ok); if (t) setTimeout(() => { if (e.textContent === t) e.textContent = ''; }, 6000); };
   const showApp = on => { $('ecJoin').classList.toggle('ec-hidden', on); $('ecApp').classList.toggle('ec-hidden', !on); };
   function hello() {
-    send({ t: 'c_hello', key: me.key, name: me.name, pub: K.pub || undefined,
+    let pkey; try { pkey = localStorage.getItem('edu-player-key') || undefined; } catch (e) { }
+    send({ t: 'c_hello', key: me.key, name: me.name, pub: K.pub || undefined, pkey,
       friends: Object.entries(friends).map(([u, f]) => ({ uid: u, tok: f.tok })) });
   }
   function connect() {
@@ -211,7 +212,7 @@
         if (!f || blocked.has(other)) break;
         if (!m.mine && m.name && f.name !== m.name) { f.name = m.name; saveFriends(); }
         const body = cleanBody(await unseal(dmAad(uid, other, m.from), m, m.mine ? K.pub : f.pub));
-        const x = body ? { id: m.id, uid: m.from, from: m.mine ? me.name : f.name, ...body, at: m.at, mine: !!m.mine }
+        const x = body ? { id: m.id, uid: m.from, from: m.mine ? me.name : f.name, ...body, at: m.at, mine: !!m.mine, cr: m.mine ? myCr() : m.cr }
           : { sys: true, text: `A message from ${f.name} couldn't be decrypted.`, at: m.at };
         addTo('d:' + other, x, !m.mine);
         if (!m.mine && body) ChatAlerts.notify(f.name, body.text || 'sent a GIF', 'a DM');
@@ -244,7 +245,7 @@
         if (!g || blocked.has(m.from)) break;
         const sender = m.mine ? { name: me.name, pub: K.pub } : g.members[m.from];
         const body = cleanBody(await unseal(gAad(m.gid, m.from), m, sender && sender.pub));
-        const x = body ? { id: m.id, uid: m.from, from: sender ? sender.name : m.name, ...body, at: m.at, mine: !!m.mine }
+        const x = body ? { id: m.id, uid: m.from, from: sender ? sender.name : m.name, ...body, at: m.at, mine: !!m.mine, cr: m.mine ? myCr() : m.cr }
           : { sys: true, text: `A message from ${m.name} couldn't be decrypted.`, at: m.at };
         addTo('g:' + m.gid, x, !m.mine);
         if (!m.mine && body && (ChatAlerts.mentions(body.text, me.name) || cur !== 'g:' + m.gid || document.hidden)) ChatAlerts.notify(x.from, body.text || 'sent a GIF', g.name);
@@ -260,7 +261,11 @@
       }
     }
   }
-  const fromSaid = m => ({ id: m.id, uid: m.uid, from: m.from, text: m.text, gif: m.gif, reply: m.reply, at: m.at, owner: m.owner, mine: m.uid === uid });
+  const fromSaid = m => ({ id: m.id, uid: m.uid, from: m.from, text: m.text, gif: m.gif, reply: m.reply, at: m.at, owner: m.owner, cr: m.cr, mine: m.uid === uid });
+  // Challenger tag: the server adds the games where the sender is in the top 3. For your own DMs and
+  // group messages (which it doesn't stamp for you) it comes from your own Challenger status (ranked.js).
+  const myCr = () => window.Ranked ? Object.keys(Ranked.CR_GAMES).filter(g => { const s = Ranked.crStatus(g); return s && s.challenger; }) : [];
+  const crGames = list => Array.isArray(list) && window.Ranked ? list.filter(g => Ranked.CR_GAMES[g]) : [];
   const chName = id => (channels.find(c => c.id === id) || {}).name || id;
   const fmtCode = c => c ? c.slice(0, 5) + '-' + c.slice(5) : '';
 
@@ -289,7 +294,7 @@
       const f = gif ? { ok: true, text: '' } : ChatText.filterMessage(text);
       if (!f.ok) return err(f.reason);
       const body = { text: f.text, gif, reply }, cid = Math.random().toString(36).slice(2);
-      const p = { conv: cur, body, cid, msg: { uid, from: me.name, ...body, at: Date.now(), mine: true, pending: true } };
+      const p = { conv: cur, body, cid, msg: { uid, from: me.name, ...body, at: Date.now(), mine: true, pending: true, cr: myCr() } };
       if (!(await sealAndSend(p))) return;
       pending.set(cid, p);
       addTo(cur, p.msg);
@@ -434,6 +439,13 @@
       if (x.reply) line.appendChild(el('span', 'ec-quote', `↪ ${x.reply.from}: ${x.reply.text}`));
       line.appendChild(el('time', '', new Date(x.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })));
       if (x.owner) line.appendChild(el('span', 'tagt', 'TEAM'));
+      const crs = crGames(x.cr);
+      if (crs.length) {
+        const tag = el('span', 'tagc'); tag.innerHTML = Ranked.emblem(Ranked.CHALLENGER, 15);
+        tag.appendChild(document.createTextNode('CHALLENGER'));
+        tag.title = 'Challenger (top 3 on the leaderboard) in ' + crs.map(g => Ranked.CR_GAMES[g].name).join(', ');
+        line.appendChild(tag);
+      }
       const nm = el('b', 'who', x.from); nm.style.color = `hsl(${hue(x.uid || x.from)},75%,72%)`;
       nm.title = x.mine ? 'You' : 'Click to mention';
       nm.onclick = () => { if (!x.mine) mention(x.from); };

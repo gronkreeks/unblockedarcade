@@ -82,7 +82,9 @@ const isUid = x => typeof x === 'string' && x.length === 10 && [...x].every(c =>
 const validKey = k => typeof k === 'string' && /^[A-Za-z0-9_-]{20,64}$/.test(k);
 const pair = (a, b) => a < b ? a + '|' + b : b + '|' + a;
 
-function createChat({ send, now, log }) {
+function createChat({ send, now, log, crTitles }) {
+  // Games where someone is a Challenger (top 3 on the leaderboard), checked by the server, never claimed
+  const crOf = u => { try { const t = crTitles && u.pkey ? crTitles(u.pkey) : []; return t.length ? t : undefined; } catch (e) { return undefined; } };
   const signFriend = signer('chat-friend'), signGroup = signer('chat-group');
   const friendTok = (a, b) => signFriend(pair(a, b));
   const groupTok = (gid, members) => signGroup(gid + '|' + [...members].sort().join(','));
@@ -134,7 +136,7 @@ function createChat({ send, now, log }) {
     const gif = typeof m.gif === 'string' && /^[a-z0-9-]{1,24}$/.test(m.gif) ? m.gif : undefined;
     if (m.gif && !gif) return;
     const reply = m.reply && typeof m.reply === 'object' ? { id: +m.reply.id || 0, from: tidy(m.reply.from, 16), text: tidy(m.reply.text, 80) } : undefined;
-    const msg = { t: 'c_said', ch, id: ++seq, uid: u.uid, from: u.name, text: gif ? '' : text.text, gif, reply, at: now(), owner: u.owner || undefined };
+    const msg = { t: 'c_said', ch, id: ++seq, uid: u.uid, from: u.name, text: gif ? '' : text.text, gif, reply, at: now(), owner: u.owner || undefined, cr: crOf(u) };
     const h = hist.get(ch); h.push(msg); if (h.length > keep(ch)) h.shift();
     if (redis) redis(['LPUSH', 'chat:' + ch, JSON.stringify(msg)]).then(() => redis(['LTRIM', 'chat:' + ch, 0, keep(ch) - 1])).catch(e => log('chat: save failed: ' + e.message));
     everyone(msg);
@@ -162,6 +164,8 @@ function createChat({ send, now, log }) {
       if (!u) { u = { uid, conns: new Set(), friends: new Set(), rate: newRate(), owner: OWNERS.has(uid) }; users.set(uid, u); }
       const wasOnline = u.conns.size > 0;
       u.name = nm.name; u.pub = b64(m.pub, 88, 88) || u.pub; u.ipKey = ws.ipKey;
+      // The browser's leaderboard key (ranked.js), so the server can tell whether this person is a Challenger
+      u.pkey = typeof m.pkey === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(m.pkey) ? m.pkey : u.pkey;
       u.conns.add(ws); ws.chat = u; u.ws = ws;
       // Friendships this browser has tokens for
       u.friends = new Set();
@@ -258,7 +262,8 @@ function createChat({ send, now, log }) {
         if (!iv || !ct || !k) return err("That message couldn't be sent");
         if (limited()) return;
         const id = ++seq;
-        deliver(m.to, { t: 'c_dm', from: u.uid, name: u.name, id, iv, ct, k, at: t });
+        const cr = crOf(u);
+        deliver(m.to, { t: 'c_dm', from: u.uid, name: u.name, id, iv, ct, k, at: t, cr });
         for (const c of u.conns) if (c !== ws && ks) send(c, { t: 'c_dm', from: u.uid, to: m.to, name: u.name, id, iv, ct, k: ks, at: t, mine: true });
         send(ws, { t: 'c_sent', cid: m.cid, id, at: t });
         break;
@@ -282,11 +287,11 @@ function createChat({ send, now, log }) {
         const iv = b64(m.iv, 16, 16), ct = b64(m.ct, 24, 3000);
         if (!iv || !ct || !m.keys || typeof m.keys !== 'object') return err("That message couldn't be sent");
         if (limited()) return;
-        const id = ++seq;
+        const id = ++seq, cr = crOf(u);
         for (const x of g) {
           const k = b64(m.keys[x], 56, 56);
           if (!k) continue;
-          const env = { t: 'c_gmsg', gid: m.gid, from: u.uid, name: u.name, id, iv, ct, k, at: t };
+          const env = { t: 'c_gmsg', gid: m.gid, from: u.uid, name: u.name, id, iv, ct, k, at: t, cr };
           if (x === u.uid) { for (const c of u.conns) if (c !== ws) send(c, { ...env, mine: true }); }
           else deliver(x, env);
         }

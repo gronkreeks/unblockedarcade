@@ -208,7 +208,8 @@ setInterval(() => {
   for (const ws of clients) if (!ws.session || !ws.session.room) send(ws, list);
 }, 1000);
 
-const chat = createChat({ send, now, log });
+// The chat tags Challengers; it asks the leaderboards (created further down) when a message is sent
+const chat = createChat({ send, now, log, crTitles: key => challenger.titles(key) });
 const imposter = createImposter({ send, now, log, checkName, filterMessage });
 const timberfall = createTimberfall({ send, now, log, checkName });
 
