@@ -18,6 +18,8 @@ const POLLS = {
       { id: 'elements', name: 'Element Lab' },
       { id: 'spelling', name: 'Word Bee' },
       { id: 'timeline', name: 'Timeline' },
+      { id: 'coding', name: 'Code Quest' },
+      { id: 'space', name: 'Space Explorer' },
     ],
   },
 };
