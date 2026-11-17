@@ -46,6 +46,12 @@ const GAMES = {
     minT: 60, stats: { kills: [0, 99], land: [0, 100] },
     score: (t, s) => 4000 - 2 * t + 80 * s.kills,
   },
+  // Number Rush: a 60-second race, so the score is simply how many questions you got right.
+  // maxT rejects runs that weren't one race; the stat cap is far above anything a person can type.
+  math: {
+    minT: 58, maxT: 180, floor: 0, stats: { correct: [0, 150], wrong: [0, 150] },
+    score: (t, s) => s.correct,
+  },
 };
 
 function tidyName(raw) {
@@ -124,12 +130,13 @@ function createChallenger(opts) {
     if (!validKey(body.key)) return { error: 'Missing player key.' };
     const t = Math.round(ms / 100) / 10;
     if (t < G.minT) return { error: 'That win was too fast to be real.' };
+    if (G.maxT && t > G.maxT) return { error: 'That run took too long to count.' };
     const stats = {};
     for (const [k, [lo, hi]] of Object.entries(G.stats)) {
       const v = Number(body.stats && body.stats[k]);
       stats[k] = Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : lo;
     }
-    const score = Math.max(100, Math.round(G.score(t, stats)));
+    const score = Math.max(G.floor == null ? 100 : G.floor, Math.round(G.score(t, stats)));
     usedRuns.set(run.nonce, run.start + MAX_RUN_MS);
     await ready;
     const id = playerId(body.key), board = boards[run.game], old = board.get(id);

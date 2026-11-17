@@ -172,6 +172,13 @@
   </div>
 
   <div class="card">
+    <h2>Leaderboards and Votes</h2>
+    <p>Ranked games and polls use a random player key that your browser makes and keeps in <code>localStorage</code>. Our server only ever stores a one-way scrambled (hashed) ID made from that key, never the key itself.</p>
+    <p>When you post a Challenger score, the server keeps that ID with your leaderboard name (a nickname you choose, or "Player" and a code), your best score, the run's time and its game stats. When you vote in a poll (such as which game gets Ranked next), it keeps that ID with your choice, so each player has one vote and can change it. Scores and votes are stored with our database provider, Upstash, and are never sold.</p>
+    <p>To stop flooding, the server keeps a hashed version of your connection's IP address in memory for about a minute; the raw address isn't stored.</p>
+  </div>
+
+  <div class="card">
     <h2>Children's Privacy</h2>
     <p>This site is intended for a general audience. We do not knowingly collect personal information from children under the age of 13. If you believe a child has provided us with personal information, please contact us and we will delete it promptly.</p>
   </div>
