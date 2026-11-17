@@ -1,4 +1,4 @@
-// Ranked ladder shared by Chess, Frontier, Volley, Timberfall and Boxing (singleplayer, against bots).
+// Ranked ladder shared by Chess, Frontier, Volley, Timberfall, Boxing and Number Rush (singleplayer, against bots).
 // Bronze → Silver → Gold → Platinum → Diamond → Champion. Win the number of matches a game asks for
 // in your rank to move up; each rank's bots are tougher. Losses never knock you down a rank.
 // Each game keeps its own ladder in this browser (localStorage 'ranked-<game>').
@@ -10,6 +10,7 @@
 //   RK.tier → 0..5 (your rank) · RK.botTier → the bot to play next (differs during placements)
 //   RK.card() → HTML · RK.begin() when a ranked match starts · RK.matchLabel → e.g. "Placement 2/5 · Diamond bot"
 //   RK.record(won, stats) → result · RK.resultHTML(result) → HTML
+//   opts.crEveryRun: at Champion, every finished match posts a Challenger score, not just wins (Number Rush)
 (function () {
   'use strict';
   const TIERS = [
@@ -215,6 +216,8 @@
                   stat: s => `${s.kills} kill${s.kills === 1 ? '' : 's'}` },
     frontier:   { name: 'Frontier',   href: 'frontier.html',   how: 'Conquer the world fast. Every nation you knock out adds points.',
                   stat: s => `${s.kills} knocked out` },
+    math:       { name: 'Number Rush', href: 'math.html',      how: 'The most correct answers in one 60-second Champion race wins. The questions get harder the more you answer.',
+                  stat: s => `${s.correct} correct · ${s.wrong} wrong`, everyRun: true },
   };
   const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
@@ -286,7 +289,7 @@
     if (!st.placed && !st.pl) { if (st.w + st.l > 0) st.placed = true; else st.pl = newPlacement(); }
     const save = () => { try { localStorage.setItem(key, JSON.stringify(st)); } catch (e) { } };
     const needNow = () => st.tier >= TOP ? 0 : need[st.tier];
-    const hasCR = !!CR_GAMES[game];
+    const hasCR = !!CR_GAMES[game], everyRun = !!(opts && opts.crEveryRun);
     let run = null;           // Promise of the server's run token for the Champion match being played
     const crResults = {};     // finished Challenger posts, by result id
 
@@ -313,7 +316,7 @@
       let t;
       if (s && s.challenger) t = `<b style="color:${CR.a}">Challenger #${s.rank}</b> · best score ${fmtN(s.score)}`;
       else if (s) t = `Leaderboard #${s.rank} · best score ${fmtN(s.score)}. ${s.lost ? 'You were pushed out of the top 3. ' : ''}Reach the top 3 to become a Challenger.`;
-      else t = 'Every win against the Champion bot posts a Challenger score. The top 3 players become Challengers.';
+      else t = everyRun ? 'Every Champion race is a Challenger run that posts your score. The top 3 players become Challengers.' : 'Every win against the Champion bot posts a Challenger score. The top 3 players become Challengers.';
       return `<div class="rk-sub chl-line">${t}</div><button type="button" class="chl-btn" data-cr-open="${game}">${emblem(CHALLENGER, 18)}Challenger leaderboard</button>`;
     }
     let lastExtra = '', listening = false;
@@ -379,7 +382,7 @@
         } else st.l++;
         save();
         const r = { won, promoted: st.tier > before, from: before, to: st.tier, wins: st.wins, need: needNow() };
-        if (won && myRun && before >= TOP) {
+        if ((won || everyRun) && myRun && before >= TOP) {
           r.crId = 'cr' + (Math.random() * 1e9 | 0);
           myRun.then(tok => {
             if (!tok) throw new Error('Couldn\'t reach the leaderboard when this match started, so it wasn\'t timed.');
@@ -404,10 +407,10 @@
         if (r.promoted) {
           return `<div class="rk-res" style="--rk-a:${t.a}"><div class="rk-up">${emblem(r.to, 64)}</div>
             <div class="rk-big" style="color:${t.a}">Promoted to ${t.name}!</div>
-            <div class="rk-line">${r.to >= TOP ? (hasCR ? 'You reached Champion. Now every win posts a Challenger score: the top 3 players become Challengers.' : 'You reached the top of the ladder.') : `The bots get tougher. Win ${r.need} to reach ${TIERS[r.to + 1].name}.`}</div></div>`;
+            <div class="rk-line">${r.to >= TOP ? (hasCR ? `You reached Champion. Now every ${everyRun ? 'race' : 'win'} posts a Challenger score: the top 3 players become Challengers.` : 'You reached the top of the ladder.') : `The bots get tougher. Win ${r.need} to reach ${TIERS[r.to + 1].name}.`}</div></div>`;
         }
         const line = r.to >= TOP
-          ? (r.won ? `Champion win! ${st.champ} so far.` : 'Champion bots are the toughest there are. Go again!')
+          ? (r.won ? `Champion win! ${st.champ} so far.` : everyRun && r.crId ? 'The Champion bot got more this time, but your Challenger score still counts.' : 'Champion bots are the toughest there are. Go again!')
           : (r.won ? `Ranked win: ${r.wins} of ${r.need} in ${t.name}.` : `No ranked progress lost. Still ${r.wins} of ${r.need} in ${t.name}.`);
         const cr = r.crId ? `<div class="chl-res" id="${r.crId}">${crResults[r.crId] || '<div class="rk-line">Posting your Challenger score…</div>'}</div>` : '';
         return `<div class="rk-res" style="--rk-a:${t.a}">${emblem(r.to, 40)}<div class="rk-line">${esc(line)}</div>${r.to < TOP ? pips(r.wins, r.need) : ''}${cr}</div>`;
@@ -508,7 +511,7 @@
     const el = boardEl, g = CR_GAMES[game];
     el.dataset.g = game;
     for (const b of el.querySelectorAll('.chl-tabs button')) b.classList.toggle('on', b.dataset.g === game);
-    el.querySelector('.chl-how').innerHTML = `${esc(g.how)} Only wins against the Champion bot count, timed by the server. <a href="${g.href}">Play ${esc(g.name)}</a>`;
+    el.querySelector('.chl-how').innerHTML = `${esc(g.how)} ${g.everyRun ? 'Every Champion race counts' : 'Only wins against the Champion bot count'}, timed by the server. <a href="${g.href}">Play ${esc(g.name)}</a>`;
     const list = el.querySelector('.chl-list');
     list.innerHTML = '<div class="chl-empty">Loading…</div>';
     try {
