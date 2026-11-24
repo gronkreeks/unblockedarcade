@@ -13,15 +13,69 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="favicon.ico">
   <title>World Pins</title>
-  <meta name="description" content="World Pins: drop a pin where a capital city or landmark is on the world map, learn latitude and longitude, and see how close you were.">
+  <meta name="description" content="World Pins: drop a pin on a detailed world map to find capitals, cities and famous places. Zoom in for precision, learn latitude and longitude, and climb the ranks from Bronze to Champion.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="learn.css?v=1">
   <style>
-    .mapbox { position: relative; border-radius: 16px; overflow-x: auto; overflow-y: hidden; border: 1px solid var(--line); background: #10345e; -webkit-overflow-scrolling: touch; }
-    #map { display: block; width: 100%; min-width: 640px; aspect-ratio: 720 / 276; cursor: crosshair; touch-action: pan-x; }
-    .maphint { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-align: center; }
-    @media (min-width: 700px) { .maphint.phone { display: none; } }
+    body { padding-bottom: 1rem; }
+    header, .wrap { max-width: 1180px; }
+    .wrap { gap: 0.55rem; }
+    /* Top bar: the place to find, the round and the score */
+    .bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.6rem 1rem; align-items: center; }
+    .ask-kind { font-size: 0.66rem; font-weight: 900; letter-spacing: 2.5px; text-transform: uppercase; color: #7ec8ff; }
+    .ask { font-size: clamp(1.25rem, 3.6vw, 1.9rem); font-weight: 900; line-height: 1.15; }
+    .ask-sub { font-size: 0.85rem; font-weight: 700; color: var(--muted); }
+    .side { display: flex; flex-direction: column; align-items: flex-end; gap: 0.35rem; }
+    .pips { display: flex; flex-wrap: wrap; gap: 4px; }
+    .pips i { width: clamp(16px, 5vw, 30px); height: 8px; border-radius: 5px; background: rgba(255,255,255,0.15); position: relative; overflow: hidden; }
+    .pips i b { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #2ecc71, #a5f3c4); }
+    .pips i.cur { outline: 2px solid #fff; outline-offset: 1px; }
+    .tally { display: flex; gap: 0.9rem; font-size: 0.8rem; font-weight: 800; color: var(--muted); }
+    .tally b { color: #fff; font-size: 1.05rem; }
+    .tally .you b { color: #4fc3f7; } .tally .bot b { color: #ff9f43; }
+    .tally svg { width: 18px; height: 18px; vertical-align: -4px; margin-right: 2px; }
+    .clock { height: 6px; border-radius: 4px; background: rgba(0,0,0,0.3); overflow: hidden; grid-column: 1 / -1; }
+    .clock i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, var(--gold), #ffe27a); transform-origin: left; }
+    .clock.low i { background: linear-gradient(90deg, #e74c3c, #ff8a65); }
+    .clock[hidden] { display: none; }
+    @media (max-width: 600px) { .bar { grid-template-columns: minmax(0, 1fr); } .side { align-items: flex-start; } }
+
+    /* The map */
+    .stage { position: relative; height: min(68vh, 680px); min-height: 320px; border-radius: 18px; overflow: hidden; border: 1px solid rgba(255,255,255,0.16); background: #123a66; box-shadow: 0 18px 50px rgba(0,0,0,0.4); touch-action: none; user-select: none; -webkit-user-select: none; }
+    #map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+    #map.drag { cursor: grabbing; }
+    .zoom { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .zoom button { width: 40px; height: 40px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.3); background: rgba(8,16,38,0.78); color: #fff; font: inherit; font-size: 1.3rem; font-weight: 900; cursor: pointer; display: grid; place-items: center; -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+    .zoom button:hover { background: rgba(8,16,38,0.95); }
+    .zoom button svg { width: 20px; height: 20px; }
+    .scale { position: absolute; left: 10px; bottom: 10px; font-size: 0.7rem; font-weight: 800; color: #fff; background: rgba(8,16,38,0.7); border-radius: 8px; padding: 4px 8px 5px; pointer-events: none; }
+    .scale i { display: block; height: 5px; border: 2px solid #fff; border-top: none; margin-top: 2px; }
+    .zlvl { position: absolute; right: 10px; bottom: 10px; font-size: 0.7rem; font-weight: 800; color: #fff; background: rgba(8,16,38,0.7); border-radius: 8px; padding: 4px 8px; pointer-events: none; }
+    .hint { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); font-size: 0.74rem; font-weight: 800; color: #fff; background: rgba(8,16,38,0.72); border-radius: 50px; padding: 5px 12px; pointer-events: none; white-space: nowrap; max-width: calc(100% - 120px); overflow: hidden; text-overflow: ellipsis; }
+    .lock { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); }
+    .lock[hidden] { display: none; }
+    .loading { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; color: rgba(255,255,255,0.8); background: #123a66; }
+    .loading[hidden] { display: none; }
+
+    /* Result of a round */
+    .res { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem 1rem; align-items: center; }
+    .res .fb { text-align: left; min-height: 0; }
+    .res[hidden] { display: none; }
+    @media (max-width: 600px) { .res { grid-template-columns: minmax(0, 1fr); } }
+
+    /* Menu */
+    .box { width: min(640px, 100%); }
+    .opt.rk { background: linear-gradient(135deg, rgba(245,179,1,0.2), rgba(154,74,8,0.2)); border-color: rgba(245,197,24,0.55); }
+    .ladder { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 0.3rem; margin-top: 0.55rem; }
+    .ladder div { display: flex; align-items: center; gap: 0.4rem; font-size: 0.68rem; font-weight: 700; color: var(--muted); background: rgba(0,0,0,0.18); border-radius: 9px; padding: 0.3rem 0.45rem; line-height: 1.3; }
+    .ladder div.cur { color: #fff; outline: 1.5px solid rgba(245,197,24,0.8); }
+    .ladder b { display: block; color: #fff; font-size: 0.74rem; }
+    .ladder svg { flex: none; }
+    .rkrow { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.6rem; }
+    .rkrow span { flex: 1; min-width: 12rem; font-size: 0.75rem; font-weight: 700; color: var(--muted); }
+    .rv b { color: #fff; }
+    .rv .pts { float: right; font-weight: 900; color: #a5f3c4; }
   </style>
 </head>
 <body>
@@ -32,35 +86,63 @@
 </header>
 
 <main class="wrap">
-  <div class="panel hud"><span>Round <b id="round">1</b>/10</span><span>Score <b id="score">0</b></span><span id="setName"></span></div>
-  <div class="panel prompt">
-    <div class="kind" id="kind">&nbsp;</div>
-    <div class="big" id="ask"></div>
-    <div class="fb" id="fb">Tap the map where you think it is.</div>
-    <div class="center" style="margin-top:0.4rem"><button class="btn" id="nextBtn" type="button" hidden>Next ➜</button></div>
+  <div class="panel bar">
+    <div><div class="ask-kind" id="kind">&nbsp;</div><div class="ask" id="ask">&nbsp;</div><div class="ask-sub" id="sub">&nbsp;</div></div>
+    <div class="side"><div class="pips" id="pips"></div><div class="tally" id="tally"></div></div>
+    <div class="clock" id="clock" hidden><i id="clockBar"></i></div>
   </div>
-  <div class="mapbox" id="mapbox"><canvas id="map" width="1440" height="552" aria-label="World map: tap to place your pin"></canvas></div>
-  <p class="maphint phone">Swipe the map sideways to see the whole world.</p>
-  <p class="maphint">Dashed lines: the Tropics of Cancer and Capricorn and the Arctic Circle. The gold line is the Equator, and the line through London is the Prime Meridian (0°).</p>
+
+  <div class="stage" id="stage">
+    <canvas id="map" aria-label="World map. Drag to move, scroll or pinch to zoom, tap to drop your pin."></canvas>
+    <div class="hint" id="hint">Drag to move · scroll or pinch to zoom · tap to drop your pin</div>
+    <div class="zoom">
+      <button type="button" id="zIn" aria-label="Zoom in">+</button>
+      <button type="button" id="zOut" aria-label="Zoom out">−</button>
+      <button type="button" id="zWorld" aria-label="Show the whole world"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c-3 3-3 15 0 18M12 3c3 3 3 15 0 18"/></svg></button>
+      <button type="button" id="zPin" aria-label="Go to my pin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/></svg></button>
+    </div>
+    <div class="scale" id="scale"></div>
+    <div class="zlvl" id="zlvl"></div>
+    <button class="btn lock" id="lockBtn" type="button" hidden>📍 Lock in pin</button>
+    <div class="loading" id="loading">Loading the world map…</div>
+  </div>
+
+  <div class="panel res" id="res" hidden>
+    <div class="fb" id="fb"></div>
+    <button class="btn" id="nextBtn" type="button">Next ➜</button>
+  </div>
 </main>
 
 <div class="ov" id="menuOv">
   <div class="box">
     <div class="logo"><img src="icons/color/pin.svg" alt="">WORLD PINS</div>
-    <p class="tag">Ten places, one world map. Drop your pin as close as you can: the nearer you are, the more points you score.</p>
+    <p class="tag">Find places on a detailed world map. Zoom in as far as you need, drop your pin and lock it in: the closer you are, the more you score.</p>
     <div class="opts">
-      <div class="opt"><h3>What to find</h3>
+      <div class="opt rk">
+        <h3>Ranked</h3>
+        <div id="rkCard"></div>
+        <div class="ladder" id="ladder"></div>
+        <div class="rkrow"><span id="rkNote"></span><button class="btn" id="rkGo" type="button">Play ranked</button></div>
+      </div>
+      <div class="opt"><h3>Practice: places</h3>
         <div class="seg" id="segSet">
-          <button type="button" data-v="capitals">Capital cities<small>60 capitals, every continent</small></button>
-          <button type="button" data-v="landmarks">Landmarks & nature<small>wonders, mountains, falls</small></button>
-          <button type="button" data-v="mixed">Mixed<small>a bit of both</small></button>
+          <button type="button" data-v="capital">Capital cities<small>every continent</small></button>
+          <button type="button" data-v="city">Big cities<small>not just capitals</small></button>
+          <button type="button" data-v="landmark">Landmarks & nature<small>wonders, peaks, falls</small></button>
+          <button type="button" data-v="all">Everything<small>all 200+ places</small></button>
         </div>
       </div>
+      <div class="opt"><h3>Practice: difficulty</h3>
+        <div class="seg" id="segDiff">
+          <button type="button" data-v="1">Famous<small>places most people know</small></button>
+          <button type="button" data-v="3">Tricky<small>less famous places</small></button>
+          <button type="button" data-v="5">Expert<small>the hardest ones</small></button>
+        </div>
+        <div class="center" style="margin-top:0.7rem"><button class="btn" id="prGo" type="button">Practise (10 rounds)</button></div>
+      </div>
     </div>
-    <div class="center" style="margin-top:0.9rem"><button class="btn" id="goBtn" type="button">Start</button></div>
     <p class="best" id="best"></p>
-    <div data-poll="ranked-next" style="margin-top:0.9rem"></div>
-    <div class="learn"><small>What you'll learn</small>Where the world's <b>capital cities</b> and <b>famous places</b> are, how <b>latitude and longitude</b> pin down any spot on Earth, and how the <b>Equator</b>, the <b>Tropics</b> and the <b>Prime Meridian</b> split the globe into hemispheres. Every answer shows the real coordinates and how far away you were.</div>
+    <div class="learn"><small>What you'll learn</small>Where the world's <b>capitals</b>, <b>big cities</b> and <b>famous places</b> are, which <b>country</b> each one is in, and how <b>latitude and longitude</b> pin down any spot on Earth. The grid gets finer as you zoom (30°, 10°, 5°, then 1°), and every answer shows the real coordinates, the country you picked and how far away you were.</div>
     <a class="home" href="index.html">⬅ Back to Home</a>
   </div>
 </div>
@@ -69,6 +151,7 @@
   <div class="box">
     <div class="result" id="endTitle"></div>
     <div class="stats" id="endStats"></div>
+    <div id="rkRes"></div>
     <div class="review" id="review"></div>
     <div class="ends"><button class="btn" id="againBtn" type="button">Play again</button><button class="btn alt" id="endMenuBtn" type="button">Menu</button></div>
   </div>
@@ -76,189 +159,557 @@
 
 <script src="frontier-maps.js"></script>
 <script src="learn.js?v=1"></script>
-<script src="poll.js?v=2"></script>
+<script src="ranked.js?v=6"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
 <script>
 'use strict';
 const { $, esc, shuffle, lsGet, lsSet, sfx } = Learn;
 Learn.soundButton();
 
-// [name, country or description, latitude, longitude]
-const CAPITALS = [
-  ['London', 'United Kingdom', 51.51, -0.13], ['Paris', 'France', 48.86, 2.35], ['Madrid', 'Spain', 40.42, -3.70], ['Rome', 'Italy', 41.90, 12.50],
-  ['Berlin', 'Germany', 52.52, 13.40], ['Moscow', 'Russia', 55.76, 37.62], ['Lisbon', 'Portugal', 38.72, -9.14], ['Dublin', 'Ireland', 53.35, -6.26],
-  ['Oslo', 'Norway', 59.91, 10.75], ['Stockholm', 'Sweden', 59.33, 18.07], ['Helsinki', 'Finland', 60.17, 24.94], ['Reykjavík', 'Iceland', 64.15, -21.94],
-  ['Warsaw', 'Poland', 52.23, 21.01], ['Vienna', 'Austria', 48.21, 16.37], ['Athens', 'Greece', 37.98, 23.73], ['Kyiv', 'Ukraine', 50.45, 30.52],
-  ['Ankara', 'Türkiye', 39.93, 32.86], ['Cairo', 'Egypt', 30.04, 31.24], ['Nairobi', 'Kenya', -1.29, 36.82], ['Abuja', 'Nigeria', 9.08, 7.40],
-  ['Accra', 'Ghana', 5.60, -0.19], ['Addis Ababa', 'Ethiopia', 9.03, 38.74], ['Kinshasa', 'DR Congo', -4.32, 15.31], ['Dakar', 'Senegal', 14.72, -17.47],
-  ['Rabat', 'Morocco', 34.02, -6.84], ['Algiers', 'Algeria', 36.75, 3.06], ['Tunis', 'Tunisia', 36.81, 10.18], ['Khartoum', 'Sudan', 15.50, 32.56],
-  ['Kampala', 'Uganda', 0.35, 32.58], ['Luanda', 'Angola', -8.84, 13.23], ['Antananarivo', 'Madagascar', -18.88, 47.51], ['Lusaka', 'Zambia', -15.39, 28.32],
-  ['Tokyo', 'Japan', 35.68, 139.69], ['Beijing', 'China', 39.90, 116.41], ['Seoul', 'South Korea', 37.57, 126.98], ['New Delhi', 'India', 28.61, 77.21],
-  ['Bangkok', 'Thailand', 13.76, 100.50], ['Jakarta', 'Indonesia', -6.21, 106.85], ['Manila', 'Philippines', 14.60, 120.98], ['Hanoi', 'Vietnam', 21.03, 105.85],
-  ['Kuala Lumpur', 'Malaysia', 3.14, 101.69], ['Singapore', 'Singapore', 1.35, 103.82], ['Tehran', 'Iran', 35.69, 51.39], ['Riyadh', 'Saudi Arabia', 24.71, 46.68],
-  ['Islamabad', 'Pakistan', 33.68, 73.05], ['Dhaka', 'Bangladesh', 23.81, 90.41], ['Kathmandu', 'Nepal', 27.72, 85.32], ['Ulaanbaatar', 'Mongolia', 47.89, 106.91],
-  ['Canberra', 'Australia', -35.28, 149.13], ['Wellington', 'New Zealand', -41.29, 174.78], ['Ottawa', 'Canada', 45.42, -75.70], ['Washington, D.C.', 'United States', 38.91, -77.04],
-  ['Mexico City', 'Mexico', 19.43, -99.13], ['Havana', 'Cuba', 23.11, -82.37], ['Bogotá', 'Colombia', 4.71, -74.07], ['Lima', 'Peru', -12.05, -77.04],
-  ['Santiago', 'Chile', -33.45, -70.67], ['Buenos Aires', 'Argentina', -34.60, -58.38], ['Brasília', 'Brazil', -15.79, -47.88], ['Quito', 'Ecuador', -0.18, -78.47],
+// ──────────── Places ────────────
+// [name, where, latitude, longitude, difficulty 1 (famous) to 5 (expert), kind]
+const C = 'capital', T = 'city', L = 'landmark';
+const PLACES = [
+  // Capitals
+  ['London', 'United Kingdom', 51.51, -0.13, 1, C], ['Paris', 'France', 48.86, 2.35, 1, C], ['Madrid', 'Spain', 40.42, -3.70, 1, C],
+  ['Rome', 'Italy', 41.90, 12.50, 1, C], ['Berlin', 'Germany', 52.52, 13.40, 1, C], ['Moscow', 'Russia', 55.76, 37.62, 1, C],
+  ['Cairo', 'Egypt', 30.04, 31.24, 1, C], ['Tokyo', 'Japan', 35.68, 139.69, 1, C], ['Beijing', 'China', 39.90, 116.41, 1, C],
+  ['New Delhi', 'India', 28.61, 77.21, 1, C], ['Canberra', 'Australia', -35.28, 149.13, 1, C], ['Washington, D.C.', 'United States', 38.91, -77.04, 1, C],
+  ['Ottawa', 'Canada', 45.42, -75.70, 1, C], ['Mexico City', 'Mexico', 19.43, -99.13, 1, C], ['Buenos Aires', 'Argentina', -34.60, -58.38, 1, C],
+  ['Lisbon', 'Portugal', 38.72, -9.14, 2, C], ['Dublin', 'Ireland', 53.35, -6.26, 2, C], ['Oslo', 'Norway', 59.91, 10.75, 2, C],
+  ['Stockholm', 'Sweden', 59.33, 18.07, 2, C], ['Helsinki', 'Finland', 60.17, 24.94, 2, C], ['Reykjavík', 'Iceland', 64.15, -21.94, 2, C],
+  ['Athens', 'Greece', 37.98, 23.73, 2, C], ['Warsaw', 'Poland', 52.23, 21.01, 2, C], ['Vienna', 'Austria', 48.21, 16.37, 2, C],
+  ['Brussels', 'Belgium', 50.85, 4.35, 2, C], ['Amsterdam', 'Netherlands', 52.37, 4.90, 2, C], ['Copenhagen', 'Denmark', 55.68, 12.57, 2, C],
+  ['Nairobi', 'Kenya', -1.29, 36.82, 2, C], ['Bangkok', 'Thailand', 13.76, 100.50, 2, C], ['Seoul', 'South Korea', 37.57, 126.98, 2, C],
+  ['Jakarta', 'Indonesia', -6.21, 106.85, 2, C], ['Manila', 'Philippines', 14.60, 120.98, 2, C], ['Singapore', 'Singapore', 1.35, 103.82, 2, C],
+  ['Kuala Lumpur', 'Malaysia', 3.14, 101.69, 2, C], ['Tehran', 'Iran', 35.69, 51.39, 2, C], ['Riyadh', 'Saudi Arabia', 24.71, 46.68, 2, C],
+  ['Wellington', 'New Zealand', -41.29, 174.78, 2, C], ['Brasília', 'Brazil', -15.79, -47.88, 2, C], ['Lima', 'Peru', -12.05, -77.04, 2, C],
+  ['Santiago', 'Chile', -33.45, -70.67, 2, C], ['Bogotá', 'Colombia', 4.71, -74.07, 2, C], ['Havana', 'Cuba', 23.11, -82.37, 2, C],
+  ['Kyiv', 'Ukraine', 50.45, 30.52, 3, C], ['Prague', 'Czechia', 50.08, 14.44, 3, C], ['Budapest', 'Hungary', 47.50, 19.04, 3, C],
+  ['Bern', 'Switzerland', 46.95, 7.45, 3, C], ['Bucharest', 'Romania', 44.43, 26.10, 3, C], ['Sofia', 'Bulgaria', 42.70, 23.32, 3, C],
+  ['Belgrade', 'Serbia', 44.79, 20.45, 3, C], ['Ankara', 'Türkiye', 39.93, 32.86, 3, C], ['Beirut', 'Lebanon', 33.89, 35.50, 3, C],
+  ['Amman', 'Jordan', 31.95, 35.93, 3, C], ['Doha', 'Qatar', 25.29, 51.53, 3, C], ['Abu Dhabi', 'United Arab Emirates', 24.45, 54.38, 3, C],
+  ['Hanoi', 'Vietnam', 21.03, 105.85, 3, C], ['Kathmandu', 'Nepal', 27.72, 85.32, 3, C], ['Dhaka', 'Bangladesh', 23.81, 90.41, 3, C],
+  ['Islamabad', 'Pakistan', 33.68, 73.05, 3, C], ['Ulaanbaatar', 'Mongolia', 47.89, 106.91, 3, C], ['Accra', 'Ghana', 5.60, -0.19, 3, C],
+  ['Abuja', 'Nigeria', 9.08, 7.40, 3, C], ['Addis Ababa', 'Ethiopia', 9.03, 38.74, 3, C], ['Kinshasa', 'DR Congo', -4.32, 15.31, 3, C],
+  ['Dakar', 'Senegal', 14.72, -17.47, 3, C], ['Rabat', 'Morocco', 34.02, -6.84, 3, C], ['Algiers', 'Algeria', 36.75, 3.06, 3, C],
+  ['Tunis', 'Tunisia', 36.81, 10.18, 3, C], ['Khartoum', 'Sudan', 15.50, 32.56, 3, C], ['Kampala', 'Uganda', 0.35, 32.58, 3, C],
+  ['Luanda', 'Angola', -8.84, 13.23, 3, C], ['Quito', 'Ecuador', -0.18, -78.47, 3, C], ['Caracas', 'Venezuela', 10.48, -66.90, 3, C],
+  ['Montevideo', 'Uruguay', -34.90, -56.16, 3, C], ['Kingston', 'Jamaica', 17.97, -76.79, 3, C],
+  ['Tallinn', 'Estonia', 59.44, 24.75, 4, C], ['Riga', 'Latvia', 56.95, 24.11, 4, C], ['Vilnius', 'Lithuania', 54.69, 25.28, 4, C],
+  ['Minsk', 'Belarus', 53.90, 27.56, 4, C], ['Zagreb', 'Croatia', 45.81, 15.98, 4, C], ['Ljubljana', 'Slovenia', 46.06, 14.51, 4, C],
+  ['Bratislava', 'Slovakia', 48.15, 17.11, 4, C], ['Valletta', 'Malta', 35.90, 14.51, 4, C], ['Tbilisi', 'Georgia', 41.72, 44.79, 4, C],
+  ['Yerevan', 'Armenia', 40.18, 44.51, 4, C], ['Baku', 'Azerbaijan', 40.41, 49.87, 4, C], ['Tashkent', 'Uzbekistan', 41.30, 69.24, 4, C],
+  ['Muscat', 'Oman', 23.59, 58.41, 4, C], ['Kuwait City', 'Kuwait', 29.38, 47.99, 4, C], ['Sana’a', 'Yemen', 15.37, 44.19, 4, C],
+  ['Thimphu', 'Bhutan', 27.47, 89.64, 4, C], ['Phnom Penh', 'Cambodia', 11.56, 104.92, 4, C], ['Vientiane', 'Laos', 17.97, 102.63, 4, C],
+  ['Port Moresby', 'Papua New Guinea', -9.44, 147.18, 4, C], ['Suva', 'Fiji', -18.14, 178.44, 4, C], ['Kigali', 'Rwanda', -1.95, 30.06, 4, C],
+  ['Dodoma', 'Tanzania', -6.16, 35.75, 4, C], ['Maputo', 'Mozambique', -25.97, 32.57, 4, C], ['Windhoek', 'Namibia', -22.56, 17.08, 4, C],
+  ['Gaborone', 'Botswana', -24.65, 25.91, 4, C], ['Harare', 'Zimbabwe', -17.83, 31.05, 4, C], ['Lilongwe', 'Malawi', -13.96, 33.79, 4, C],
+  ['Lusaka', 'Zambia', -15.39, 28.32, 4, C], ['Antananarivo', 'Madagascar', -18.88, 47.51, 4, C], ['Bamako', 'Mali', 12.64, -8.00, 4, C],
+  ['Mogadishu', 'Somalia', 2.05, 45.32, 4, C], ['Asunción', 'Paraguay', -25.26, -57.58, 4, C], ['Panama City', 'Panama', 8.98, -79.52, 4, C],
+  ['San José', 'Costa Rica', 9.93, -84.08, 4, C], ['Managua', 'Nicaragua', 12.11, -86.24, 4, C], ['Guatemala City', 'Guatemala', 14.63, -90.51, 4, C],
+  ['Port-au-Prince', 'Haiti', 18.54, -72.34, 4, C], ['Santo Domingo', 'Dominican Republic', 18.49, -69.93, 4, C], ['Nassau', 'Bahamas', 25.05, -77.35, 4, C],
+  ['Bishkek', 'Kyrgyzstan', 42.87, 74.59, 5, C], ['Dushanbe', 'Tajikistan', 38.56, 68.79, 5, C], ['Ashgabat', 'Turkmenistan', 37.95, 58.38, 5, C],
+  ['Naypyidaw', 'Myanmar', 19.76, 96.08, 5, C], ['Niamey', 'Niger', 13.51, 2.11, 5, C], ['N’Djamena', 'Chad', 12.13, 15.06, 5, C],
+  ['Nouakchott', 'Mauritania', 18.08, -15.98, 5, C], ['Freetown', 'Sierra Leone', 8.48, -13.23, 5, C], ['Monrovia', 'Liberia', 6.30, -10.80, 5, C],
+  ['Yamoussoukro', 'Côte d’Ivoire', 6.83, -5.29, 5, C], ['Ouagadougou', 'Burkina Faso', 12.37, -1.52, 5, C], ['Yaoundé', 'Cameroon', 3.87, 11.52, 5, C],
+  ['Libreville', 'Gabon', 0.42, 9.47, 5, C], ['Asmara', 'Eritrea', 15.32, 38.93, 5, C], ['Djibouti', 'Djibouti', 11.59, 43.15, 5, C],
+  ['Juba', 'South Sudan', 4.86, 31.57, 5, C], ['Port Louis', 'Mauritius', -20.16, 57.50, 5, C], ['Georgetown', 'Guyana', 6.80, -58.16, 5, C],
+  ['Paramaribo', 'Suriname', 5.85, -55.20, 5, C], ['Tegucigalpa', 'Honduras', 14.07, -87.19, 5, C], ['San Salvador', 'El Salvador', 13.69, -89.22, 5, C],
+  // Big cities
+  ['New York', 'United States', 40.71, -74.01, 1, T], ['Sydney', 'New South Wales, Australia', -33.87, 151.21, 1, T],
+  ['Los Angeles', 'California, United States', 34.05, -118.24, 2, T], ['Rio de Janeiro', 'Brazil', -22.91, -43.17, 2, T], ['Mumbai', 'India', 19.08, 72.88, 2, T],
+  ['Shanghai', 'China', 31.23, 121.47, 2, T], ['Hong Kong', 'China', 22.32, 114.17, 2, T], ['Istanbul', 'Türkiye', 41.01, 28.98, 2, T],
+  ['Melbourne', 'Victoria, Australia', -37.81, 144.96, 2, T], ['Cape Town', 'South Africa', -33.92, 18.42, 2, T], ['Dubai', 'United Arab Emirates', 25.20, 55.27, 2, T],
+  ['Toronto', 'Ontario, Canada', 43.65, -79.38, 2, T],
+  ['Chicago', 'Illinois, United States', 41.88, -87.63, 3, T], ['Vancouver', 'British Columbia, Canada', 49.28, -123.12, 3, T], ['Barcelona', 'Spain', 41.39, 2.17, 3, T],
+  ['Milan', 'Italy', 45.46, 9.19, 3, T], ['Munich', 'Germany', 48.14, 11.58, 3, T], ['Saint Petersburg', 'Russia', 59.93, 30.34, 3, T],
+  ['Osaka', 'Japan', 34.69, 135.50, 3, T], ['Karachi', 'Pakistan', 24.86, 67.01, 3, T], ['Lagos', 'Nigeria', 6.52, 3.38, 3, T],
+  ['Johannesburg', 'South Africa', -26.20, 28.05, 3, T], ['São Paulo', 'Brazil', -23.55, -46.63, 3, T], ['Perth', 'Western Australia', -31.95, 115.86, 3, T],
+  ['Brisbane', 'Queensland, Australia', -27.47, 153.03, 3, T], ['Auckland', 'New Zealand', -36.85, 174.76, 3, T], ['Kolkata', 'India', 22.57, 88.36, 3, T],
+  ['Ho Chi Minh City', 'Vietnam', 10.82, 106.63, 3, T], ['Casablanca', 'Morocco', 33.57, -7.59, 3, T], ['Alexandria', 'Egypt', 31.20, 29.92, 3, T],
+  ['Houston', 'Texas, United States', 29.76, -95.37, 3, T], ['Miami', 'Florida, United States', 25.76, -80.19, 3, T], ['Seattle', 'Washington, United States', 47.61, -122.33, 3, T],
+  ['Darwin', 'Northern Territory, Australia', -12.46, 130.84, 4, T], ['Hobart', 'Tasmania, Australia', -42.88, 147.33, 4, T], ['Adelaide', 'South Australia', -34.93, 138.60, 4, T],
+  ['Anchorage', 'Alaska, United States', 61.22, -149.90, 4, T], ['Honolulu', 'Hawaii, United States', 21.31, -157.86, 4, T], ['Vladivostok', 'Russia', 43.12, 131.89, 4, T],
+  ['Novosibirsk', 'Russia', 55.03, 82.92, 4, T], ['Chennai', 'India', 13.08, 80.27, 4, T], ['Bengaluru', 'India', 12.97, 77.59, 4, T],
+  ['Guadalajara', 'Mexico', 20.66, -103.35, 4, T], ['Medellín', 'Colombia', 6.24, -75.58, 4, T], ['Marseille', 'France', 43.30, 5.37, 4, T],
+  ['Naples', 'Italy', 40.85, 14.27, 4, T], ['Montreal', 'Quebec, Canada', 45.50, -73.57, 4, T], ['Cairns', 'Queensland, Australia', -16.92, 145.77, 4, T],
+  ['Alice Springs', 'Northern Territory, Australia', -23.70, 133.88, 4, T], ['Mecca', 'Saudi Arabia', 21.39, 39.86, 4, T],
+  ['Timbuktu', 'Mali', 16.77, -3.01, 5, T], ['Zanzibar City', 'Tanzania', -6.16, 39.19, 5, T], ['Cusco', 'Peru', -13.53, -71.97, 5, T],
+  // Landmarks and nature
+  ['Mount Everest', 'Nepal and China: the highest mountain on Earth', 27.99, 86.93, 1, L], ['The Great Pyramid of Giza', 'Egypt', 29.98, 31.13, 1, L],
+  ['The Statue of Liberty', 'New York, United States', 40.69, -74.04, 1, L], ['The Sydney Opera House', 'Sydney, Australia', -33.86, 151.21, 1, L],
+  ['The Taj Mahal', 'Agra, India', 27.17, 78.04, 1, L], ['The Grand Canyon', 'Arizona, United States', 36.10, -112.10, 1, L],
+  ['Uluru', 'Northern Territory, Australia', -25.34, 131.04, 1, L], ['The Eiffel Tower', 'Paris, France', 48.86, 2.29, 1, L],
+  ['The Colosseum', 'Rome, Italy', 41.89, 12.49, 2, L], ['Stonehenge', 'England', 51.18, -1.83, 2, L], ['Machu Picchu', 'Peru', -13.16, -72.55, 2, L],
+  ['Christ the Redeemer', 'Rio de Janeiro, Brazil', -22.95, -43.21, 2, L], ['Niagara Falls', 'Canada and the United States', 43.08, -79.07, 2, L],
+  ['Mount Fuji', 'Japan', 35.36, 138.73, 2, L], ['The Great Wall at Badaling', 'China', 40.36, 116.02, 2, L],
+  ['Mount Kilimanjaro', 'Tanzania: Africa’s highest mountain', -3.07, 37.35, 2, L], ['Victoria Falls', 'Zambia and Zimbabwe', -17.92, 25.86, 2, L],
+  ['Petra', 'Jordan', 30.33, 35.44, 2, L], ['The Great Barrier Reef', 'Queensland, Australia', -18.29, 147.70, 2, L], ['The Panama Canal', 'Panama', 9.08, -79.68, 2, L],
+  ['Chichén Itzá', 'Mexico', 20.68, -88.57, 3, L], ['Angkor Wat', 'Cambodia', 13.41, 103.87, 3, L], ['Iguazu Falls', 'Argentina and Brazil', -25.69, -54.44, 3, L],
+  ['The Galápagos Islands', 'Ecuador', -0.60, -90.50, 3, L], ['Lake Baikal', 'Russia: the deepest lake on Earth', 53.50, 108.00, 3, L],
+  ['The Suez Canal', 'Egypt', 30.60, 32.30, 3, L], ['The Strait of Gibraltar', 'between Spain and Morocco', 35.97, -5.50, 3, L],
+  ['The Cape of Good Hope', 'South Africa', -34.36, 18.47, 3, L], ['The mouth of the Amazon', 'Brazil', -0.10, -50.00, 3, L],
+  ['The Dead Sea', 'Israel, the West Bank and Jordan: the lowest land on Earth', 31.50, 35.50, 3, L], ['Denali', 'Alaska: North America’s highest mountain', 63.07, -151.00, 3, L],
+  ['Mont Blanc', 'France and Italy: the highest peak in the Alps', 45.83, 6.87, 4, L], ['Aconcagua', 'Argentina: the highest mountain in the Americas', -32.65, -70.01, 4, L],
+  ['Mount Kosciuszko', 'New South Wales: mainland Australia’s highest peak', -36.46, 148.26, 4, L], ['Lake Titicaca', 'Peru and Bolivia', -15.80, -69.40, 4, L],
+  ['The Okavango Delta', 'Botswana', -19.30, 22.90, 4, L], ['Ha Long Bay', 'Vietnam', 20.91, 107.18, 4, L], ['The Matterhorn', 'Switzerland and Italy', 45.98, 7.66, 4, L],
+  ['Kakadu National Park', 'Northern Territory, Australia', -12.84, 132.39, 4, L], ['Lake Victoria’s centre', 'Uganda, Kenya and Tanzania', -1.00, 33.00, 5, L],
+  ['Socotra', 'Yemen: an island of unique dragon’s blood trees', 12.46, 53.82, 5, L], ['Easter Island (Rapa Nui)', 'Chile: home of the moai statues', -27.11, -109.35, 5, L],
+  ['Svalbard (Longyearbyen)', 'Norway, far into the Arctic', 78.22, 15.65, 5, L],
 ];
-const LANDMARKS = [
-  ['Mount Everest', 'Nepal and China: the highest mountain on Earth', 27.99, 86.93], ['The Great Pyramid of Giza', 'Egypt', 29.98, 31.13],
-  ['The Great Wall at Badaling', 'China', 40.36, 116.02], ['The Taj Mahal', 'Agra, India', 27.17, 78.04], ['The Eiffel Tower', 'Paris, France', 48.86, 2.29],
-  ['The Colosseum', 'Rome, Italy', 41.89, 12.49], ['Stonehenge', 'England', 51.18, -1.83], ['The Statue of Liberty', 'New York, United States', 40.69, -74.04],
-  ['The Grand Canyon', 'Arizona, United States', 36.10, -112.10], ['Niagara Falls', 'Canada and the United States', 43.08, -79.07],
-  ['Machu Picchu', 'Peru', -13.16, -72.55], ['Christ the Redeemer', 'Rio de Janeiro, Brazil', -22.95, -43.21], ['Chichén Itzá', 'Mexico', 20.68, -88.57],
-  ['Iguazu Falls', 'Argentina and Brazil', -25.69, -54.44], ['The Galápagos Islands', 'Ecuador', -0.60, -90.50], ['Victoria Falls', 'Zambia and Zimbabwe', -17.92, 25.86],
-  ['Mount Kilimanjaro', 'Tanzania: Africa’s highest mountain', -3.07, 37.35], ['The Cape of Good Hope', 'South Africa', -34.36, 18.47],
-  ['Petra', 'Jordan', 30.33, 35.44], ['Angkor Wat', 'Cambodia', 13.41, 103.87], ['Mount Fuji', 'Japan', 35.36, 138.73],
-  ['Uluru', 'Northern Territory, Australia', -25.34, 131.04], ['The Sydney Opera House', 'Sydney, Australia', -33.86, 151.21],
-  ['The Great Barrier Reef', 'Queensland, Australia', -18.29, 147.70], ['Lake Baikal', 'Russia: the deepest lake on Earth', 53.50, 108.00],
-  ['The Panama Canal', 'Panama', 9.08, -79.68], ['The Suez Canal', 'Egypt', 30.60, 32.30], ['The Strait of Gibraltar', 'between Spain and Morocco', 35.97, -5.50],
-  ['Denali', 'Alaska: North America’s highest mountain', 63.07, -151.00], ['The mouth of the Amazon', 'Brazil', -0.10, -50.00],
-  ['The Dead Sea', 'Israel, the West Bank and Jordan: the lowest land on Earth', 31.50, 35.50], ['The Kremlin', 'Moscow, Russia', 55.75, 37.62],
-];
-const SETS = {
-  capitals: { name: 'Capital cities', kind: 'Capital city', items: () => CAPITALS },
-  landmarks: { name: 'Landmarks & nature', kind: 'Landmark', items: () => LANDMARKS },
-  mixed: { name: 'Mixed', kind: '', items: () => CAPITALS.concat(LANDMARKS) },
-};
-const ROUNDS = 10;
+const KINDS = { capital: 'Capital city', city: 'City', landmark: 'Landmark' };
 
-// ── Map ──
-const M = FrontierMaps.MAPS.earth, LAT0 = M.lat[0], LAT1 = M.lat[1];
-const cv = $('map'), g = cv.getContext('2d'), W = cv.width, H = cv.height;
-const X = lon => (lon + 180) / 360 * W, Y = lat => (LAT0 - lat) / (LAT0 - LAT1) * H;
-const base = document.createElement('canvas');
-(function drawBase() {
-  const mask = FrontierMaps.decodeMask(M), small = document.createElement('canvas');
-  small.width = M.w; small.height = M.h;
-  const sg = small.getContext('2d'), img = sg.createImageData(M.w, M.h);
-  for (let i = 0; i < mask.length; i++) {
-    const land = mask[i], y = Math.floor(i / M.w), lat = LAT0 - y / M.h * (LAT0 - LAT1);
-    const c = land ? (Math.abs(lat) > 60 ? [222, 232, 236] : Math.abs(lat) < 23.4 ? [76, 160, 92] : [118, 170, 96]) : [22, 72, 128];
-    img.data.set([c[0], c[1], c[2], 255], i * 4);
+// ──────────── Ranks ────────────
+// diff: which difficulties come up. S: the points scale in km (1000 × e^(−distance ÷ S)), so higher ranks
+// need much more precise pins. time: seconds per round (0 = no clock). bot: the rank bot's typical miss.
+const RANKS = [
+  { name: 'Bronze',   diff: [1, 2],    S: 2000, time: 0,  bot: 1000, about: 'Famous capitals and landmarks · no clock' },
+  { name: 'Silver',   diff: [1, 2, 3], S: 1300, time: 0,  bot: 620,  about: 'Better-known capitals and big cities · no clock' },
+  { name: 'Gold',     diff: [2, 3],    S: 800,  time: 60, bot: 380,  about: 'Major cities and landmarks · 60 s a round' },
+  { name: 'Platinum', diff: [3, 4],    S: 450,  time: 45, bot: 210,  about: 'Smaller capitals and regional cities · 45 s' },
+  { name: 'Diamond',  diff: [3, 4, 5], S: 250,  time: 35, bot: 110,  about: 'Tricky places, steep scoring · 35 s' },
+  { name: 'Champion', diff: [4, 5],    S: 120,  time: 25, bot: 55,   about: 'The hardest places, pinpoint scoring · 25 s' },
+];
+const MATCH_ROUNDS = 5, PRACTICE_ROUNDS = 10, PRACTICE_S = 700;
+const RK = Ranked.create('geography', { wins: [2, 2, 3, 3, 4], crEveryRun: true });
+const points = (d, S) => d == null ? 0 : Math.round(1000 * Math.exp(-d / S));
+
+// ──────────── Map data ────────────
+// Detailed borders (Natural Earth 1:50m via world-atlas). If they can't load, the simple land map from Frontier is used.
+let GEO = null;        // { land: [Path2D by colour], coast: Path2D, borders: Path2D, countries: [{ name, bbox, rings }] }
+let MASK = null;       // fallback land picture
+const LAND = ['#5d9a5b', '#6aa35c', '#7aa860', '#8aad62', '#6f9c66'];
+async function loadMap() {
+  try {
+    if (!window.topojson) throw new Error('no topojson');
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 12000);
+    const w = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-50m.json', { signal: ctl.signal }).then(r => r.json());
+    clearTimeout(t);
+    const fc = topojson.feature(w, w.objects.countries), land = LAND.map(() => new Path2D()), countries = [];
+    // Lines that cross the 180° meridian jump from +180 to −180 in the data: keep them continuous instead
+    // (the map is drawn three times side by side, so coordinates past ±180 still show up in the right place)
+    const unwrap = pts => { let off = 0, px = null; return pts.map(([x, y]) => { if (px != null) { if (x + off - px > 180) off -= 360; else if (px - (x + off) > 180) off += 360; } px = x + off; return [px, y]; }); };
+    fc.features.forEach((f, k) => {
+      if (f.properties && f.properties.name === 'Antarctica') return;   // off the bottom of the playing area
+      const polys = f.geometry ? (f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates) : [];
+      const p = land[(k * 7 + 3) % LAND.length], rings = [];
+      let x0 = 180, x1 = -180, y0 = 90, y1 = -90;
+      for (const poly of polys) for (const raw of poly) {
+        const ring = unwrap(raw);
+        ring.forEach(([x, y], i) => { i ? p.lineTo(x, y) : p.moveTo(x, y); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
+        p.closePath(); rings.push(ring);
+      }
+      countries.push({ name: fullName((f.properties && f.properties.name) || ''), bbox: [x0, y0, x1, y1], rings });
+    });
+    const toPath = mesh => { const p = new Path2D(); for (const line of mesh.coordinates) unwrap(line).forEach(([x, y], i) => i ? p.lineTo(x, y) : p.moveTo(x, y)); return p; };
+    GEO = { land, countries, coast: toPath(topojson.mesh(w, w.objects.countries, (a, b) => a === b)), borders: toPath(topojson.mesh(w, w.objects.countries, (a, b) => a !== b)) };
+  } catch (e) {
+    const M = FrontierMaps.MAPS.earth, mask = FrontierMaps.decodeMask(M), c = document.createElement('canvas');
+    c.width = M.w; c.height = M.h;
+    const g = c.getContext('2d'), img = g.createImageData(M.w, M.h);
+    for (let i = 0; i < mask.length; i++) img.data.set(mask[i] ? [106, 163, 92, 255] : [0, 0, 0, 0], i * 4);
+    g.putImageData(img, 0, 0);
+    MASK = { c, lon: M.lon, lat: M.lat };
+    $('hint').textContent = 'The detailed map didn’t load, so this is the simple one';
   }
-  sg.putImageData(img, 0, 0);
-  base.width = W; base.height = H;
-  const b = base.getContext('2d');
-  b.imageSmoothingEnabled = true; b.imageSmoothingQuality = 'high';
-  b.drawImage(small, 0, 0, W, H);
-  // Graticule every 30°
-  b.lineWidth = 1.2; b.strokeStyle = 'rgba(255,255,255,0.16)';
-  for (let lon = -150; lon < 180; lon += 30) { b.beginPath(); b.moveTo(X(lon), 0); b.lineTo(X(lon), H); b.stroke(); }
-  for (let lat = -30; lat <= 60; lat += 30) { if (!lat) continue; b.beginPath(); b.moveTo(0, Y(lat)); b.lineTo(W, Y(lat)); b.stroke(); }
-  b.font = '700 19px Nunito, sans-serif'; b.fillStyle = 'rgba(255,255,255,0.55)';
-  for (let lon = -150; lon < 180; lon += 30) b.fillText(`${Math.abs(lon)}°${lon < 0 ? 'W' : lon > 0 ? 'E' : ''}`, X(lon) + 4, H - 8);
-  for (let lat = -30; lat <= 60; lat += 30) b.fillText(`${Math.abs(lat)}°${lat < 0 ? 'S' : lat > 0 ? 'N' : ''}`, 6, Y(lat) - 5);
-  // Special lines
-  const line = (lat, color, dash, label) => { b.setLineDash(dash); b.strokeStyle = color; b.lineWidth = 2; b.beginPath(); b.moveTo(0, Y(lat)); b.lineTo(W, Y(lat)); b.stroke(); b.setLineDash([]); b.fillStyle = color; b.fillText(label, W - b.measureText(label).width - 8, Y(lat) - 5); };
-  line(0, 'rgba(255,214,64,0.9)', [], 'Equator 0°');
-  line(23.44, 'rgba(255,255,255,0.5)', [8, 8], 'Tropic of Cancer');
-  line(-23.44, 'rgba(255,255,255,0.5)', [8, 8], 'Tropic of Capricorn');
-  line(66.56, 'rgba(255,255,255,0.5)', [8, 8], 'Arctic Circle');
-  b.strokeStyle = 'rgba(255,214,64,0.7)'; b.lineWidth = 2; b.beginPath(); b.moveTo(X(0), 0); b.lineTo(X(0), H); b.stroke();
-  b.fillStyle = 'rgba(255,214,64,0.9)'; b.fillText('Prime Meridian 0°', X(0) + 5, 20);
-})();
+  $('loading').hidden = true;
+  fitWorld(); draw();
+}
+// The map's short names written out ("Dem. Rep. Congo" → "DR Congo")
+function fullName(n) {
+  const fix = { 'Dem. Rep. Congo': 'DR Congo', 'United States of America': 'the United States', 'Central African Rep.': 'Central African Republic',
+    'Bosnia and Herz.': 'Bosnia and Herzegovina', 'Dominican Rep.': 'Dominican Republic', 'Eq. Guinea': 'Equatorial Guinea', 'S. Sudan': 'South Sudan',
+    'W. Sahara': 'Western Sahara', 'Solomon Is.': 'Solomon Islands', 'Falkland Is.': 'Falkland Islands', 'N. Cyprus': 'Northern Cyprus',
+    'Fr. S. Antarctic Lands': 'French Southern Lands', 'eSwatini': 'Eswatini', 'Turkey': 'Türkiye', 'Macedonia': 'North Macedonia',
+    'Marshall Is.': 'Marshall Islands', 'Cayman Is.': 'Cayman Islands', 'Faeroe Is.': 'Faroe Islands', 'Br. Indian Ocean Ter.': 'British Indian Ocean Territory',
+    'S. Geo. and the Is.': 'South Georgia', 'Heard I. and McDonald Is.': 'Heard and McDonald Islands', 'Antigua and Barb.': 'Antigua and Barbuda',
+    'St. Vin. and Gren.': 'St Vincent and the Grenadines', 'U.S. Virgin Is.': 'US Virgin Islands', 'British Virgin Is.': 'British Virgin Islands',
+    'Turks and Caicos Is.': 'Turks and Caicos Islands', 'N. Mariana Is.': 'Northern Mariana Islands', 'Cook Is.': 'Cook Islands', 'Fr. Polynesia': 'French Polynesia',
+    'Wallis and Futuna Is.': 'Wallis and Futuna', 'Pitcairn Is.': 'Pitcairn Islands' };
+  return fix[n] || n;
+}
+// Which country a point is in (ray casting on each ring; good enough on a flat lon/lat map)
+function countryAt(lon, lat) {
+  if (!GEO) return '';
+  lon = ((lon + 540) % 360) - 180;
+  for (const c of GEO.countries) for (const L of [lon, lon - 360, lon + 360]) {
+    if (L < c.bbox[0] || L > c.bbox[2] || lat < c.bbox[1] || lat > c.bbox[3]) continue;
+    let inside = false;
+    for (const r of c.rings) for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+      const [xi, yi] = r[i], [xj, yj] = r[j];
+      if ((yi > lat) !== (yj > lat) && L < (xj - xi) * (lat - yi) / (yj - yi) + xi) inside = !inside;
+    }
+    if (inside) return c.name;
+  }
+  return '';
+}
 
-function pin(x, y, color, label) {
-  g.fillStyle = color; g.strokeStyle = '#0b1830'; g.lineWidth = 3;
-  g.beginPath(); g.arc(x, y - 22, 11, Math.PI, 0); g.lineTo(x, y); g.closePath(); g.fill(); g.stroke();
-  g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y - 22, 4, 0, Math.PI * 2); g.fill();
+// ──────────── View: pan and zoom ────────────
+const cv = $('map'), ctx = cv.getContext('2d'), stage = $('stage');
+let W = 0, H = 0, DPR = 1;
+const V = { lon: 10, lat: 15, z: 3 };          // centre and pixels per degree
+const LAT_TOP = 84, LAT_BOT = -60, Z_MAX = 90;
+const zMin = () => Math.min(W / 360, H / (LAT_TOP - LAT_BOT)) * 0.96;
+function resize() {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  const r = stage.getBoundingClientRect(); W = r.width; H = r.height;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  clampView(); draw();
+}
+function clampView() {
+  V.z = Math.max(zMin(), Math.min(Z_MAX, V.z));
+  const half = H / 2 / V.z, span = LAT_TOP - LAT_BOT;
+  if (half * 2 >= span) V.lat = (LAT_TOP + LAT_BOT) / 2;
+  else V.lat = Math.max(LAT_BOT + half, Math.min(LAT_TOP - half, V.lat));
+  if (W / V.z >= 360) V.lon = 10;
+  V.lon = ((V.lon + 540) % 360) - 180;
+}
+const sx = lon => W / 2 + (lon - V.lon) * V.z, sy = lat => H / 2 - (lat - V.lat) * V.z;
+const toLon = x => V.lon + (x - W / 2) / V.z, toLat = y => V.lat - (y - H / 2) / V.z;
+// The copy of a longitude nearest the view centre (the map wraps round)
+const near = lon => lon + 360 * Math.round((V.lon - lon) / 360);
+function zoomAt(x, y, f) {
+  const lon = toLon(x), lat = toLat(y);
+  V.z = Math.max(zMin(), Math.min(Z_MAX, V.z * f));
+  V.lon = lon - (x - W / 2) / V.z; V.lat = lat + (y - H / 2) / V.z;
+  clampView(); draw();
+}
+function fitWorld() { V.z = zMin(); V.lon = 10; V.lat = (LAT_TOP + LAT_BOT) / 2; clampView(); }
+let anim = 0;
+function flyTo(lon, lat, z, ms) {
+  cancelAnimationFrame(anim);
+  const a = { ...V }, b = { lon: lon + 360 * Math.round((a.lon - lon) / 360), lat, z }, t0 = performance.now();
+  const step = t => {
+    const k = Math.min(1, (t - t0) / (ms || 700)), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+    V.z = Math.exp(Math.log(a.z) + (Math.log(b.z) - Math.log(a.z)) * e);
+    V.lon = a.lon + (b.lon - a.lon) * e; V.lat = a.lat + (b.lat - a.lat) * e;
+    clampView(); draw();
+    if (k < 1) anim = requestAnimationFrame(step);
+  };
+  anim = requestAnimationFrame(step);
+}
+
+// ──────────── Drawing ────────────
+let frame = 0;
+function draw() { if (!frame) frame = requestAnimationFrame(render); }
+function render() {
+  frame = 0;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = '#16497d'; ctx.fillRect(0, 0, W, H);
+  // Copies of the world to the left and right, so the map wraps
+  for (let k = -1; k <= 1; k++) {
+    const off = k * 360, left = sx(-180 + off), right = sx(180 + off);
+    if (right < 0 || left > W) continue;
+    if (GEO) {
+      ctx.setTransform(DPR * V.z, 0, 0, -DPR * V.z, DPR * (W / 2 + (off - V.lon) * V.z), DPR * (H / 2 + V.lat * V.z));
+      GEO.land.forEach((p, i) => { ctx.fillStyle = LAND[i]; ctx.fill(p); });
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = (V.z > 12 ? 1.1 : 0.7) / V.z; ctx.stroke(GEO.borders);
+      ctx.strokeStyle = 'rgba(10,40,70,0.65)'; ctx.lineWidth = 1 / V.z; ctx.stroke(GEO.coast);
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    } else if (MASK) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(MASK.c, sx(MASK.lon[0] + off), sy(MASK.lat[0]), (MASK.lon[1] - MASK.lon[0]) * V.z, (MASK.lat[0] - MASK.lat[1]) * V.z);
+    }
+  }
+  drawGrid();
+  if (S) drawPins();
+  // Scale bar and zoom level
+  const kmPerPx = 111.32 * Math.cos(V.lat * Math.PI / 180) / V.z, nice = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000];
+  const km = nice.find(n => n / kmPerPx >= 70) || 5000;
+  $('scale').innerHTML = `${km.toLocaleString('en-US')} km<i style="width:${Math.round(km / kmPerPx)}px"></i>`;
+  $('zlvl').textContent = `Zoom ×${(V.z / zMin()).toFixed(V.z / zMin() < 10 ? 1 : 0)}`;
+}
+function drawGrid() {
+  const step = V.z < 5 ? 30 : V.z < 14 ? 10 : V.z < 40 ? 5 : 1;
+  const lon0 = Math.floor(toLon(0) / step) * step, lon1 = toLon(W), lat0 = Math.floor(toLat(H) / step) * step, lat1 = toLat(0);
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.13)'; ctx.font = '700 11px Nunito, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.beginPath();
+  for (let lon = lon0; lon <= lon1; lon += step) { const x = Math.round(sx(lon)) + 0.5; ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+  for (let lat = lat0; lat <= lat1; lat += step) { const y = Math.round(sy(lat)) + 0.5; ctx.moveTo(0, y); ctx.lineTo(W, y); }
+  ctx.stroke();
+  const fmtLon = l => { l = ((l + 540) % 360) - 180; return `${Math.abs(Math.round(l))}°${l < 0 ? 'W' : l > 0 && l < 180 ? 'E' : ''}`; };
+  for (let lon = lon0; lon <= lon1; lon += step) ctx.fillText(fmtLon(lon), sx(lon) + 3, 13);
+  for (let lat = lat0; lat <= lat1; lat += step) if (Math.abs(lat) <= 90) ctx.fillText(`${Math.abs(lat)}°${lat < 0 ? 'S' : lat > 0 ? 'N' : ''}`, 4, sy(lat) - 3);
+  // Equator, Tropics, polar circle, Prime Meridian
+  const line = (lat, color, dash, label) => {
+    const y = sy(lat); if (y < 0 || y > H) return;
+    ctx.setLineDash(dash); ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); ctx.setLineDash([]);
+    if (V.z < 30) { ctx.fillStyle = color; ctx.fillText(label, W - ctx.measureText(label).width - 58, y - 4); }
+  };
+  line(0, 'rgba(255,214,64,0.85)', [], 'Equator');
+  line(23.44, 'rgba(255,255,255,0.45)', [6, 6], 'Tropic of Cancer');
+  line(-23.44, 'rgba(255,255,255,0.45)', [6, 6], 'Tropic of Capricorn');
+  line(66.56, 'rgba(255,255,255,0.45)', [6, 6], 'Arctic Circle');
+  for (let k = -1; k <= 1; k++) { const x = sx(k * 360); if (x < 0 || x > W) continue; ctx.strokeStyle = 'rgba(255,214,64,0.6)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+}
+function pinAt(lon, lat, color, label, above) {
+  const x = sx(near(lon)), y = sy(lat);
+  ctx.fillStyle = color; ctx.strokeStyle = '#0b1830'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(x, y - 20, 10, Math.PI, 0); ctx.lineTo(x, y); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y - 20, 3.6, 0, Math.PI * 2); ctx.fill();
   if (label) {
-    g.font = '800 18px Nunito, sans-serif';
-    const w = g.measureText(label).width + 14, lx = Math.min(W - w - 4, Math.max(4, x - w / 2)), ly = y + 8;
-    g.fillStyle = 'rgba(8,16,38,0.85)'; g.beginPath(); g.roundRect ? g.roundRect(lx, ly, w, 26, 8) : g.rect(lx, ly, w, 26); g.fill();
-    g.fillStyle = '#fff'; g.fillText(label, lx + 7, ly + 19);
+    ctx.font = '800 13px Nunito, sans-serif';
+    const w = ctx.measureText(label).width + 12, lx = Math.min(W - w - 4, Math.max(4, x - w / 2)), ly = above ? y - 56 : y + 6;
+    ctx.fillStyle = 'rgba(8,16,38,0.88)'; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(lx, ly, w, 21, 7) : ctx.rect(lx, ly, w, 21); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.fillText(label, lx + 6, ly + 15);
   }
 }
-function draw() {
-  g.clearRect(0, 0, W, H); g.drawImage(base, 0, 0);
-  if (!S || !S.guess) return;
-  const t = S.cur, gx = X(S.guess.lon), gy = Y(S.guess.lat), tx = X(t[3]), ty = Y(t[2]);
-  // The line between your pin and the real place (the short way round)
-  g.setLineDash([10, 8]); g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 3;
-  g.beginPath();
-  if (Math.abs(S.guess.lon - t[3]) > 180) {
-    const right = S.guess.lon > t[3], ex = right ? W : 0, k = (right ? W - gx : gx) / ((right ? W - gx : gx) + (right ? tx : W - tx)), my = gy + (ty - gy) * k;
-    g.moveTo(gx, gy); g.lineTo(ex, my); g.moveTo(W - ex, my); g.lineTo(tx, ty);
-  } else { g.moveTo(gx, gy); g.lineTo(tx, ty); }
-  g.stroke(); g.setLineDash([]);
-  pin(gx, gy, '#4fc3f7');
-  pin(tx, ty, '#ff5a5f', t[0]);
+function drawPins() {
+  const r = S.round;
+  if (!r) return;
+  if (r.done) {
+    const t = r.place, gl = r.guess, tl = near(t[3]);
+    if (gl) {
+      // Dashed line between the pins, the short way round
+      const glon = tl + ((((gl.lon - tl) % 360) + 540) % 360 - 180);
+      ctx.setLineDash([8, 6]); ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(sx(glon), sy(gl.lat)); ctx.lineTo(sx(tl), sy(t[2])); ctx.stroke(); ctx.setLineDash([]);
+      // The rank's "full marks" zone: inside this ring scores at least 900
+      const rr = -Math.log(0.9) * S.scale / 111.32 * V.z;
+      ctx.strokeStyle = 'rgba(165,243,196,0.75)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(sx(tl), sy(t[2]), Math.max(4, rr), 0, Math.PI * 2); ctx.stroke();
+      if (S.mode === 'ranked' && r.bot) pinAt(r.bot.lon, r.bot.lat, '#ff9f43');
+      // Labels go above your pin when the two pins are close, so they don't overlap
+      const close = Math.abs(sx(glon) - sx(tl)) < 90 && Math.abs(sy(gl.lat) - sy(t[2])) < 40;
+      pinAt(glon, gl.lat, '#4fc3f7', 'You', close);
+    }
+    pinAt(tl, t[2], '#ff5a5f', t[0]);
+  } else if (r.guess) pinAt(r.guess.lon, r.guess.lat, '#4fc3f7');
 }
 
-// Great-circle distance in km
-function km(a1, o1, a2, o2) {
-  const r = Math.PI / 180, dA = (a2 - a1) * r, dO = (o2 - o1) * r;
-  const h = Math.sin(dA / 2) ** 2 + Math.cos(a1 * r) * Math.cos(a2 * r) * Math.sin(dO / 2) ** 2;
+// ──────────── Input ────────────
+const ptrs = new Map();
+let gesture = null;
+cv.addEventListener('pointerdown', e => {
+  try { cv.setPointerCapture(e.pointerId); } catch (err) { }
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  cancelAnimationFrame(anim);
+  if (ptrs.size === 1) gesture = { x0: e.clientX, y0: e.clientY, t0: performance.now(), moved: false };
+  else if (gesture) gesture.moved = true;
+});
+cv.addEventListener('pointermove', e => {
+  const p = ptrs.get(e.pointerId); if (!p) return;
+  const r = cv.getBoundingClientRect();
+  if (ptrs.size === 2) {
+    const [a, b] = [...ptrs.values()], d0 = Math.hypot(a.x - b.x, a.y - b.y);
+    p.x = e.clientX; p.y = e.clientY;
+    const [c, d] = [...ptrs.values()], d1 = Math.hypot(c.x - d.x, c.y - d.y);
+    if (d0 > 0) zoomAt((c.x + d.x) / 2 - r.left, (c.y + d.y) / 2 - r.top, d1 / d0);
+    return;
+  }
+  const dx = e.clientX - p.x, dy = e.clientY - p.y;
+  p.x = e.clientX; p.y = e.clientY;
+  if (gesture && !gesture.moved && Math.hypot(e.clientX - gesture.x0, e.clientY - gesture.y0) > 6) { gesture.moved = true; cv.classList.add('drag'); }
+  if (gesture && gesture.moved) { V.lon -= dx / V.z; V.lat += dy / V.z; clampView(); draw(); }
+});
+const up = e => {
+  if (!ptrs.has(e.pointerId)) return;
+  ptrs.delete(e.pointerId);
+  if (ptrs.size === 0) {
+    cv.classList.remove('drag');
+    if (gesture && !gesture.moved && e.type === 'pointerup') {
+      const r = cv.getBoundingClientRect();
+      placePin(toLon(e.clientX - r.left), toLat(e.clientY - r.top));
+    }
+    gesture = null;
+  }
+};
+cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = cv.getBoundingClientRect();
+  zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0018)));
+}, { passive: false });
+$('zIn').onclick = () => zoomAt(W / 2, H / 2, 2);
+$('zOut').onclick = () => zoomAt(W / 2, H / 2, 0.5);
+$('zWorld').onclick = () => flyTo(10, (LAT_TOP + LAT_BOT) / 2, zMin(), 500);
+$('zPin').onclick = () => { const g = S && S.round && S.round.guess; if (g) flyTo(g.lon, g.lat, Math.max(V.z, zMin() * 6), 500); };
+addEventListener('keydown', e => {
+  if (!$('menuOv').classList.contains('hidden') || !$('endOv').classList.contains('hidden') || e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key, pan = 80 / V.z;
+  if (k === '+' || k === '=') zoomAt(W / 2, H / 2, 1.6);
+  else if (k === '-' || k === '_') zoomAt(W / 2, H / 2, 1 / 1.6);
+  else if (k === 'ArrowLeft') { V.lon -= pan; clampView(); draw(); }
+  else if (k === 'ArrowRight') { V.lon += pan; clampView(); draw(); }
+  else if (k === 'ArrowUp') { V.lat += pan; clampView(); draw(); }
+  else if (k === 'ArrowDown') { V.lat -= pan; clampView(); draw(); }
+  else if (k === 'Enter' || k === ' ') { if (S && S.round && S.round.done) $('nextBtn').click(); else if (!$('lockBtn').hidden) lock(); }
+  else return;
+  e.preventDefault();
+});
+new ResizeObserver(resize).observe(stage);
+
+// ──────────── Game ────────────
+let S = null, tick = 0;
+const pickSet = Learn.seg($('segSet'), 'pins-set2'), pickDiff = Learn.seg($('segDiff'), 'pins-diff');
+const km = (a1, o1, a2, o2) => {
+  const r = Math.PI / 180, h = Math.sin((a2 - a1) * r / 2) ** 2 + Math.cos(a1 * r) * Math.cos(a2 * r) * Math.sin((o2 - o1) * r / 2) ** 2;
   return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
+};
+const coord = (lat, lon) => `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(2)}°${lon >= 0 ? 'E' : 'W'}`;
+const fmtKm = d => d < 10 ? `${d.toFixed(1)} km` : `${Math.round(d).toLocaleString('en-US')} km`;
+
+// Pick rounds: different places, spread across the difficulties the mode allows
+function pickPlaces(filter, n) {
+  const pool = shuffle(PLACES.filter(filter)), out = [], seen = new Set();
+  for (const p of pool) { if (out.length >= n) break; if (!seen.has(p[1]) || pool.length < n * 2) { out.push(p); seen.add(p[1]); } }
+  return out;
 }
-const points = d => d < 50 ? 1000 : Math.max(0, Math.round(1000 * Math.exp(-(d - 50) / 1200)));
-const coord = (lat, lon) => `${Math.abs(lat).toFixed(1)}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(1)}°${lon >= 0 ? 'E' : 'W'}`;
-const hemis = (lat, lon) => `${lat >= 0 ? 'Northern' : 'Southern'} and ${lon >= 0 ? 'Eastern' : 'Western'} hemispheres`;
-const zone = lat => Math.abs(lat) < 23.44 ? 'between the Tropics' : Math.abs(lat) > 66.56 ? 'inside the polar circle' : lat > 0 ? 'north of the Tropic of Cancer' : 'south of the Tropic of Capricorn';
-
-// ── Game ──
-let S = null;
-const pickSet = Learn.seg($('segSet'), 'pins-set');
-
-function start() {
-  const set = pickSet();
-  S = { set, list: shuffle(SETS[set].items()).slice(0, ROUNDS), i: -1, score: 0, log: [], guess: null };
-  $('setName').textContent = SETS[set].name;
+function start(mode) {
+  cancelAnimationFrame(anim); clearInterval(tick);
+  if (mode === 'ranked') {
+    const lv = RK.botTier, R = RANKS[lv], atTop = !RK.placing && RK.tier >= RANKS.length - 1;
+    S = { mode, lv, scale: R.S, time: R.time, rounds: MATCH_ROUNDS, places: pickPlaces(p => R.diff.includes(p[4]), MATCH_ROUNDS),
+          label: atTop ? 'Challenger run · highest total wins' : `Ranked · ${RK.matchLabel}`, challenger: atTop };
+    RK.begin();
+  } else {
+    const set = pickSet(), d = +pickDiff(), diffs = d === 1 ? [1, 2] : d === 3 ? [3, 4] : [4, 5];
+    S = { mode, scale: PRACTICE_S, time: 0, rounds: PRACTICE_ROUNDS, label: 'Practice',
+          places: pickPlaces(p => (set === 'all' || p[5] === set) && diffs.includes(p[4]), PRACTICE_ROUNDS) };
+    S.rounds = S.places.length;
+  }
+  Object.assign(S, { i: -1, log: [], you: 0, bot: 0, round: null });
   $('menuOv').classList.add('hidden'); $('endOv').classList.add('hidden');
   next();
 }
 function next() {
   S.i++;
-  if (S.i >= ROUNDS) return end();
-  S.cur = S.list[S.i]; S.guess = null;
-  const isCap = CAPITALS.includes(S.cur);
-  $('kind').textContent = isCap ? 'Capital city' : 'Landmark';
-  $('ask').textContent = `Where is ${S.cur[0]}?`;
-  $('fb').innerHTML = isCap ? `It's the capital of <b>${esc(S.cur[1])}</b>. Tap the map where you think it is.` : `${esc(S.cur[1])}. Tap the map where you think it is.`;
-  $('nextBtn').hidden = true;
-  $('round').textContent = S.i + 1; $('score').textContent = S.score.toLocaleString('en-US');
+  if (S.i >= S.rounds) return end();
+  const p = S.places[S.i];
+  S.round = { place: p, guess: null, done: false, start: performance.now() };
+  $('kind').textContent = `${KINDS[p[5]]} · ${S.label}`;
+  $('ask').textContent = `Where is ${p[0]}?`;
+  $('sub').textContent = p[5] === 'landmark' ? p[1] : p[5] === 'capital' ? `Capital of ${p[1]}` : p[1];
+  $('res').hidden = true; $('lockBtn').hidden = true;
+  $('hint').textContent = 'Drag to move · scroll or pinch to zoom · tap to drop your pin';
+  fitWorld(); draw(); hud();
+  $('clock').hidden = !S.time;
+  clearInterval(tick);
+  if (S.time) tick = setInterval(clock, 100);
+}
+function clock() {
+  const r = S.round; if (!r || r.done) return;
+  const left = Math.max(0, S.time - (performance.now() - r.start) / 1000);
+  $('clockBar').style.transform = `scaleX(${left / S.time})`;
+  $('clock').classList.toggle('low', left < 8);
+  if (left <= 0) lock(true);
+}
+function hud() {
+  $('pips').innerHTML = Array.from({ length: S.rounds }, (_, k) => {
+    const l = S.log[k];
+    return `<i class="${k === S.i && !(S.round && S.round.done) ? 'cur' : ''}">${l ? `<b style="width:${l.pts / 10}%"></b>` : ''}</i>`;
+  }).join('');
+  $('tally').innerHTML = S.mode === 'ranked'
+    ? `<span class="you">${RK.emblem(null, 18)}You <b>${S.you.toLocaleString('en-US')}</b></span><span class="bot">${RK.emblem(S.lv, 18)}${RANKS[S.lv].name} bot <b>${S.bot.toLocaleString('en-US')}</b></span>`
+    : `<span>Score <b>${S.you.toLocaleString('en-US')}</b></span>`;
+}
+function placePin(lon, lat) {
+  const r = S && S.round;
+  if (!r || r.done || $('loading').hidden === false) return;
+  r.guess = { lon: ((lon + 540) % 360) - 180, lat: Math.max(-89.9, Math.min(89.9, lat)) };
+  $('lockBtn').hidden = false;
+  const c = countryAt(r.guess.lon, r.guess.lat);
+  $('hint').textContent = `Pin at ${coord(r.guess.lat, r.guess.lon)}${c ? ` (${c})` : ''} · tap again to move it`;
   draw();
 }
-cv.addEventListener('click', e => {
-  if (!S || S.guess || S.i >= ROUNDS) return;
-  const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * W, y = (e.clientY - r.top) / r.height * H;
-  S.guess = { lon: x / W * 360 - 180, lat: LAT0 - y / H * (LAT0 - LAT1) };
-  const t = S.cur, d = km(S.guess.lat, S.guess.lon, t[2], t[3]), p = points(d);
-  S.score += p; S.log.push({ t, d, p });
-  (p >= 500 ? sfx.ok : sfx.no)();
-  const verdict = d < 300 ? '<span class="good">Spot on!</span>' : d < 1000 ? '<span class="good">Close!</span>' : d < 3000 ? '<span class="bad">Not far off.</span>' : '<span class="bad">A long way off.</span>';
-  $('fb').innerHTML = `${verdict} You were <b>${Math.round(d).toLocaleString('en-US')} km</b> away: <b>+${p}</b> points.<br>${esc(t[0])} is at <b>${coord(t[2], t[3])}</b>, in the ${hemis(t[2], t[3])}, ${zone(t[2])}.`;
-  $('score').textContent = S.score.toLocaleString('en-US');
-  $('nextBtn').hidden = false; $('nextBtn').textContent = S.i + 1 >= ROUNDS ? 'See results ➜' : 'Next ➜';
-  draw();
-  // On phones the map scrolls sideways: bring the real place into view
-  const box = $('mapbox'), px = X(t[3]) / W * cv.clientWidth;
-  if (box.scrollWidth > box.clientWidth) box.scrollTo({ left: px - box.clientWidth / 2, behavior: 'smooth' });
-});
-$('nextBtn').onclick = next;
+// A rank bot's pin: usually near, sometimes way off
+function botGuess(p) {
+  const R = RANKS[S.lv], g = Math.sqrt(-2 * Math.log(Math.random() + 1e-9)) * Math.cos(2 * Math.PI * Math.random());
+  let d = R.bot * Math.exp(0.55 * g);
+  if (Math.random() < 0.06) d *= 4;
+  const brg = Math.random() * 2 * Math.PI, dr = d / 6371, la = p[2] * Math.PI / 180, lo = p[3] * Math.PI / 180;
+  const la2 = Math.asin(Math.sin(la) * Math.cos(dr) + Math.cos(la) * Math.sin(dr) * Math.cos(brg));
+  const lo2 = lo + Math.atan2(Math.sin(brg) * Math.sin(dr) * Math.cos(la), Math.cos(dr) - Math.sin(la) * Math.sin(la2));
+  return { lat: la2 * 180 / Math.PI, lon: ((lo2 * 180 / Math.PI + 540) % 360) - 180, d };
+}
+function lock(timeout) {
+  const r = S && S.round;
+  if (!r || r.done) return;
+  r.done = true; clearInterval(tick);
+  $('lockBtn').hidden = true;
+  const p = r.place, d = r.guess ? km(r.guess.lat, r.guess.lon, p[2], p[3]) : null, pts = points(d, S.scale);
+  const inC = r.guess ? countryAt(r.guess.lon, r.guess.lat) : '';
+  S.you += pts;
+  const entry = { p, d, pts, inC };
+  if (S.mode === 'ranked') { r.bot = botGuess(p); entry.botPts = points(r.bot.d, S.scale); entry.botD = r.bot.d; S.bot += entry.botPts; }
+  S.log.push(entry);
+  (pts >= 600 ? sfx.ok : sfx.no)();
+  const verdict = d == null ? `<span class="bad">${timeout ? 'Time’s up, no pin!' : 'No pin dropped.'}</span>` : pts >= 900 ? '<span class="good">Pinpoint!</span>' : pts >= 600 ? '<span class="good">Close!</span>' : pts >= 250 ? '<span class="bad">Not far off.</span>' : '<span class="bad">A long way off.</span>';
+  const where = p[5] === 'capital' ? `the capital of ${esc(p[1])}` : esc(p[1]);
+  $('fb').innerHTML = `${verdict} ${d != null ? `You were <b>${fmtKm(d)}</b> away: <b>+${pts}</b> points.` : ''}` +
+    (S.mode === 'ranked' ? ` The ${RANKS[S.lv].name} bot was ${fmtKm(entry.botD)} away (+${entry.botPts}).` : '') +
+    `<br><b>${esc(p[0])}</b>, ${where}, is at <b>${coord(p[2], p[3])}</b>.` +
+    (r.guess && inC ? ` Your pin landed in <b>${esc(inC)}</b>.` : r.guess && GEO && d > 30 ? ' Your pin landed in the sea.' : '') +
+    (timeout && r.guess ? ' The clock ran out, so your pin was locked in where it was.' : '');
+  $('nextBtn').textContent = S.i + 1 >= S.rounds ? 'See results ➜' : 'Next ➜';
+  $('res').hidden = false;
+  $('hint').textContent = 'The green ring is the 900+ point zone';
+  // Fly to show both pins
+  if (r.guess) {
+    const tl = p[3], gl = tl + ((((r.guess.lon - tl) % 360) + 540) % 360 - 180);
+    const lonC = (tl + gl) / 2, latC = (p[2] + r.guess.lat) / 2, span = Math.max(Math.abs(tl - gl), Math.abs(p[2] - r.guess.lat) * W / H, 3);
+    flyTo(lonC, latC, Math.min(30, W / (span * 1.8)), 800);
+  } else flyTo(p[3], p[2], zMin() * 4, 800);
+  hud();
+}
+$('lockBtn').onclick = () => lock();
+$('nextBtn').onclick = () => { if (S && S.round && S.round.done) next(); };
 
 function end() {
-  S.i = ROUNDS;
-  const key = 'pins-best-' + S.set, best = lsGet(key, 0), isBest = S.score > best;
-  if (isBest) lsSet(key, S.score);
-  const avg = Math.round(S.log.reduce((a, l) => a + l.d, 0) / S.log.length);
-  $('endTitle').textContent = S.score >= 8000 ? 'Geography genius!' : S.score >= 5000 ? 'Great map skills!' : 'Keep exploring!';
-  $('endStats').innerHTML = `<div>Score<b>${S.score.toLocaleString('en-US')}</b></div><div>Average miss<b>${avg.toLocaleString('en-US')} km</b></div><div>${isBest ? 'New best!' : 'Best'}<b>${Math.max(best, S.score).toLocaleString('en-US')}</b></div>`;
-  $('review').innerHTML = '<h4>Your pins</h4>' + S.log.map(l => `<div class="rv"><b>${esc(l.t[0])}</b> (${esc(l.t[1])}) · ${coord(l.t[2], l.t[3])} · ${Math.round(l.d).toLocaleString('en-US')} km away · +${l.p}</div>`).join('');
-  sfx.end();
+  clearInterval(tick);
+  const ranked = S.mode === 'ranked', avg = Math.round(S.log.filter(l => l.d != null).reduce((a, l) => a + l.d, 0) / Math.max(1, S.log.filter(l => l.d != null).length));
+  let rk = '';
+  S.round = null; draw();
+  if (ranked) {
+    const won = S.you > S.bot;
+    $('endTitle').textContent = won ? 'You win!' : S.you === S.bot ? 'Tied!' : `The ${RANKS[S.lv].name} bot wins`;
+    $('endTitle').style.color = won ? '#7fe0a8' : '#ff9a8a';
+    rk = RK.resultHTML(RK.record(won, { pts: S.you, km: avg }));
+    (won ? sfx.end : sfx.no)();
+    $('endStats').innerHTML = `<div>You<b>${S.you.toLocaleString('en-US')}</b></div><div>${RANKS[S.lv].name} bot<b>${S.bot.toLocaleString('en-US')}</b></div><div>Average miss<b>${avg.toLocaleString('en-US')} km</b></div>`;
+  } else {
+    const key = `pins-best-${pickSet()}-${pickDiff()}`, best = lsGet(key, 0), max = S.rounds * 1000;
+    if (S.you > best) lsSet(key, S.you);
+    $('endTitle').textContent = S.you >= max * 0.8 ? 'Geography genius!' : S.you >= max * 0.5 ? 'Great map skills!' : 'Keep exploring!';
+    $('endTitle').style.color = '#fff';
+    $('endStats').innerHTML = `<div>Score<b>${S.you.toLocaleString('en-US')}</b></div><div>Average miss<b>${avg.toLocaleString('en-US')} km</b></div><div>${S.you > best ? 'New best!' : 'Best'}<b>${Math.max(best, S.you).toLocaleString('en-US')}</b></div>`;
+    sfx.end();
+  }
+  $('rkRes').innerHTML = rk;
+  $('review').innerHTML = '<h4>Your pins</h4>' + S.log.map(l => `<div class="rv"><span class="pts">+${l.pts}</span><b>${esc(l.p[0])}</b> (${esc(l.p[1])}) · ${coord(l.p[2], l.p[3])}<br>${l.d == null ? 'No pin' : `${fmtKm(l.d)} away${l.inC ? `, in ${esc(l.inC)}` : ''}`}</div>`).join('');
+  S.mode = 'over';
   $('endOv').classList.remove('hidden');
 }
+
 function showMenu() {
-  const b = lsGet('pins-best-' + pickSet(), 0);
-  $('best').textContent = b ? `Your best (${SETS[pickSet()].name}): ${b.toLocaleString('en-US')} of 10,000` : 'Score up to 1,000 points a round: 10,000 is perfect.';
+  cancelAnimationFrame(anim); clearInterval(tick);
+  $('rkCard').innerHTML = RK.card();
+  $('ladder').innerHTML = RANKS.map((R, i) => `<div class="${i === RK.botTier ? 'cur' : ''}">${RK.emblem(i, 24)}<span><b>${R.name}</b>${R.about}</span></div>`).join('');
+  const atTop = !RK.placing && RK.tier >= RANKS.length - 1;
+  $('rkNote').textContent = atTop ? 'Champion matches are Challenger runs: your 5-round total is posted, and the 3 highest become Challengers.'
+    : RK.placing ? 'Placement matches start at Platinum level.' : `Next: 5 rounds against the ${RANKS[RK.botTier].name} bot. Leaving a match early counts as a loss.`;
+  $('rkGo').textContent = atTop ? 'Start Challenger run' : 'Play ranked';
+  const b = lsGet(`pins-best-${pickSet()}-${pickDiff()}`, 0);
+  $('best').textContent = b ? `Your best practice score here: ${b.toLocaleString('en-US')} of 10,000` : 'Practice: up to 1,000 points a round.';
   $('endOv').classList.add('hidden'); $('menuOv').classList.remove('hidden');
 }
+const inMatch = () => S && S.mode === 'ranked' && S.log.length + (S.round && !S.round.done ? 1 : 0) > 0;
+function quit() { if (inMatch()) { RK.record(false); S.mode = 'over'; } }
 $('segSet').addEventListener('click', () => setTimeout(showMenu));
-$('goBtn').onclick = start;
-$('againBtn').onclick = start;
+$('segDiff').addEventListener('click', () => setTimeout(showMenu));
+$('rkGo').onclick = () => start('ranked');
+$('prGo').onclick = () => start('practice');
+$('againBtn').onclick = () => start(S && S.lv != null ? 'ranked' : 'practice');
 $('endMenuBtn').onclick = showMenu;
-$('menuBtn').onclick = showMenu;
-draw();
+$('menuBtn').onclick = () => {
+  if (inMatch() && !confirm('Leave this ranked match? It counts as a loss.')) return;
+  quit(); showMenu();
+};
+addEventListener('pagehide', quit);
+
+resize();
+loadMap();
 showMenu();
 </script>
 </body>

@@ -1,4 +1,4 @@
-// Ranked ladder shared by Chess, Frontier, Volley, Timberfall, Boxing and Number Rush (singleplayer, against bots).
+// Ranked ladder shared by Chess, Frontier, Volley, Timberfall, Boxing, Number Rush and World Pins (singleplayer, against bots).
 // Bronze → Silver → Gold → Platinum → Diamond → Champion. Win the number of matches a game asks for
 // in your rank to move up; each rank's bots are tougher. Losses never knock you down a rank.
 // Each game keeps its own ladder in this browser (localStorage 'ranked-<game>').
@@ -218,6 +218,8 @@
                   stat: s => `${s.kills} knocked out` },
     math:       { name: 'Number Rush', href: 'math.html',      how: 'The most correct answers in one 60-second Champion race wins. The questions get harder the more you answer.',
                   stat: s => `${s.correct} correct · ${s.wrong} wrong`, everyRun: true },
+    geography:  { name: 'World Pins',  href: 'geography.html', how: 'The highest 5-round total in one Champion match wins (up to 5,000). Champion rounds are timed and only pinpoint pins score well.',
+                  stat: s => `average miss ${Math.round(s.km).toLocaleString('en-US')} km`, everyRun: true },
   };
   const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };

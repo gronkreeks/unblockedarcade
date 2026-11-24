@@ -52,6 +52,11 @@ const GAMES = {
     minT: 58, maxT: 180, floor: 0, stats: { correct: [0, 150], wrong: [0, 150] },
     score: (t, s) => s.correct,
   },
+  // World Pins: the 5-round points total of a Champion match (each round scores up to 1,000).
+  geography: {
+    minT: 15, maxT: 3600, floor: 0, stats: { pts: [0, 5000], km: [0, 20040] },
+    score: (t, s) => s.pts,
+  },
 };
 
 function tidyName(raw) {
