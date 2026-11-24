@@ -4,8 +4,7 @@
 // can cheat by editing their own copy of the game.
 // It also hosts the EduArcade chatroom and Frontier's lobby/in-game chat (see chat.js),
 // Imposter games played on several devices (see imposter.js), Timberfall (see timberfall.js) and the
-// Challenger leaderboards (see challenger.js; set UPSTASH_REDIS_REST_URL / _TOKEN on Render to keep them)
-// and polls such as "which game gets Ranked next" (see poll.js).
+// Challenger leaderboards (see challenger.js; set UPSTASH_REDIS_REST_URL / _TOKEN on Render to keep them).
 'use strict';
 const http = require('http');
 const crypto = require('crypto');
@@ -28,7 +27,6 @@ const { createImposter } = require('./imposter.js');
 const { createTimberfall } = require('./timberfall.js');
 const { createHttpTransport } = require('./http-transport.js');
 const { createChallenger } = require('./challenger.js');
-const { createPolls } = require('./poll.js');
 
 const PORT = process.env.PORT || 8080;
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ||
@@ -310,7 +308,6 @@ function onMessage(ws, raw) {
 // WebSockets. WebSockets still work too, for pages opened before the switch.
 const server = http.createServer((req, res) => {
   if (challenger.handle(req, res, ipKeyOf(req))) return;
-  if (polls.handle(req, res, ipKeyOf(req))) return;
   if (httpConns.handle(req, res)) return;
   if (req.url === '/status') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
@@ -328,7 +325,6 @@ function ipKeyOf(req) {
   return crypto.createHash('sha256').update(ip + 'eduarcade-chat').digest('hex').slice(0, 16);
 }
 const challenger = createChallenger({ originAllowed, log: (...a) => log(...a) });
-const polls = createPolls({ originAllowed, log: (...a) => log(...a) });
 function originAllowed(origin) {
   if (!origin || origin === 'null') return true;   // opened from a file, or a non-browser client
   if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;

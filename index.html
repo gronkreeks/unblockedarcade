@@ -235,19 +235,6 @@
 
     .section { display: flex; flex-direction: column; align-items: center; }
     .section + .section { margin-top: 2.6rem; }
-    /* New educational experiences: the learning games, framed and highlighted, first on the page */
-    .learn-zone { position: relative; width: 100%; max-width: 1060px; margin: 0 auto; padding: 1.6rem 1rem 1.5rem; border-radius: 26px;
-      background: radial-gradient(ellipse at top, rgba(245,197,24,0.14), transparent 60%), linear-gradient(170deg, #17305e, #10234a);
-      border: 2px solid rgba(245,197,24,0.55); box-shadow: 0 0 0 6px rgba(245,197,24,0.08), 0 20px 50px rgba(0,0,0,0.35); scroll-margin-top: 1rem; }
-    .lz-head { text-align: center; margin-bottom: 1.1rem; }
-    .lz-tag { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.68rem; font-weight: 900; letter-spacing: 2.5px; text-transform: uppercase; color: #11214a; background: var(--gold); border-radius: 50px; padding: 0.3rem 0.8rem; }
-    .lz-tag .ic { width: 13px; height: 13px; }
-    .lz-head h2 { font-size: clamp(1.35rem, 4vw, 1.9rem); font-weight: 900; margin: 0.55rem 0 0.3rem; letter-spacing: 0.5px; }
-    .lz-head p { color: rgba(255,255,255,0.75); font-size: 0.92rem; font-weight: 700; max-width: 620px; margin: 0 auto; line-height: 1.5; }
-    .lz-subjects { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.35rem; margin-top: 0.7rem; }
-    .lz-subjects span { font-size: 0.7rem; font-weight: 800; color: #fff; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); border-radius: 50px; padding: 0.2rem 0.65rem; }
-    @media (max-width: 600px) { .learn-zone { padding: 1.3rem 0.6rem 1.1rem; border-radius: 20px; } }
-    .ribbon.learn { background: var(--gold); color: #11214a; box-shadow: 0 2px 8px rgba(0,0,0,0.25); }
     /* ── Ranked profile ── */
     .rkp { margin-top: 2.8rem; display: flex; flex-direction: column; align-items: center; scroll-margin-top: 1rem; }
     .rkp-box { width: 100%; max-width: 1000px; background: var(--navy-3); border: 1px solid var(--line); border-radius: 20px; padding: 1rem 1.1rem 0.8rem; }
@@ -538,7 +525,7 @@
   </style>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="g-sports" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M3 5.5c3 0 6 2 7 6M8 2c-1 3 0 6 5 8"/></symbol><symbol id="g-fight" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1.5 3.5 9H8l-1 5.5L12.5 7H8z"/></symbol><symbol id="g-shooter" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3"/></symbol><symbol id="g-platform" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 14h5M9 14h5M3 11c1-6 7-8 10-5"/><path d="m11 3.5 2.5 2.5L11 8"/></symbol><symbol id="g-arcade" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="10" width="12" height="4" rx="1.5"/><path d="M8 10V6"/><circle cx="8" cy="4" r="2.2"/></symbol><symbol id="g-idle" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2v8l2.2-2 1.6 4 1.6-.7-1.6-3.8H12z"/></symbol><symbol id="g-lane" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15V2M4 2.5h8l-2 3 2 3H4"/></symbol><symbol id="g-board" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1.5"/><path d="M8 2v12M2 8h12"/></symbol><symbol id="g-grand" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c-2.5 2-2.5 10 0 12M8 2c2.5 2 2.5 10 0 12"/></symbol><symbol id="g-survival" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.5 13.5 4v4c0 3.5-2.5 5.5-5.5 6.5C5 13.5 2.5 11.5 2.5 8V4z"/></symbol><symbol id="g-suspense" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></symbol><symbol id="g-tactics" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.5 13.5 4.7v6.6L8 14.5l-5.5-3.2V4.7z"/><path d="M8 8v6.5M8 8l5.5-3.3M8 8 2.5 4.7"/></symbol><symbol id="g-sandbox" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m8 1.5 6 3v7l-6 3-6-3v-7z"/><path d="m2 4.5 6 3 6-3M8 7.5v7"/></symbol><symbol id="g-typing" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="4" width="13" height="8" rx="1.5"/><path d="M4 7h1M7 7h1M10 7h1M5 9.5h6"/></symbol><symbol id="g-party" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="5.5" r="2.2"/><circle cx="11" cy="6" r="1.8"/><path d="M1.5 13.5c.5-2.5 2-3.8 4-3.8s3.5 1.3 4 3.8M10 9.8c2 0 3.5 1.2 4 3.7"/></symbol><symbol id="g-math" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h4M5 2.5v4M9.5 4.5h4M3.5 10l3 3M6.5 10l-3 3M9.5 10.5h4M9.5 13h4"/></symbol><symbol id="g-map" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 14.5s4.5-4.2 4.5-7.8a4.5 4.5 0 0 0-9 0c0 3.6 4.5 7.8 4.5 7.8Z"/><circle cx="8" cy="6.7" r="1.6"/></symbol><symbol id="g-science" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h4M6.8 2v4.5L3 13a1 1 0 0 0 .9 1.5h8.2A1 1 0 0 0 13 13L9.2 6.5V2"/><path d="M4.6 10.5h6.8"/></symbol><symbol id="g-spell" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12.5 4.5 4l2.5 8.5M3 9.5h3M9 4v8.5h2.3a2.1 2.1 0 0 0 0-4.2H9M9 8.3h2a2 2 0 0 0 0-4.3H9"/></symbol><symbol id="g-history" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2h8M4 14h8M5 2c0 3.5 3 4.5 3 6s-3 2.5-3 6M11 2c0 3.5-3 4.5-3 6s3 2.5 3 6"/></symbol><symbol id="g-code" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 4 2 8l3.5 4M10.5 4 14 8l-3.5 4M9 3 7 13"/></symbol><symbol id="g-space" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3.6"/><ellipse cx="8" cy="8" rx="7" ry="2.4" transform="rotate(-20 8 8)"/></symbol><symbol id="i-book" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3.5h4.2A1.8 1.8 0 0 1 8 5.3V14a1.5 1.5 0 0 0-1.5-1.5H2ZM14 3.5H9.8A1.8 1.8 0 0 0 8 5.3V14a1.5 1.5 0 0 1 1.5-1.5H14Z"/></symbol><symbol id="i-chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6 4 4 4-4"/></symbol><symbol id="i-lock" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="10" height="7.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></symbol><symbol id="i-phone" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="1.5" width="7" height="13" rx="1.5"/><path d="M7 12.5h2"/></symbol><symbol id="i-play" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5v9l7-4.5z" fill="currentColor"/></symbol></svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="g-sports" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M3 5.5c3 0 6 2 7 6M8 2c-1 3 0 6 5 8"/></symbol><symbol id="g-fight" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1.5 3.5 9H8l-1 5.5L12.5 7H8z"/></symbol><symbol id="g-shooter" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3"/></symbol><symbol id="g-platform" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 14h5M9 14h5M3 11c1-6 7-8 10-5"/><path d="m11 3.5 2.5 2.5L11 8"/></symbol><symbol id="g-arcade" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="10" width="12" height="4" rx="1.5"/><path d="M8 10V6"/><circle cx="8" cy="4" r="2.2"/></symbol><symbol id="g-idle" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2v8l2.2-2 1.6 4 1.6-.7-1.6-3.8H12z"/></symbol><symbol id="g-lane" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15V2M4 2.5h8l-2 3 2 3H4"/></symbol><symbol id="g-board" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1.5"/><path d="M8 2v12M2 8h12"/></symbol><symbol id="g-grand" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c-2.5 2-2.5 10 0 12M8 2c2.5 2 2.5 10 0 12"/></symbol><symbol id="g-survival" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.5 13.5 4v4c0 3.5-2.5 5.5-5.5 6.5C5 13.5 2.5 11.5 2.5 8V4z"/></symbol><symbol id="g-suspense" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></symbol><symbol id="g-tactics" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.5 13.5 4.7v6.6L8 14.5l-5.5-3.2V4.7z"/><path d="M8 8v6.5M8 8l5.5-3.3M8 8 2.5 4.7"/></symbol><symbol id="g-sandbox" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m8 1.5 6 3v7l-6 3-6-3v-7z"/><path d="m2 4.5 6 3 6-3M8 7.5v7"/></symbol><symbol id="g-typing" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="4" width="13" height="8" rx="1.5"/><path d="M4 7h1M7 7h1M10 7h1M5 9.5h6"/></symbol><symbol id="g-party" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="5.5" r="2.2"/><circle cx="11" cy="6" r="1.8"/><path d="M1.5 13.5c.5-2.5 2-3.8 4-3.8s3.5 1.3 4 3.8M10 9.8c2 0 3.5 1.2 4 3.7"/></symbol><symbol id="g-math" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h4M5 2.5v4M9.5 4.5h4M3.5 10l3 3M6.5 10l-3 3M9.5 10.5h4M9.5 13h4"/></symbol><symbol id="g-map" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 14.5s4.5-4.2 4.5-7.8a4.5 4.5 0 0 0-9 0c0 3.6 4.5 7.8 4.5 7.8Z"/><circle cx="8" cy="6.7" r="1.6"/></symbol><symbol id="g-science" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h4M6.8 2v4.5L3 13a1 1 0 0 0 .9 1.5h8.2A1 1 0 0 0 13 13L9.2 6.5V2"/><path d="M4.6 10.5h6.8"/></symbol><symbol id="g-spell" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12.5 4.5 4l2.5 8.5M3 9.5h3M9 4v8.5h2.3a2.1 2.1 0 0 0 0-4.2H9M9 8.3h2a2 2 0 0 0 0-4.3H9"/></symbol><symbol id="g-history" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2h8M4 14h8M5 2c0 3.5 3 4.5 3 6s-3 2.5-3 6M11 2c0 3.5-3 4.5-3 6s3 2.5 3 6"/></symbol><symbol id="g-code" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 4 2 8l3.5 4M10.5 4 14 8l-3.5 4M9 3 7 13"/></symbol><symbol id="g-space" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3.6"/><ellipse cx="8" cy="8" rx="7" ry="2.4" transform="rotate(-20 8 8)"/></symbol><symbol id="i-chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6 4 4 4-4"/></symbol><symbol id="i-lock" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="10" height="7.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></symbol><symbol id="i-phone" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="1.5" width="7" height="13" rx="1.5"/><path d="M7 12.5h2"/></symbol><symbol id="i-play" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5v9l7-4.5z" fill="currentColor"/></symbol></svg>
 
   <div class="sky">
     <div class="cloud c1"></div>
@@ -555,12 +542,11 @@
     <p class="tagline">learn through play</p>
     <div class="hero-btns">
       <a class="btn btn-gold" href="#games"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg>Play now</a>
-      <a class="btn btn-glass" href="#subjects">Educational experiences</a>
       <a class="btn btn-glass" href="mission.html">Our Mission</a>
       <a class="btn btn-glass" href="#profile">Ranked profile</a>
       <a class="btn btn-glass" href="#chatroom"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg>Chatroom</a>
     </div>
-    <div class="hero-facts"><span>24 free games</span><span>8 educational experiences</span><span>No login</span><span>No downloads</span></div>
+    <div class="hero-facts"><span>24 free games</span><span>No login</span><span>No downloads</span></div>
   </div>
 
   <div class="grass"></div>
@@ -568,17 +554,11 @@
   <main class="ground" id="games">
     <div class="ground-main">
       
-      <section class="section learn-zone" id="subjects" aria-labelledby="h-subjects">
-        <div class="lz-head">
-          <span class="lz-tag"><svg class="ic" aria-hidden="true"><use href="#i-book"/></svg>New educational experiences</span>
-          <h2 id="h-subjects">Learn school subjects by playing</h2>
-          <p>Made to teach, not just to play: each one explains its answers, so you learn something new every round.</p>
-          <div class="lz-subjects"><span>Maths</span><span>Chemistry</span><span>Geography</span><span>History</span><span>Coding</span><span>Astronomy</span></div>
-        </div>
-        <div data-poll="ranked-next" data-wide="1" style="margin:0 auto 1.1rem;width:100%;max-width:760px"></div>
-        <div class="grid" id="grid-subjects">
+      <section class="section" id="mathsci" aria-labelledby="h-mathsci">
+        <h2 class="section-label" id="h-mathsci">Maths &amp; Science</h2>
+        <div class="grid" id="grid-mathsci">
           <a class="card flagged" href="math.html" data-ranked="math" style="--c1:#1e88e5;--c2:#0d47a1" data-skill="Mental Arithmetic" data-learn="Times tables, place value, negative numbers, order of operations, percentages, fractions, powers and decimals. Ranked races get harder at every rank, and practice mode explains a method for every answer." data-players="Solo · Ranked" data-phone="1">
-            <span class="ribbon learn">Learn</span>
+            <span class="ribbon new">New</span>
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-math"/></svg>Maths</span>
             <span class="badge-icon"><img src="icons/color/math.svg" alt="" width="58" height="58" loading="lazy"></span>
             <span class="card-title">Number Rush</span>
@@ -586,41 +566,43 @@
             <span class="badge">Solo · Ranked</span>
           </a>
           <a class="card flagged" href="elements.html" style="--c1:#00897b;--c2:#004d40" data-skill="Chemistry" data-learn="The periodic table: atomic numbers, periods and groups, chemical symbols (including the Latin ones) and element families like alkali metals, halogens and noble gases." data-players="1 Player" data-phone="1">
-            <span class="ribbon learn">Learn</span>
+            <span class="ribbon new">New</span>
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-science"/></svg>Science</span>
             <span class="badge-icon"><img src="icons/color/atom.svg" alt="" width="58" height="58" loading="lazy"></span>
             <span class="card-title">Element Lab</span>
             <span class="badge">1 Player</span>
           </a>
-          <a class="card flagged" href="geography.html" style="--c1:#2e7d32;--c2:#1b4d20" data-skill="Geography" data-learn="Where capital cities and famous places are on the world map, latitude and longitude, and the Equator, Tropics and Prime Meridian." data-players="1 Player" data-phone="1">
-            <span class="ribbon learn">Learn</span>
-            <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-map"/></svg>Geography</span>
-            <span class="badge-icon"><img src="icons/color/pin.svg" alt="" width="58" height="58" loading="lazy"></span>
-            <span class="card-title">World Pins</span>
-            <span class="badge">1 Player</span>
-          </a>
-          <a class="card flagged" href="timeline.html" style="--c1:#8d6e63;--c2:#4e342e" data-skill="History" data-learn="Put 5,000 years of world and Australian history in order, from the first writing to the Mars rovers, with BC and AD dates and why each event mattered." data-players="1 Player" data-phone="1">
-            <span class="ribbon learn">Learn</span>
-            <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-history"/></svg>History</span>
-            <span class="badge-icon"><img src="icons/color/hourglass.svg" alt="" width="58" height="58" loading="lazy"></span>
-            <span class="card-title">Timeline</span>
-            <span class="badge">1 Player</span>
-          </a>
-          <a class="card flagged" href="coding.html" style="--c1:#f9a825;--c2:#c25e00" data-skill="Coding" data-learn="Program a robot with commands and loops to reach the flag: sequences, loops, debugging and writing efficient code, over 8 levels." data-players="1 Player" data-phone="1">
-            <span class="ribbon learn">Learn</span>
-            <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-code"/></svg>Coding</span>
-            <span class="badge-icon"><img src="icons/color/robot.svg" alt="" width="58" height="58" loading="lazy"></span>
-            <span class="card-title">Code Quest</span>
-            <span class="badge">1 Player</span>
-          </a>
           <a class="card flagged" href="space.html" style="--c1:#5e35b1;--c2:#24124f" data-skill="Astronomy" data-learn="Put the planets in order by distance and size, learn astronomical units, rocky planets, gas giants and ice giants, and take a space quiz." data-players="1 Player" data-phone="1">
-            <span class="ribbon learn">Learn</span>
+            <span class="ribbon new">New</span>
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-space"/></svg>Space</span>
             <span class="badge-icon"><img src="icons/color/planet.svg" alt="" width="58" height="58" loading="lazy"></span>
             <span class="card-title">Space Explorer</span>
             <span class="badge">1 Player</span>
           </a>
-          <button class="more" type="button" aria-expanded="false" aria-controls="grid-subjects">
+          <button class="more" type="button" aria-expanded="false" aria-controls="grid-mathsci">
+            <span class="more-n"></span><span class="more-label">More games</span><svg class="ic chev" aria-hidden="true"><use href="#i-chev"/></svg>
+          </button>
+        </div>
+      </section>
+      <section class="section" id="geohist" aria-labelledby="h-geohist">
+        <h2 class="section-label" id="h-geohist">Geography &amp; History</h2>
+        <div class="grid" id="grid-geohist">
+          <a class="card flagged" href="geography.html" data-ranked="geography" style="--c1:#2e7d32;--c2:#1b4d20" data-skill="Geography" data-learn="Where capitals, cities and famous places are on a detailed world map with country borders, plus latitude and longitude. Ranked matches get harder at every rank: trickier places, a clock, and only precise pins score well." data-players="Solo · Ranked" data-phone="1">
+            <span class="ribbon new">New</span>
+            <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-map"/></svg>Geography</span>
+            <span class="badge-icon"><img src="icons/color/pin.svg" alt="" width="58" height="58" loading="lazy"></span>
+            <span class="card-title">World Pins</span>
+            <span class="rk-pill" data-game="geography"><span class="rk-pill-em"></span><span class="rk-pill-t">Ranked</span></span>
+            <span class="badge">Solo · Ranked</span>
+          </a>
+          <a class="card flagged" href="timeline.html" style="--c1:#8d6e63;--c2:#4e342e" data-skill="History" data-learn="Put 5,000 years of world and Australian history in order, from the first writing to the Mars rovers, with BC and AD dates and why each event mattered." data-players="1 Player" data-phone="1">
+            <span class="ribbon new">New</span>
+            <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-history"/></svg>History</span>
+            <span class="badge-icon"><img src="icons/color/hourglass.svg" alt="" width="58" height="58" loading="lazy"></span>
+            <span class="card-title">Timeline</span>
+            <span class="badge">1 Player</span>
+          </a>
+          <button class="more" type="button" aria-expanded="false" aria-controls="grid-geohist">
             <span class="more-n"></span><span class="more-label">More games</span><svg class="ic chev" aria-hidden="true"><use href="#i-chev"/></svg>
           </button>
         </div>
@@ -752,13 +734,20 @@
         </div>
       </section>
       <section class="section" id="literacy" aria-labelledby="h-literacy">
-        <h2 class="section-label" id="h-literacy">Literacy &amp; Technology</h2>
+        <h2 class="section-label" id="h-literacy">Literacy, Coding &amp; Technology</h2>
         <div class="grid" id="grid-literacy">
           <a class="card flagged" href="spelling.html" style="--c1:#f9a825;--c2:#a86b00" data-skill="Spelling &amp; Vocabulary" data-learn="Spell the words people get wrong most: hear each word, learn its meaning, syllables and a memory trick for remembering it." data-players="1 Player" data-phone="1">
             <span class="ribbon new">New</span>
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-spell"/></svg>Spelling</span>
             <span class="badge-icon"><img src="icons/color/bee.svg" alt="" width="58" height="58" loading="lazy"></span>
             <span class="card-title">Word Bee</span>
+            <span class="badge">1 Player</span>
+          </a>
+          <a class="card flagged" href="coding.html" style="--c1:#f9a825;--c2:#c25e00" data-skill="Coding" data-learn="Program a robot with commands and loops to reach the flag: sequences, loops, debugging and writing efficient code, over 8 levels." data-players="1 Player" data-phone="1">
+            <span class="ribbon new">New</span>
+            <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-code"/></svg>Coding</span>
+            <span class="badge-icon"><img src="icons/color/robot.svg" alt="" width="58" height="58" loading="lazy"></span>
+            <span class="card-title">Code Quest</span>
             <span class="badge">1 Player</span>
           </a>
           <a class="card" href="typing.html" style="--c1:#6a1ab5;--c2:#2d0060" data-skill="Literacy &amp; Tech" data-learn="Typing speed, accuracy and keyboard fluency, one new technique per level." data-players="1 Player" data-phone="0">
@@ -902,7 +891,7 @@
     for (const row of rows) {
       const grid = row.querySelector('.grid'), btn = row.querySelector('.more');
       const cards = [...grid.querySelectorAll('.card')], cols = columns(grid);
-      const fits = cards.length <= cols || row.classList.contains('learn-zone');   // the learning games always show in full
+      const fits = cards.length <= cols;
       const open = btn.getAttribute('aria-expanded') === 'true';
       const shown = fits || open ? cards.length : cols - 1;
       cards.forEach((c, i) => { c.hidden = i >= shown; });
@@ -954,13 +943,12 @@
 })();
 </script>
 
-<script src="ranked.js?v=5"></script>
-<script src="poll.js?v=2"></script>
+<script src="ranked.js?v=6"></script>
 <script>
 // Ranked pills show your rank in each game (ranked.js keeps the ladders in this browser)
 (() => {
   // Wins needed per rank match each game's Ranked.create.
-  const GAMES = [['math', 'Number Rush', [2, 2, 3, 3, 4]], ['volley', 'Volley', [2, 3, 3, 4, 5]], ['boxing', 'Boxing', [2, 3, 3, 4, 5]], ['timberfall', 'Timberfall', [1, 2, 2, 2, 3]],
+  const GAMES = [['math', 'Number Rush', [2, 2, 3, 3, 4]], ['geography', 'World Pins', [2, 2, 3, 3, 4]], ['volley', 'Volley', [2, 3, 3, 4, 5]], ['boxing', 'Boxing', [2, 3, 3, 4, 5]], ['timberfall', 'Timberfall', [1, 2, 2, 2, 3]],
     ['frontier', 'Frontier', [1, 2, 2, 2, 3]], ['chess', 'Chess', [1, 2, 2, 3, 3]]];
   const NEED = Object.fromEntries(GAMES.map(g => [g[0], g[2]]));
   const T = Ranked.TIERS, CRT = Ranked.CR;
