@@ -3,7 +3,7 @@
 // WebSockets. Players only send intents ("attack this tile", "build a city here"), so nobody
 // can cheat by editing their own copy of the game.
 // It also hosts the EduArcade chatroom and Frontier's lobby/in-game chat (see chat.js),
-// Imposter games played on several devices (see imposter.js), Timberfall (see timberfall.js) and the
+// Imposter games played on several devices (see imposter.js), Timberfall (see timberfall.js), Bombsite (bombsite.js) and the
 // Challenger leaderboards (see challenger.js; set UPSTASH_REDIS_REST_URL / _TOKEN on Render to keep them).
 'use strict';
 const http = require('http');
@@ -25,6 +25,7 @@ const CORE_HASH = (() => {
 const { filterMessage, checkName, newRate, rateCheck, createChat } = require('./chat.js');
 const { createImposter } = require('./imposter.js');
 const { createTimberfall } = require('./timberfall.js');
+const { createBombsite } = require('./bombsite.js');
 const { createHttpTransport } = require('./http-transport.js');
 const { createChallenger } = require('./challenger.js');
 
@@ -212,6 +213,7 @@ setInterval(() => {
 const chat = createChat({ send, now, log, crTitles: key => challenger.titles(key) });
 const imposter = createImposter({ send, now, log, checkName, filterMessage });
 const timberfall = createTimberfall({ send, now, log, checkName });
+const bombsite = createBombsite({ send, now, log, checkName });
 
 // ──────────── Messages ────────────
 function onMessage(ws, raw) {
@@ -220,6 +222,8 @@ function onMessage(ws, raw) {
   if (!m || typeof m.t !== 'string') return;
   // Timberfall sends controls 20 times a second and has its own flood limit
   if (m.t.startsWith('r_')) { timberfall.handle(ws, m); return; }
+  // Bombsite relays the host's snapshots and players' movement as-is (bombsite.js), with its own flood limit
+  if (m.t.startsWith('b_')) { bombsite.handle(ws, m, typeof raw === 'string' ? raw : String(raw)); return; }
   // Simple flood protection: at most 30 messages per second.
   const t = now();
   if (t - ws.rateStart > 1000) { ws.rateStart = t; ws.rateCount = 0; }
@@ -311,7 +315,7 @@ const server = http.createServer((req, res) => {
   if (httpConns.handle(req, res)) return;
   if (req.url === '/status') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-    res.end(JSON.stringify({ ok: true, online: clients.size, http: httpConns.count(), games: runningGames(), core: CORE_HASH, lobbies: rooms.size - runningGames(), chat: chat.stats(), imposter: imposter.stats(), timberfall: timberfall.stats(), challenger: challenger.stats() }));
+    res.end(JSON.stringify({ ok: true, online: clients.size, http: httpConns.count(), games: runningGames(), core: CORE_HASH, lobbies: rooms.size - runningGames(), chat: chat.stats(), imposter: imposter.stats(), timberfall: timberfall.stats(), bombsite: bombsite.stats(), challenger: challenger.stats() }));
     return;
   }
   res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -352,6 +356,7 @@ function onConnection(ws, req) {
     chat.close(ws);
     imposter.close(ws);
     timberfall.close(ws);
+    bombsite.close(ws);
     const s = ws.session;
     if (!s || s.ws !== ws) return;
     s.ws = null;

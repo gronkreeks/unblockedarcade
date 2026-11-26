@@ -13,7 +13,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="favicon.ico">
   <title>Bombsite</title>
-  <meta name="description" content="A 5v5 tactical shooter against bots. Buy guns, armour and grenades, plant or defuse the bomb, and climb the ranked ladder.">
+  <meta name="description" content="A 5v5 tactical shooter against bots or with friends online. Buy guns, armour and grenades, plant or defuse the bomb, and climb the ranked ladder.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap">
@@ -63,6 +63,24 @@
     kbd { font-family: inherit; font-weight: 900; font-size: 0.75rem; background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.25); border-bottom-width: 3px; border-radius: 6px; padding: 0.05rem 0.4rem; white-space: nowrap; color: #fff; }
     .learn p { font-size: 0.88rem; font-weight: 700; line-height: 1.6; color: rgba(255,255,255,0.85); }
     .learn p + p { margin-top: 0.5rem; }
+    .joinrow { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+    #codeIn { width: 7.5rem; text-transform: uppercase; letter-spacing: 4px; text-align: center; }
+    .btn:disabled { opacity: 0.45; cursor: default; }
+    .seg button:disabled { cursor: default; }
+    .roomhead { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.6rem; }
+    #roomCode { font-size: 2rem; font-weight: 900; letter-spacing: 8px; color: var(--gold); }
+    #roomList { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.35rem; }
+    #roomList div { display: flex; align-items: center; gap: 0.45rem; background: rgba(255,255,255,0.06); border-radius: 10px; padding: 0.35rem 0.6rem; font-weight: 800; font-size: 0.9rem; }
+    #roomList div.me { background: rgba(255,255,255,0.14); }
+    #roomList div.off { opacity: 0.5; }
+    #roomList b { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #roomList small { color: var(--muted); font-size: 0.7rem; }
+    .tg { font-size: 0.65rem; font-weight: 900; border-radius: 6px; padding: 0.05rem 0.35rem; background: rgba(255,255,255,0.15); }
+    .tg.t { background: var(--t); color: #2a1d12; } .tg.ct { background: var(--ct); color: #0e1e30; }
+    .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 0.45rem; background: #888; vertical-align: middle; }
+    .dot.on { background: #4ade80; } .dot.wait { background: #f5c518; } .dot.off { background: #ff6b6b; }
+    .hint.err { color: #ff9a8a; }
+    .hint.err:empty { display: none; }
 
     /* ── HUD ── */
     #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; text-shadow: 0 1px 3px rgba(0,0,0,0.85); }
@@ -108,6 +126,9 @@
     #progTxt { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 0.8rem; }
     #hint { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); font-weight: 800; font-size: 0.95rem; text-align: center; background: rgba(0,0,0,0.55); padding: 4px 12px; border-radius: 10px; }
     #hint:empty { display: none; }
+    #speedo { position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); font-variant-numeric: tabular-nums; text-align: center; }
+    #speedo b { font-size: 1.5rem; font-weight: 900; } #speedo span { font-size: 0.75rem; font-weight: 800; color: rgba(255,255,255,0.65); margin-left: 4px; }
+    #speedo.fast b { color: #8ef0a0; }
     #hint kbd { font-size: 0.8rem; }
     #vitals { position: absolute; left: 16px; bottom: 14px; display: flex; gap: 10px; }
     .vit { display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,0.5); border-radius: 10px; padding: 4px 12px 4px 8px; color: #fff; }
@@ -204,6 +225,7 @@
   <div id="msg"></div>
   <div id="prog" hidden><div id="progFill"></div><span id="progTxt"></span></div>
   <div id="hint"></div>
+  <div id="speedo" hidden><b id="speedoN">0</b><span>u/s</span></div>
   <div id="spec" hidden></div>
   <div id="vitals">
     <div class="vit"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" fill="currentColor"/></svg><b id="hp">100</b></div>
@@ -239,6 +261,7 @@
     <div class="tabs">
       <button class="tab on" id="tabRk" type="button">Ranked</button>
       <button class="tab" id="tabSp" type="button">Practice</button>
+      <button class="tab" id="tabOn" type="button">Online</button>
     </div>
 
     <div id="rkPanel">
@@ -266,6 +289,40 @@
       <button class="btn btn-gold btn-big" id="playBtn" type="button">Play practice</button>
     </div>
 
+    <div id="onPanel" hidden>
+      <div class="card" id="onHome">
+        <div class="lbl">Play with friends</div>
+        <div class="joinrow">
+          <button class="btn btn-gold" id="onCreate" type="button">Create lobby</button>
+          <input type="text" id="codeIn" maxlength="4" placeholder="CODE" autocomplete="off" spellcheck="false">
+          <button class="btn btn-glass" id="onJoin" type="button">Join</button>
+        </div>
+        <p class="hint">Create a lobby and share its 4-letter code, or type a friend's code. Up to 10 people, and bots fill the empty places. Online matches don't change your rank.</p>
+      </div>
+      <div class="card" id="onRoom" hidden>
+        <div class="roomhead"><div><div class="lbl">Lobby code</div><div id="roomCode"></div></div><button class="back" id="roomCopy" type="button">Copy</button></div>
+        <div id="roomList"></div>
+        <div class="grid2" style="margin-top:0.8rem">
+          <div>
+            <div class="lbl">Your side</div>
+            <div class="seg" id="teamSeg"><button type="button" data-v="auto">Auto</button><button type="button" class="s-t" data-v="T">Terrorists</button><button type="button" class="s-ct" data-v="CT">Counter-Terrorists</button></div>
+          </div>
+          <div>
+            <div class="lbl">Bots (host picks)</div>
+            <div class="seg" id="botsSeg"><button type="button" data-v="fill">Fill to 5v5</button><button type="button" data-v="even">Even teams only</button></div>
+            <div class="seg" id="bdiffSeg" style="margin-top:0.35rem"><button type="button" class="d-easy" data-v="easy">Easy</button><button type="button" class="d-normal" data-v="normal">Normal</button><button type="button" class="d-hard" data-v="hard">Hard</button><button type="button" class="d-expert" data-v="expert">Expert</button></div>
+          </div>
+        </div>
+        <p class="hint" id="roomHint"></p>
+        <div class="joinrow" style="margin-top:0.7rem">
+          <button class="btn btn-gold" id="roomStart" type="button">Start match</button>
+          <button class="btn btn-glass" id="roomLeave" type="button">Leave lobby</button>
+        </div>
+      </div>
+      <p class="hint"><span class="dot" id="onDot"></span><span id="onStatus">Not connected</span></p>
+      <p class="hint err" id="onErr"></p>
+    </div>
+
     <div class="card" style="margin-top:0.9rem">
       <div class="grid2">
         <div>
@@ -283,7 +340,7 @@
       <div class="card">
         <div class="lbl">Controls</div>
         <div class="keys">
-          <span><kbd>WASD</kbd></span><span>Move · <kbd>Shift</kbd> walk quietly · <kbd>C</kbd> crouch · <kbd>Space</kbd> jump</span>
+          <span><kbd>WASD</kbd></span><span>Move · <kbd>Shift</kbd> walk quietly · <kbd>C</kbd> crouch · <kbd>Space</kbd> jump (tap it just before landing to bunny hop)</span>
           <span><kbd>Mouse</kbd></span><span>Aim · left click shoot · right click scope / knife stab</span>
           <span><kbd>1</kbd>–<kbd>5</kbd></span><span>Rifle · pistol · knife · grenades · bomb (or scroll)</span>
           <span><kbd>Q</kbd></span><span>Last weapon</span>
@@ -292,6 +349,7 @@
           <span><kbd>E</kbd></span><span>Plant · defuse · pick up a gun</span>
           <span><kbd>G</kbd></span><span>Drop gun or bomb</span>
           <span><kbd>Tab</kbd></span><span>Scoreboard</span>
+          <span><kbd>P</kbd></span><span>Speed counter on / off</span>
           <span><kbd>Esc</kbd></span><span>Pause</span>
         </div>
         <p class="hint">Grenades: hold left click and let go for a long throw, right click for a short lob, both for in between.</p>
@@ -324,7 +382,7 @@
 <div class="over" id="pauseBox" hidden>
   <div class="box">
     <h2>Paused</h2>
-    <p>Click Resume to keep playing.</p>
+    <p id="pauseTxt">Click Resume to keep playing.</p>
     <div class="btns">
       <button class="btn btn-gold" id="pauseResume" type="button">Resume</button>
       <button class="btn btn-glass" id="pauseMute" type="button">Sound: on</button>
@@ -336,8 +394,9 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="ranked.js?v=7"></script>
+<script src="net.js?v=1"></script>
 <script src="bombsite-world.js?v=2"></script>
 <script src="bombsite-fx.js?v=3"></script>
-<script src="bombsite-game.js?v=8"></script>
+<script src="bombsite-game.js?v=9"></script>
 </body>
 </html>
