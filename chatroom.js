@@ -45,7 +45,7 @@
   }
 
   // ── Live state ──
-  let ws = null, uid = null, owner = false, active = false, retry = 1000, retryT = 0, helloT = 0, queue = Promise.resolve();
+  let ws = null, uid = null, owner = false, teamAcct = false, active = false, retry = 1000, retryT = 0, helloT = 0, queue = Promise.resolve();
   let channels = [], onlineN = 0, cur = 'c:general', replyTo = null;
   const chLogs = {};                // 'c:ID' -> [msgs]
   const chUnread = {};
@@ -118,9 +118,12 @@
   const status = t => { $('ecStatus').textContent = t; };
   const err = (t, ok) => { const e = $('ecErr'); e.textContent = t || ''; e.classList.toggle('ok', !!ok); if (t) setTimeout(() => { if (e.textContent === t) e.textContent = ''; }, 6000); };
   const showApp = on => { $('ecJoin').classList.toggle('ec-hidden', on); $('ecApp').classList.toggle('ec-hidden', !on); };
+  // Team password: kept only for this tab (sessionStorage), so it's gone when the tab closes, even on a shared computer
+  const teamPw = () => { try { return sessionStorage.getItem('edu-team-pw') || undefined; } catch (e) { return undefined; } };
+  const setTeamPw = v => { try { v ? sessionStorage.setItem('edu-team-pw', v) : sessionStorage.removeItem('edu-team-pw'); } catch (e) { } };
   function hello() {
     let pkey; try { pkey = localStorage.getItem('edu-player-key') || undefined; } catch (e) { }
-    send({ t: 'c_hello', key: me.key, name: me.name, pub: K.pub || undefined, pkey,
+    send({ t: 'c_hello', key: me.key, name: me.name, pub: K.pub || undefined, pkey, team: teamPw(),
       friends: Object.entries(friends).map(([u, f]) => ({ uid: u, tok: f.tok })) });
   }
   function connect() {
@@ -154,7 +157,7 @@
     clearTimeout(helloT);
     switch (m.t) {
       case 'c_welcome': {
-        uid = m.uid; owner = !!m.owner; onlineN = m.online;
+        uid = m.uid; owner = !!m.owner; teamAcct = !!m.teamAccount; onlineN = m.online; teamBtn();
         me.name = m.name; store('edu-chat-me', me);
         $('ecMe').textContent = m.name; $('ecCodeVal').textContent = fmtCode(uid);
         channels = m.channels;
@@ -172,6 +175,14 @@
       }
       case 'c_denied': case 'c_kicked': stop(); showApp(false); $('ecJoinErr').textContent = m.msg; status(''); break;
       case 'c_err': err(m.msg, m.ok); break;
+      case 'c_team_ok': case 'c_team_off':
+        owner = m.t === 'c_team_ok';
+        if (!owner) setTeamPw(null);
+        for (const c of channels) if (c.id === 'news') c.readonly = !owner;
+        teamBtn(); err(owner ? 'Signed in to the team in this tab.' : 'Signed out of the team.', true);
+        openConv(cur, true);
+        break;
+      case 'c_team_bad': owner = false; setTeamPw(null); teamBtn(); err(m.msg); break;
       case 'c_online': onlineN = m.n; if (cur.startsWith('c:')) renderTop(); break;
       case 'c_said': {
         const x = fromSaid(m), id = 'c:' + m.ch, log = chLogs[id] || (chLogs[id] = []);
@@ -467,7 +478,7 @@
       const acts = el('span', 'mact');
       const a = (t, f) => { const b = el('button', '', t); b.type = 'button'; b.onclick = f; acts.appendChild(b); };
       if (!x.pending) a('Reply', () => setReply(x));
-      if (owner && cur === 'c:news' && x.id) a('Delete', () => { if (confirm('Delete this announcement for everyone?')) send({ t: 'c_del', ch: 'news', id: x.id }); });
+      if (owner && cur.startsWith('c:') && x.id) a('Delete', () => { if (confirm(`Delete this message from ${x.from} for everyone?`)) send({ t: 'c_del', ch: cur.slice(2), id: x.id }); });
       if (!x.mine && x.uid) {
         if (cur.startsWith('c:') && !friends[x.uid]) a('Add friend', () => send({ t: 'c_freq', to: x.uid }));
         if (cur.startsWith('c:')) a('Report', () => { if (confirm(`Report this message from ${x.from}?\n\n"${x.text || '[GIF]'}"`)) send({ t: 'c_report', ch: cur.slice(2), id: x.id }); });
@@ -605,6 +616,19 @@
     enter(name);
   };
   $('ecName').addEventListener('keydown', e => { if (e.key === 'Enter') $('ecEnter').click(); });
+  // Team sign-in: only shown to team friend codes. The badge needs the team password as well.
+  function teamBtn() {
+    const b = $('ecTeam'); if (!b) return;
+    b.hidden = !teamAcct; b.textContent = owner ? 'Team sign-out' : 'Team sign-in'; b.classList.toggle('on', owner);
+  }
+  $('ecTeam').onclick = () => {
+    if (owner) { send({ t: 'c_team_off' }); return; }
+    const pw = el('input', 'ec-in'); pw.type = 'password'; pw.autocomplete = 'current-password'; pw.placeholder = 'Team password';
+    const note = el('p', '', 'Kept only in this tab until you close it. Sign out before leaving a shared computer.');
+    const body = el('div'); body.append(pw, note);
+    dialog('Team sign-in', body, 'Sign in', () => { if (!pw.value) return false; setTeamPw(pw.value); send({ t: 'c_team', pw: pw.value }); });
+    pw.focus();
+  };
   $('ecRename').onclick = () => { stop(); showApp(false); status(''); $('ecName').focus(); };
   $('ecCode').onclick = () => { try { navigator.clipboard.writeText(fmtCode(uid)); err('Friend code copied', true); } catch (e) { } };
   $('ecBack').onclick = () => $('ecApp').classList.remove('chatting');
