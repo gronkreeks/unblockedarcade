@@ -2,7 +2,7 @@
 // in-game chat uses. Nothing is written to disk.
 //
 // The site-wide chat works like privatewebchat:
-//   Channels   Announcements (only the owners in CHAT_OWNERS can post), General, Games, Homework.
+//   Channels   Announcements (only the team can post: see CHAT_OWNERS and CHAT_TEAM_PASSWORD), General, Games, Homework.
 //              Public, so not end-to-end encrypted: the last 50 messages of each are kept so people who
 //              arrive see what's going on, and reports can be checked. In Upstash Redis when it's set up
 //              (they survive restarts), otherwise in memory only.
@@ -78,6 +78,14 @@ const MAX_GROUP = 12, MAX_FRIENDS = 200;
 const REPORTS_TO_REMOVE = 3, REPORT_WINDOW_MS = 10 * 60000, TIMEOUT_MS = 15 * 60000;
 // Friend codes of the people who can post announcements, comma-separated (dashes are fine)
 const OWNERS = new Set((process.env.CHAT_OWNERS || '').split(',').map(s => s.toUpperCase().replace(/[^A-Z0-9]/g, '')).filter(Boolean));
+// A team friend code isn't enough on its own: friend codes are public and only 10 characters (someone could
+// search for a key that hashes to one), and a browser's key can be copied off a shared computer. So the TEAM
+// badge, posting announcements and deleting messages also need CHAT_TEAM_PASSWORD, typed in each browser tab
+// (the page keeps it only until the tab closes). With no password set, nobody is on the team.
+const TEAM_PW = process.env.CHAT_TEAM_PASSWORD || '';
+const pwHash = pw => crypto.createHash('sha256').update('eduarcade-team|' + pw).digest();
+const TEAM_HASH = TEAM_PW ? pwHash(TEAM_PW) : null;
+const TEAM_TRIES = 5, TEAM_TRY_WINDOW_MS = 15 * 60000;   // wrong passwords allowed per address
 
 const b64 = (s, min, max) => typeof s === 'string' && s.length >= min && s.length <= max && /^[A-Za-z0-9+/]+={0,2}$/.test(s) ? s : null;
 // Friend codes: 10 characters, no look-alikes (0/O, 1/I/L)
@@ -99,7 +107,8 @@ function createChat({ send, now, log, crTitles }) {
   const friendTok = (a, b) => signFriend(pair(a, b));
   const groupTok = (gid, members) => signGroup(gid + '|' + [...members].sort().join(','));
 
-  const users = new Map();        // uid -> { uid, name, pub, conns: Set, friends: Set, rate, ipKey, owner }
+  const users = new Map();        // uid -> { uid, name, pub, conns: Set, friends: Set, rate, ipKey }
+  const teamTries = new Map();    // ipKey -> times of wrong team passwords
   const queues = new Map();       // uid -> [{ msg, exp }]
   const requests = new Map();     // 'from>to' -> { from, name, pub, exp }
   const timeouts = new Map();     // ipKey -> until
@@ -141,11 +150,12 @@ function createChat({ send, now, log, crTitles }) {
   const countSoon = () => { if (!countT) countT = setTimeout(() => { countT = null; everyone({ t: 'c_online', n: onlineCount() }); }, 3000); };
 
   // text: the tidied message (already checked by the caller)
-  function say(u, ch, m, text) {
+  // team: whether this connection is signed in to the team (ws.team)
+  function say(u, ch, m, text, team) {
     const gif = typeof m.gif === 'string' && /^[a-z0-9-]{1,24}$/.test(m.gif) ? m.gif : undefined;
     if (m.gif && !gif) return;
     const reply = m.reply && typeof m.reply === 'object' ? { id: +m.reply.id || 0, from: tidy(m.reply.from, 16), text: tidy(m.reply.text, 80) } : undefined;
-    const msg = { t: 'c_said', ch, id: ++seq, uid: u.uid, from: u.name, text: gif ? '' : text, gif, reply, at: now(), owner: u.owner || undefined, cr: crOf(u) };
+    const msg = { t: 'c_said', ch, id: ++seq, uid: u.uid, from: u.name, text: gif ? '' : text, gif, reply, at: now(), owner: team || undefined, cr: crOf(u) };
     const h = hist.get(ch); h.push(msg); if (h.length > keep(ch)) h.shift();
     if (redis) redis(['LPUSH', 'chat:' + ch, JSON.stringify(msg)]).then(() => redis(['LTRIM', 'chat:' + ch, 0, keep(ch) - 1])).catch(e => log('chat: save failed: ' + e.message));
     everyone(msg);
@@ -156,6 +166,21 @@ function createChat({ send, now, log, crTitles }) {
     sendU(u, { t: 'c_kicked', msg: 'You were removed from the chat for 15 minutes after other people reported your messages.' });
     for (const ws of u.conns) ws.chat = null;
     u.conns.clear();
+  }
+  // Team sign-in for one connection. Returns '' when it worked, or what went wrong.
+  function teamSignIn(ws, u, pw) {
+    const t = now(), tries = (teamTries.get(ws.ipKey) || []).filter(x => t - x < TEAM_TRY_WINDOW_MS);
+    if (tries.length >= TEAM_TRIES) return 'Too many wrong passwords. Try again in 15 minutes.';
+    if (!OWNERS.has(u.uid)) return 'This chat account isn\'t on the team.';
+    if (!TEAM_HASH) return 'Team sign-in isn\'t set up: CHAT_TEAM_PASSWORD is missing on the server.';
+    if (typeof pw !== 'string' || !pw || pw.length > 200 || !crypto.timingSafeEqual(pwHash(pw), TEAM_HASH)) {
+      tries.push(t); teamTries.set(ws.ipKey, tries);
+      log(`chat: wrong team password for ${u.name} (${u.uid}) from ${ws.ipKey}`);
+      return 'Wrong team password.';
+    }
+    ws.team = true;
+    log(`chat: team sign-in ${u.name} (${u.uid})`);
+    return '';
   }
   function friendInfo(u) { return { uid: u.uid, name: u.name, pub: u.pub }; }
 
@@ -170,12 +195,15 @@ function createChat({ send, now, log, crTitles }) {
       if (ws.chat) close(ws);
       const uid = uidOf(m.key);
       let u = users.get(uid);
-      if (!u) { u = { uid, conns: new Set(), friends: new Set(), rate: newRate(), owner: OWNERS.has(uid) }; users.set(uid, u); }
+      if (!u) { u = { uid, conns: new Set(), friends: new Set(), rate: newRate() }; users.set(uid, u); }
       const wasOnline = u.conns.size > 0;
       u.name = nm.name; u.pub = b64(m.pub, 88, 88) || u.pub; u.ipKey = ws.ipKey;
       // The browser's leaderboard key (ranked.js), so the server can tell whether this person is a Challenger
       u.pkey = typeof m.pkey === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(m.pkey) ? m.pkey : u.pkey;
       u.conns.add(ws); ws.chat = u; u.ws = ws;
+      // Team: a team friend code plus the team password, sent again by the page after a reconnect
+      ws.team = false;
+      const teamErr = OWNERS.has(uid) && m.team ? teamSignIn(ws, u, m.team) : '';
       // Friendships this browser has tokens for
       u.friends = new Set();
       const bad = [];
@@ -185,8 +213,9 @@ function createChat({ send, now, log, crTitles }) {
       }
       for (const f of u.friends) { const o = users.get(f); if (o && o.conns.size) o.friends.add(uid); }
       const online = [...u.friends].filter(f => { const o = users.get(f); return o && o.conns.size && o.friends.has(uid); });
-      send(ws, { t: 'c_welcome', uid, name: u.name, owner: u.owner, online: onlineCount(), friendsOnline: online, badFriends: bad,
-        channels: CHANNELS.map(c => ({ ...c, readonly: c.readonly && !u.owner, history: hist.get(c.id) })) });
+      send(ws, { t: 'c_welcome', uid, name: u.name, owner: ws.team, teamAccount: OWNERS.has(uid), online: onlineCount(), friendsOnline: online, badFriends: bad,
+        channels: CHANNELS.map(c => ({ ...c, readonly: c.readonly && !ws.team, history: hist.get(c.id) })) });
+      if (teamErr) send(ws, { t: 'c_team_bad', msg: teamErr });
       // Waiting friend requests, DMs and group messages
       const reqs = [...requests.values()].filter(r => r.to === uid && r.exp > t);
       for (const r of reqs) send(ws, { t: 'c_freq', from: r.from, name: r.name, pub: r.pub });
@@ -205,25 +234,33 @@ function createChat({ send, now, log, crTitles }) {
       case 'c_say': {
         const ch = CHANNELS.find(c => c.id === m.ch);
         if (!ch) return;
-        if (ch.readonly && !u.owner) return err('Only the EduArcade team can post here');
+        if (ch.readonly && !ws.team) return err('Only the EduArcade team can post here');
         let text = '';
         if (!m.gif) {
           if (ch.id === 'news') { text = tidyLong(m.text, NEWS_MAX); if (!text) return err('Type a message first'); }
           else { const f = filterMessage(m.text); if (!f.ok) return err(f.reason); text = f.text; }
           const l = rateCheck(u.rate, text, t); if (l) return err(l);
         } else if (limited()) return;
-        say(u, ch.id, m, text);
+        say(u, ch.id, m, text, ws.team);
         break;
       }
-      case 'c_del': {   // the team can delete announcements
-        if (!u.owner || m.ch !== 'news') return err('Only the EduArcade team can delete announcements');
-        const h = hist.get('news'), i = h.findIndex(x => x.id === m.id);
+      case 'c_del': {   // the team can delete any channel message
+        if (!ws.team) return err('Only the EduArcade team can delete messages');
+        const h = hist.get(m.ch), i = h ? h.findIndex(x => x.id === m.id) : -1;
         if (i < 0) return;
+        log(`chat: ${u.name} (${u.uid}) deleted in #${m.ch}: "${h[i].from} (${h[i].uid}): ${h[i].text || '[gif]'}"`);
         h.splice(i, 1);
-        saveHist('news');
-        everyone({ t: 'c_deleted', ch: 'news', id: m.id });
+        saveHist(m.ch);
+        everyone({ t: 'c_deleted', ch: m.ch, id: m.id });
         break;
       }
+      case 'c_team': {   // team sign-in for this tab
+        const e = teamSignIn(ws, u, m.pw);
+        if (e) return send(ws, { t: 'c_team_bad', msg: e });
+        send(ws, { t: 'c_team_ok' });
+        break;
+      }
+      case 'c_team_off': ws.team = false; send(ws, { t: 'c_team_off' }); break;
       case 'c_report': {
         const msg = (hist.get(m.ch) || []).find(x => x.id === m.id);
         if (!msg || msg.uid === u.uid) return;
@@ -377,6 +414,7 @@ function createChat({ send, now, log, crTitles }) {
     for (const [k, r] of requests) if (r.exp < t) requests.delete(k);
     for (const [k, v] of timeouts) if (v < t) timeouts.delete(k);
     for (const [k, v] of reports) if (!v.some(x => t - x.at < REPORT_WINDOW_MS)) reports.delete(k);
+    for (const [k, v] of teamTries) if (!v.some(x => t - x < TEAM_TRY_WINDOW_MS)) teamTries.delete(k);
   }, 60000).unref();
   return { handle, close, stats: () => ({ users: onlineCount(), queued: queues.size }) };
 }
