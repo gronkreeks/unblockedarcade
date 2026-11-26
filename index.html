@@ -609,6 +609,14 @@
       <section class="section" id="strategy" aria-labelledby="h-strategy">
         <h2 class="section-label" id="h-strategy">Strategy &amp; Critical Thinking</h2>
         <div class="grid" id="grid-strategy">
+          <a class="card flagged" href="bombsite.html" data-ranked="bombsite" style="--c1:#b5762e;--c2:#5e3812" data-skill="Teamwork &amp; Economy" data-learn="A 5v5 tactical shooter against bots: plan where to attack or defend, read the radar and your teammates' callouts, and manage money between rounds, deciding when to save and when to buy guns, armour and grenades." data-players="Solo · Ranked" data-phone="0">
+            <span class="ribbon new">New</span>
+            <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-shooter"/></svg>Tactical shooter</span>
+            <span class="badge-icon"><img src="icons/color/bomb.svg" alt="" width="58" height="58" loading="lazy"></span>
+            <span class="card-title">Bombsite</span>
+            <span class="rk-pill" data-game="bombsite"><span class="rk-pill-em"></span><span class="rk-pill-t">Ranked</span></span>
+            <span class="badge">Solo · Ranked</span>
+          </a>
           <a class="card flagged" href="timberfall.html" data-ranked="timberfall" style="--c1:#2f7d32;--c2:#14421a" data-skill="Decision Making" data-learn="Make fast decisions under pressure: manage wood and supplies, read the shrinking zone, and choose when to fight, build or move." data-players="Solo · Online" data-phone="0">
             <span class="ribbon new">New</span>
             <span class="genre"><svg class="ic" aria-hidden="true"><use href="#g-shooter"/></svg>Battle royale</span>
@@ -943,12 +951,12 @@
 })();
 </script>
 
-<script src="ranked.js?v=6"></script>
+<script src="ranked.js?v=7"></script>
 <script>
 // Ranked pills show your rank in each game (ranked.js keeps the ladders in this browser)
 (() => {
   // Wins needed per rank match each game's Ranked.create.
-  const GAMES = [['math', 'Number Rush', [2, 2, 3, 3, 4]], ['geography', 'World Pins', [2, 2, 3, 3, 4]], ['volley', 'Volley', [2, 3, 3, 4, 5]], ['boxing', 'Boxing', [2, 3, 3, 4, 5]], ['timberfall', 'Timberfall', [1, 2, 2, 2, 3]],
+  const GAMES = [['math', 'Number Rush', [2, 2, 3, 3, 4]], ['geography', 'World Pins', [2, 2, 3, 3, 4]], ['volley', 'Volley', [2, 3, 3, 4, 5]], ['boxing', 'Boxing', [2, 3, 3, 4, 5]], ['timberfall', 'Timberfall', [1, 2, 2, 2, 3]], ['bombsite', 'Bombsite', [1, 1, 2, 2, 3]],
     ['frontier', 'Frontier', [1, 2, 2, 2, 3]], ['chess', 'Chess', [1, 2, 2, 3, 3]]];
   const NEED = Object.fromEntries(GAMES.map(g => [g[0], g[2]]));
   const T = Ranked.TIERS, CRT = Ranked.CR;

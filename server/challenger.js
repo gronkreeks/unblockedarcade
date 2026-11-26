@@ -57,6 +57,11 @@ const GAMES = {
     minT: 15, maxT: 3600, floor: 0, stats: { pts: [0, 5000], km: [0, 20040] },
     score: (t, s) => s.pts,
   },
+  // Bombsite: the most kills in one Champion match (first to 6 rounds, 11 at most, 5 enemies a round).
+  bombsite: {
+    minT: 90, maxT: 3 * 3600, floor: 0, stats: { kills: [0, 60], deaths: [0, 60], hs: [0, 60] },
+    score: (t, s) => s.kills,
+  },
 };
 
 function tidyName(raw) {
