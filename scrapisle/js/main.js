@@ -311,6 +311,7 @@ class Game {
     }
     if (!P.alive) { this.camera.position.set(P.x, P.y + 0.4, P.z); this.camera.rotation.set(-0.3, P.yaw + Math.PI, 0.6, 'YXZ'); }
     const cp = this.camera.position;
+    this.camera.updateMatrixWorld(); this.audio.listen(this.camera);   // 3D sound follows your view
     this.env.update(cp, this);
     updateTerrainLOD(this.terrain, cp, 1);
     this.decor.update(cp);

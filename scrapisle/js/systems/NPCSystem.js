@@ -62,6 +62,8 @@ export class NPCSystem {
   }
   _botNear(n) { let f = false; this.game.actorHash.query(n.x, n.z, 120, a => { if (a.kind === 'survivor' && a.alive && !a.isPlayer) { f = true; return true; } }); return f; }
   think(n, dt) {
+    const P = this.game.player;
+    if (P && Math.abs(n.x - P.x) + Math.abs(n.z - P.z) < 60) this.game.bots.footsteps(n, dt);
     const W = this.game.world, def = ITEMS[n.weapon];
     n.fireT -= dt; n.react -= dt;
     if (n.reloadT > 0) { n.reloadT -= dt; if (n.reloadT <= 0) n.mag = def.mag; }

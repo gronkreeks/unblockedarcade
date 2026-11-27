@@ -134,6 +134,8 @@ export class BotManager {
         if (b.ai.thinkAcc >= every) b.ai.thinkAcc = 0;
       }
       this.updateAvatar(b, dt, d);
+      // footsteps you can hear (and place) when someone is close
+      if (d < 50 && mode === 'full') this.footsteps(b, dt);
     }
     // arms race: the best weapon tier the player has had (0 bow, 1 pistols/shotguns, 2 semi/SMG, 3 AK/bolt)
     this.armsT = (this.armsT || 0) - dt;
@@ -166,6 +168,17 @@ export class BotManager {
     this.ai.exec(b, dt, mode);
     // a finished task is replaced straight away instead of idling until the next think
     if (b.alive && !b.ai.task && b.ai.goal === 'task') this.ai.think(b, mode);
+  }
+  footsteps(a, dt) {
+    const sp = Math.hypot(a.vx || 0, a.vz || 0);
+    if (sp < 0.6 || a.onGround === false) return;
+    a._stepAcc = (a._stepAcc || 0) + sp * dt;
+    const run = sp > 4;
+    if (a._stepAcc < (run ? 2.1 : 1.6)) return;
+    a._stepAcc = 0;
+    const W = this.game.world;
+    const kind = a.y - W.heightAt(a.x, a.z) > 0.25 ? 'wood' : this.game.combat.groundKind(a);
+    this.game.audio.stepAt(kind, a, a.crouch, run);
   }
   updateAvatar(b, dt, d) {
     const G = this.game;

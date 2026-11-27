@@ -296,9 +296,10 @@ export class PlayerController {
       this.stepAcc = (this.stepAcc || 0) + hs * dt;
       if (this.stepAcc > (this.sprinting ? 2.1 : 1.6)) {
         this.stepAcc = 0;
-        const kind = G.combat.groundKind(s);
-        if (s.y - W.heightAt(s.x, s.z) < 0.2 && kind !== 'dirt' || G.world.biomeAt(s.x, s.z) === 2 && Math.random() < 0.3) G.fx.footstep(s.x, s.y, s.z, kind === 'dirt' ? 'dust' : kind);
-        G.audio.step(kind, s.crouch);
+        const onFloor = s.y - W.heightAt(s.x, s.z) > 0.25;   // on a foundation or floor: wooden steps
+        const kind = onFloor ? 'wood' : G.combat.groundKind(s);
+        if (!onFloor && (kind !== 'dirt' || G.world.biomeAt(s.x, s.z) === 2 && Math.random() < 0.3)) G.fx.footstep(s.x, s.y, s.z, kind === 'dirt' ? 'dust' : kind);
+        G.audio.step(kind, s.crouch, this.sprinting);
       }
     }
     // sleeves follow the worn shirt
