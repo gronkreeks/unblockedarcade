@@ -204,3 +204,24 @@ export function sortContainer(cont) {
   cont.touch();
   return true;
 }
+
+// Quick stack: move items from the main inventory into the given containers, but only into a
+// container that already holds that item (like Rust). Belt and worn items stay. Returns how
+// many items moved and how many containers took something.
+export function quickStack(inv, conts) {
+  let moved = 0; const used = new Set();
+  for (let i = 0; i < inv.main.size; i++) {
+    const s = inv.main.slots[i]; if (!s) continue;
+    for (const c of conts) {
+      if (!c.slots.some(x => x && x.id === s.id)) continue;
+      const before = s.n;
+      const left = c.addStack(s);
+      const after = left ? left.n : 0;
+      if (after < before) { moved += before - after; used.add(c); }
+      inv.main.slots[i] = left || null;
+      if (!left) break;
+    }
+  }
+  inv.main.touch(); for (const c of used) c.touch();
+  return { moved, boxes: used.size };
+}

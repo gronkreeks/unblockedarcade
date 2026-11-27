@@ -57,6 +57,8 @@ export class PlayerController {
       // Ctrl is crouch: stop the browser's Ctrl shortcuts (save, bookmark, select all...) while playing.
       // Ctrl+W can only be caught in fullscreen, where the keyboard is locked to the game.
       if (e.ctrlKey && this.locked && !e.metaKey) e.preventDefault();
+      // with the keyboard locked in fullscreen, Esc no longer frees the mouse by itself
+      if (e.code === 'Escape' && this.locked && document.fullscreenElement) { document.exitPointerLock(); return; }
       if (this.game.ui.captureKeys(e)) return;
       if (e.code === 'Tab') e.preventDefault();
       if (!this.locked) { if (this.game.ui.open === 'inv' && MOVE_KEYS.has(e.code)) this.keys.add(e.code); return; }
@@ -73,9 +75,18 @@ export class PlayerController {
     });
     document.addEventListener('keyup', e => this.keys.delete(e.code));
   }
+  // Playing goes fullscreen automatically (unless turned off in the pause menu). Fullscreen also locks
+  // the keyboard to the game, so Ctrl+W while crouch-walking can't close the tab.
   lock() {
-    if (!this.locked) this.canvas.requestPointerLock();
-    if (document.fullscreenElement && navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock().catch(() => {});
+    const kb = () => { if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock().catch(() => {}); };
+    const point = () => { if (!this.locked) { const r = this.canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } };
+    const root = document.documentElement;
+    if (this.game.prefs.fullscreen !== false && !document.fullscreenElement && root.requestFullscreen) {
+      root.requestFullscreen({ navigationUI: 'hide' }).then(() => { kb(); point(); }).catch(point);
+      return;
+    }
+    if (document.fullscreenElement) kb();
+    point();
   }
   isGun() { const d = this.s && this.s.activeDef(); return !!d && (d.type === 'gun' || d.type === 'bow'); }
   selectSlot(i) {

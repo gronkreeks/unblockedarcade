@@ -4,7 +4,7 @@ import { RECIPES, RECIPE, CRAFT_CATS, researchCost, TECH_PARENT, TECH_TREE } fro
 import { PIECES, PIECE_ORDER, GRADES, pieceCost, DEPLOYABLES } from '../data/building.js';
 import { MONUMENT_TYPES, BIOME } from '../world/WorldGeneration.js';
 import { DISTRIBUTION, STYLES } from '../bots/BotProfiles.js';
-import { moveSlot, splitSlot, sortContainer } from '../systems/InventorySystem.js';
+import { moveSlot, splitSlot, sortContainer, quickStack } from '../systems/InventorySystem.js';
 import { recycleYield } from '../systems/Deployables.js';
 import { iconURL } from './Icons.js';
 import { fmtTime } from '../core/util.js';
@@ -87,13 +87,18 @@ export class UIManager {
     $('psQuit').onclick = async () => { await this.game.saveGame(true); this.game.quitToMenu(); };
     $('psMap').onclick = () => { this.hideScreens(); this.openMap(); };
     // fullscreen also locks the keyboard to the game, so crouch-walking (Ctrl+W) can't close the tab
+    // fullscreen is on by default; leaving it here keeps it off until you switch it back on
+    const fsLabel = () => { $('psFull').textContent = document.fullscreenElement ? 'Leave fullscreen' : 'Fullscreen'; };
     $('psFull').onclick = async () => {
+      const G = this.game;
       try {
-        if (document.fullscreenElement) { await document.exitFullscreen(); if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); }
-        else { await document.documentElement.requestFullscreen(); if (navigator.keyboard && navigator.keyboard.lock) await navigator.keyboard.lock(); }
+        if (document.fullscreenElement) { if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); await document.exitFullscreen(); G.prefs.fullscreen = false; }
+        else { await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); if (navigator.keyboard && navigator.keyboard.lock) await navigator.keyboard.lock(); G.prefs.fullscreen = true; }
+        G.applyPrefs();
       } catch (e) { this.toast('Fullscreen is not available here'); }
-      $('psFull').textContent = document.fullscreenElement ? 'Leave fullscreen' : 'Fullscreen';
+      fsLabel();
     };
+    document.addEventListener('fullscreenchange', fsLabel);
   }
   renderDist(d) {
     const D = DISTRIBUTION[d];
@@ -271,7 +276,7 @@ export class UIManager {
     const cls = d && d.type === 'recycler' ? 'grid6 rec' : 'grid6';
     // boxes, cabinets, crates and bags can be sorted; machines keep their own slot layout
     const sortable = !(d && ['furnace', 'campfire', 'recycler', 'research_table'].includes(d.type));
-    return `<h3>${esc(L.title.replace(/^\w/, c => c.toUpperCase()))}</h3><div class="${cls}">${slots}</div>${extra}<div class="row"><button class="btn small" data-act="takeall">Take all</button>${sortable ? '<button class="btn small" data-act="sort">Sort</button>' : ''}</div>`;
+    return `<h3>${esc(L.title.replace(/^\w/, c => c.toUpperCase()))}</h3><div class="${cls}">${slots}</div>${extra}<div class="row"><button class="btn small" data-act="takeall">Take all</button>${sortable ? '<button class="btn small" data-act="sort">Sort</button><button class="btn small" data-act="quickhere" title="Move your items into this box where it already holds them">Quick stack</button>' : ''}</div>`;
   }
   recyclerHTML(d) {
     const cont = d.cont, P = this.P;
@@ -349,6 +354,15 @@ export class UIManager {
       }
       if (a === 'takeout' && L) { for (let i = 6; i < 12; i++) { const st = L.cont.slots[i]; if (st) L.cont.slots[i] = P.inv.giveStack(st); } L.cont.touch(); }
       if (a === 'sort' && L) { this.sel = null; sortContainer(L.cont); G.audio.click(); }
+      if (a === 'quickhere' && L) { this.sel = null; const r = quickStack(P.inv, [L.cont]); this.toast(r.moved ? `Stacked ${r.moved} items into this box` : 'Nothing here to stack onto'); if (r.moved) G.audio.pickup(); }
+      if (a === 'quicknear') {
+        // every box within reach that you can open (yours or unlocked)
+        this.sel = null;
+        const boxes = G.deploy.list.filter(d => d.cont && (d.type === 'wood_box' || d.type === 'large_box') && Math.hypot(d.x - P.x, d.y - P.y, d.z - P.z) < 6 && G.deploy.canAccess(P.team, d)).map(d => d.cont);
+        const r = boxes.length ? quickStack(P.inv, boxes) : { moved: 0, boxes: 0 };
+        this.toast(!boxes.length ? 'No boxes nearby' : r.moved ? `Stacked ${r.moved} items into ${r.boxes} ${r.boxes === 1 ? 'box' : 'boxes'}` : 'Nothing to stack: nearby boxes don\'t hold these items');
+        if (r.moved) G.audio.pickup();
+      }
       if (a === 'takeall' && L) { for (let i = 0; i < L.cont.size; i++) { const s = L.cont.slots[i]; if (s) L.cont.slots[i] = P.inv.giveStack(s); } L.cont.touch(); }
       if (this.sel) {
         const c = this.cmap()[this.sel.c], s = c && c.slots[this.sel.i];

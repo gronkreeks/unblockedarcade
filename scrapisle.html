@@ -52,6 +52,7 @@
   <section class="col mid">
     <h3>Inventory</h3>
     <div id="pMain" class="grid6"></div>
+    <div class="row"><button class="btn small" data-act="quicknear" title="Move items into nearby boxes that already hold the same item">Quick stack to nearby boxes</button></div>
     <h3>Belt</h3>
     <div id="pBelt" class="grid6"></div>
     <div id="pSel"></div>
@@ -69,7 +70,7 @@
   <p class="muted center">Press M or Esc to close. Red squares are buildings you have seen, blue ones are yours.</p>
 </div>
 
-<div id="clickBox" class="overlay light" hidden><div class="box"><h2>Click to play</h2><p class="muted">WASD to move, Shift to sprint, Ctrl to crouch (play fullscreen so Ctrl+W can't close the tab), E to interact, Tab for inventory, Q for crafting, M for the map, Esc for the menu.</p></div></div>
+<div id="clickBox" class="overlay light" hidden><div class="box"><h2>Click to play</h2><p class="muted">WASD to move, Shift to sprint, Ctrl to crouch, E to interact, Tab for inventory, Q for crafting, M for the map, Esc for the menu. The game goes fullscreen when you click; you can turn that off in the pause menu.</p></div></div>
 
 <div id="menuScreen" class="screen">
   <div class="wrap">
@@ -167,6 +168,6 @@
   <div class="wrap center"><h2>Clan Wars</h2><p id="loadingTxt"></p></div>
 </div>
 
-<script type="module" src="scrapisle/js/main.js?v=12"></script>
+<script type="module" src="scrapisle/js/main.js?v=13"></script>
 </body>
 </html>
