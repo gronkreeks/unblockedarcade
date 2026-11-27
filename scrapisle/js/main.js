@@ -1,4 +1,4 @@
-// Scrap Isle bootstrap: renderer, game object, world setup, save/load, main loop.
+// Clan Wars bootstrap: renderer, game object, world setup, save/load, main loop.
 import * as THREE from 'three';
 import { World } from './world/WorldGeneration.js';
 import { buildTerrain, updateTerrainLOD } from './world/Terrain.js';
@@ -133,6 +133,7 @@ class Game {
     this.now = data ? data.now : 0;
     this.log = data ? data.log || [] : [];
     this.raidHistory = data ? data.raidHistory || [] : [];
+    this.pstats = Object.assign({ defended: 0 }, data ? data.pstats : null);
     this.seen = new Map(data ? data.seen || [] : []);
     this.actors = new Set();
     this.actorHash = new SpatialHash(16);
@@ -276,7 +277,7 @@ class Game {
       v: 1, cfg: this.cfg, now: this.now, uid: getUidCounter(), env: this.env.serialize(),
       player: this.player.serialize(), bots: this.bots.serialize(), teams: this.teams.serialize(),
       structures: this.build.serialize(), deploys: this.deploy.serialize(), res: this.res.serialize(), loot: this.loot.serialize(),
-      animals: this.animals.serialize(), npcs: this.npcs.serialize(), log: this.log, raidHistory: this.raidHistory, seen: [...this.seen],
+      animals: this.animals.serialize(), npcs: this.npcs.serialize(), log: this.log, raidHistory: this.raidHistory, seen: [...this.seen], pstats: this.pstats,
     };
   }
   async saveGame(auto) {

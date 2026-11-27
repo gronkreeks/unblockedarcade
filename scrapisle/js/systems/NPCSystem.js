@@ -31,7 +31,7 @@ export class NPCSystem {
   onDamage(n, amount, info) {
     const armor = info.area === 'head' ? 0.35 : 0.45;
     n.hp -= amount * (1 - armor);
-    if (info.attacker && info.attacker.kind === 'survivor') { n.target = info.attacker; n.seenT = 8; n.react = 0.2; }
+    if (info.attacker && info.attacker.kind === 'survivor') { if (n.target !== info.attacker) { n.react = randRange(0.4, 0.6); n.engagedAt = this.game.now; } n.target = info.attacker; n.seenT = 8; }
     if (n.hp <= 0) this.die(n, info);
   }
   die(n, info) {
@@ -78,7 +78,7 @@ export class NPCSystem {
         const d = dist(n.x, n.z, a.x, a.z);
         if (d < bd && this.game.physics.los({ x: n.x, y: n.y + 1.6, z: n.z }, { x: a.x, y: a.y + 1.4, z: a.z })) { bd = d; best = a; }
       });
-      if (best) { n.target = best; n.seenT = 3; n.react = 0.6; }
+      if (best) { n.target = best; n.seenT = 3; n.react = randRange(0.45, 0.75); n.engagedAt = this.game.now; }
     }
     let moving = 0;
     if (n.target) {
@@ -88,13 +88,14 @@ export class NPCSystem {
       const aimP = { x: t.x, y: t.y + (t.crouch ? 0.9 : 1.3), z: t.z };
       const vis = this.game.physics.los(eye, aimP);
       if (vis) n.seenT = 3;
-      n.yaw += angleWrap(Math.atan2(t.x - n.x, t.z - n.z) - n.yaw) * Math.min(1, dt * 6);
-      if (vis && n.react <= 0 && n.fireT <= 0 && n.reloadT <= 0) {
+      const turnErr = angleWrap(Math.atan2(t.x - n.x, t.z - n.z) - n.yaw);
+      n.yaw += Math.max(-3 * dt, Math.min(3 * dt, turnErr));
+      if (vis && n.react <= 0 && n.fireT <= 0 && n.reloadT <= 0 && Math.abs(turnErr) < 0.2) {
         if (n.mag <= 0) n.reloadT = def.reload;
         else {
           n.mag--; n.fireT = 60 / def.rpm * (def.auto ? 1.4 : 1.8);
           const dx = aimP.x - eye.x, dy = aimP.y - eye.y, dz = aimP.z - eye.z, L = Math.hypot(dx, dy, dz);
-          const err = 0.035 + d * 0.0006;
+          const err = (0.045 + d * 0.0008) * (1 + 1.5 * Math.exp(-(this.game.now - (n.engagedAt ?? -99)) / 1.5));
           const ammo = ITEMS[def.ammo[0]];
           const pellets = ammo.pellets || 1;
           for (let p = 0; p < pellets; p++) {

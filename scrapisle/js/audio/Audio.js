@@ -11,7 +11,11 @@ export class Audio {
     if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
     try {
       this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-      this.master = this.ctx.createGain(); this.master.gain.value = this.volume; this.master.connect(this.ctx.destination);
+      this.master = this.ctx.createGain(); this.master.gain.value = this.volume;
+      // a limiter so loud gunfire and explosions punch without clipping
+      const lim = this.ctx.createDynamicsCompressor();
+      lim.threshold.value = -6; lim.knee.value = 4; lim.ratio.value = 12; lim.attack.value = 0.002; lim.release.value = 0.15;
+      this.master.connect(lim); lim.connect(this.ctx.destination);
       const n = this.ctx.sampleRate;
       this.noiseBuf = this.ctx.createBuffer(1, n, n);
       const d = this.noiseBuf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
@@ -43,15 +47,17 @@ export class Audio {
     o.connect(g); g.connect(this.master); o.start(t); o.stop(t + dur + 0.05);
   }
   shot(def, src) {
-    const v = this._gainFor(src, 420) * (src && src.isPlayer ? 1 : 0.9);
+    const v = this._gainFor(src, 700) * (src && src.isPlayer ? 1 : 0.95);
     if (v < 0.01 || this._throttle('shot' + (src && src.id), 30)) return;
     if (def.type === 'bow') { this.noise(0.12, 900, 2, 0.25 * v); return; }
     const heavy = def.icon === 'rifle' || def.icon === 'shotgun';
     const body = { assault_rifle: [0.32, 650, 95], semi_rifle: [0.3, 750, 110], bolt_rifle: [0.5, 520, 70], pump_shotgun: [0.42, 420, 70], double_barrel: [0.45, 400, 65], drum_smg: [0.22, 950, 140], scrap_smg: [0.2, 1100, 150], revolver: [0.3, 800, 105], semi_pistol: [0.22, 1200, 150], pipe_pistol: [0.4, 380, 60], crossbow: [0.12, 1300, 300] }[def.id] || [heavy ? 0.35 : 0.22, heavy ? 700 : 1100, heavy ? 90 : 140];
-    this.noise(body[0], body[1], 0.7, 0.6 * v);
-    this.tone(body[2], 0.18, 0.35 * v, 'triangle', 0.4);
-    // distant shots lose their high end and arrive as a low thump
-    if (src && !src.isPlayer && v < 0.3) this.noise(0.5, 250, 0.5, 0.25 * v * 3, 'lowpass', 0.02);
+    this.noise(0.035, 3200, 0.6, 0.9 * v, 'highpass');            // the crack
+    this.noise(body[0], body[1], 0.7, 1.25 * v);                    // the body of the shot
+    this.tone(body[2], 0.22, 0.7 * v, 'triangle', 0.4);             // low punch
+    this.noise(body[0] * 1.8, 260, 0.6, 0.45 * v, 'lowpass', 0.01); // room / tail
+    // distant shots lose their high end and arrive as a low boom
+    if (src && !src.isPlayer && v < 0.35) this.noise(0.7, 220, 0.5, 0.65 * Math.sqrt(v), 'lowpass', 0.03);
   }
   explosion(c) { const v = this._gainFor(c, 600); this.noise(1.4, 180, 0.6, 0.9 * v, 'lowpass'); this.tone(55, 0.9, 0.6 * v, 'sine', 0.5); }
   hit(kind) { if (kind === 'wood') this.noise(0.12, 500, 3, 0.35); else if (kind === 'flesh') this.noise(0.1, 300, 1, 0.3, 'lowpass'); else { this.noise(0.08, 2400, 4, 0.3); this.tone(900, 0.06, 0.08, 'square'); } }

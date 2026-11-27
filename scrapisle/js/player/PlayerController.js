@@ -271,7 +271,8 @@ export class PlayerController {
       if (k.has('KeyA')) fx += 1; if (k.has('KeyD')) fx -= 1;
     }
     const len = Math.hypot(fx, fz) || 1;
-    let speed = swimming ? SWIM : s.crouch ? CROUCH : sprint ? RUN : WALK;
+    const swinging = (s.slowUntil || 0) > G.now;   // mid-swing: walking pace at most
+    let speed = swimming ? SWIM : s.crouch ? CROUCH : sprint && !swinging ? RUN : WALK;
     if (this.mouse.r && this.isGun()) speed *= 0.6;
     if (depth > 0.5 && !swimming) speed *= 0.7;
     const sy = Math.sin(s.yaw), cy = Math.cos(s.yaw);
@@ -340,7 +341,7 @@ export class PlayerController {
     const s = this.s, G = this.game;
     if (!st || !d) {
       // fists: punch
-      if (this.mouse.l && s.swingT <= 0) { s.swingT = 0.6; this.vm.doSwing(); const r = G.combat.meleeTrace(s, s.eye(), s.dir(), 1.6); if (r && r.actor) G.combat.damageActor(r.actor, 5, { type: 'melee', area: r.area, attacker: s }); }
+      if (this.mouse.l && s.swingT <= 0) { s.swingT = 0.6; s.slowUntil = G.now + 0.6; this.vm.doSwing(); const r = G.combat.meleeTrace(s, s.eye(), s.dir(), 1.6); if (r && r.actor) G.combat.damageActor(r.actor, 5, { type: 'melee', area: r.area, attacker: s }); }
       return;
     }
     const lp = this.mouse.lPressed, lh = this.mouse.l;

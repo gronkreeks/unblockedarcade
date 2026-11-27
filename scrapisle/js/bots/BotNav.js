@@ -20,7 +20,7 @@ export class BotNav {
     const d = dist(b.x, b.z, tx, tz);
     if (d <= arrive) { b.vx = 0; b.vz = 0; return true; }
     const run = opts.run ?? (d > 15 && b.hyd > 40 && b.cal > 60);
-    let speed = (run ? 5.4 : 3.0) * (b.crouch ? 0.55 : 1);
+    let speed = (run && !((b.slowUntil || 0) > this.game.now) ? 5.4 : 3.0) * (b.crouch ? 0.55 : 1);
     if (mode === 'far') {
       // abstract: terrain-following travel without collision, still walking around guarded monuments
       const step = Math.min(d, 5 * (0.85 + 0.15 * ai.S.efficiency) * dt);

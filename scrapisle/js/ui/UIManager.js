@@ -1,6 +1,6 @@
 // All HTML UI: menus, HUD, inventory with drag and drop, crafting, containers, building menus, map, death screen.
 import { ITEMS, WEAR_SLOTS } from '../data/items.js';
-import { RECIPES, RECIPE, CRAFT_CATS, researchCost, TECH_PARENT } from '../data/recipes.js';
+import { RECIPES, RECIPE, CRAFT_CATS, researchCost, TECH_PARENT, TECH_TREE } from '../data/recipes.js';
 import { PIECES, PIECE_ORDER, GRADES, pieceCost, DEPLOYABLES } from '../data/building.js';
 import { MONUMENT_TYPES, BIOME } from '../world/WorldGeneration.js';
 import { DISTRIBUTION, STYLES } from '../bots/BotProfiles.js';
@@ -424,10 +424,10 @@ export class UIManager {
   }
 
   // ================= MODALS =================
-  modal(html, onClick, onKey) {
+  modal(html, onClick, onKey, cls = '') {
     this.open = 'modal';
     this.unlockForUI();
-    const m = $('modal'); m.innerHTML = `<div class="box">${html}<div class="row end"><button class="btn small" data-act="close">Close</button></div></div>`; m.hidden = false;
+    const m = $('modal'); m.innerHTML = `<div class="box ${cls}">${html}<div class="row end"><button class="btn small" data-act="close">Close</button></div></div>`; m.hidden = false;
     m.onclick = e => { const a = e.target.closest('[data-act="close"]'); if (a) { this.close(true); return; } onClick && onClick(e); };
     this.modalKey = onKey || null;
   }
@@ -478,17 +478,75 @@ export class UIManager {
       return false;
     });
   }
+  // Rust-style tech tree: one tree per workbench level, branches growing down from the bench.
   openTechTree(bench) {
     const G = this.game, P = this.P, tier = bench.def.bench;
-    const draw = () => {
-      const rows = RECIPES.filter(r => !r.known && r.tier >= 1 && r.tier <= tier).sort((a, b) => a.tier - b.tier || a.unlock - b.unlock).map(r => {
-        const known = P.bp.has(r.id);
-        return `<div class="qrow"><img src="${iconURL(r.out)}" alt=""><span>${esc(ITEMS[r.out].name)} <span class="muted">(level ${r.tier})</span></span>${known ? '<span class="ok">Known</span>' : !G.crafting.prereqMet(P, r.id) ? `<span class="muted">Needs ${esc(ITEMS[TECH_PARENT[r.id]].name)} first</span>` : `<button class="btn tiny" data-unlock="${r.id}" ${P.inv.count('scrap') >= r.unlock ? '' : 'disabled'}>Unlock for ${r.unlock} scrap</button>`}</div>`;
-      }).join('');
-      return `<h2>${esc(bench.def.name)}</h2><p class="muted">You have ${P.inv.count('scrap')} scrap. Crafting next to this bench allows level ${tier} recipes.</p><div class="tech">${rows}</div>`;
+    if (!this.ttTier || this.ttTier > 3) this.ttTier = tier;
+    const COLW = 112, ROWH = 104, NODE = 92;
+    const layout = (t) => {
+      const list = TECH_TREE[t] || [], kids = {};
+      for (const [id, par] of list) (kids[par || '_root'] = kids[par || '_root'] || []).push(id);
+      const pos = {}; let col = 0, maxDepth = 0;
+      const place = (id, depth) => {
+        maxDepth = Math.max(maxDepth, depth);
+        const ch = kids[id] || [];
+        if (!ch.length) { pos[id] = { c: col++, d: depth }; return pos[id].c; }
+        const cs = ch.map(c => place(c, depth + 1));
+        pos[id] = { c: (cs[0] + cs[cs.length - 1]) / 2, d: depth };
+        return pos[id].c;
+      };
+      for (const id of kids._root || []) place(id, 1);
+      const cols = Math.max(1, col);
+      pos._root = { c: (cols - 1) / 2, d: 0 };
+      return { pos, kids, cols, rows: maxDepth + 1, list };
     };
-    const onClick = e => { const u = e.target.closest('[data-unlock]'); if (u) { if (G.crafting.unlock(P, u.dataset.unlock, tier)) { this.toast(`Unlocked ${ITEMS[u.dataset.unlock].name}`); G.audio.craftDone(); } this.modal(draw(), onClick); } };
-    this.modal(draw(), onClick);
+    const draw = () => {
+      const t = this.ttTier, L = layout(t), open = t <= tier;
+      const xy = (p) => [p.c * COLW + COLW / 2, p.d * ROWH + NODE / 2];
+      const W = L.cols * COLW, H = L.rows * ROWH;
+      let lines = '';
+      for (const [id, par] of L.list) {
+        const [x1, y1] = xy(L.pos[par || '_root']), [x2, y2] = xy(L.pos[id]);
+        const my = (y1 + y2) / 2;
+        const cls = P.bp.has(id) ? 'got' : (!par || P.bp.has(par)) && open ? 'next' : '';
+        lines += `<path class="${cls}" d="M${x1} ${y1 + NODE / 2 - 6} V${my} H${x2} V${y2 - NODE / 2 + 6}"/>`;
+      }
+      const node = (id) => {
+        const p = L.pos[id], [x, y] = xy(p), r = RECIPE[id];
+        const known = P.bp.has(id), avail = open && !known && G.crafting.prereqMet(P, id);
+        const state = known ? 'known' : avail ? 'avail' : 'locked';
+        const afford = avail && P.inv.count('scrap') >= r.unlock;
+        return `<button class="ttNode ${state}${afford ? ' afford' : ''}${this.ttSel === id ? ' sel' : ''}" data-tt="${id}" style="left:${x - NODE / 2}px;top:${y - NODE / 2}px;width:${NODE}px;height:${NODE}px">
+          <img src="${iconURL(r.out)}" alt=""><span>${esc(ITEMS[r.out].name)}</span><em>${known ? 'Known' : r.unlock + ' scrap'}</em></button>`;
+      };
+      const [rx, ry] = xy(L.pos._root);
+      const root = `<div class="ttNode root" style="left:${rx - NODE / 2}px;top:${ry - NODE / 2}px;width:${NODE}px;height:${NODE}px"><img src="${iconURL('workbench' + t)}" alt=""><span>Workbench Level ${t}</span></div>`;
+      const tabs = [1, 2, 3].map(k => `<button class="btn small ${k === t ? 'go' : ''}" data-tttab="${k}">Level ${k}</button>`).join('');
+      // details of the selected item
+      let det = `<p class="muted">Select an item. Each one needs the item above it unlocked first.</p>`;
+      const sel = this.ttSel && RECIPE[this.ttSel] && RECIPE[this.ttSel].tier === t ? RECIPE[this.ttSel] : null;
+      if (sel) {
+        const known = P.bp.has(sel.id), par = TECH_PARENT[sel.id];
+        let act;
+        if (known) act = '<span class="ok">You know this blueprint</span>';
+        else if (!open) act = `<span class="muted">Needs a Workbench Level ${t}</span>`;
+        else if (!G.crafting.prereqMet(P, sel.id)) act = `<span class="muted">Unlock ${esc(ITEMS[par].name)} first</span>`;
+        else act = `<button class="btn go" data-unlock="${sel.id}" ${P.inv.count('scrap') >= sel.unlock ? '' : 'disabled'}>Unlock for ${sel.unlock} scrap</button>`;
+        det = `<div class="ttDet"><img src="${iconURL(sel.out)}" alt=""><div><h3>${esc(ITEMS[sel.out].name)}</h3><p class="muted">Crafts from ${costText(sel.cost)}${sel.n > 1 ? `, makes ${sel.n}` : ''}</p></div><div class="ttAct">${act}</div></div>`;
+      }
+      return `<h2>${esc(bench.def.name)}</h2><p class="muted">You have ${P.inv.count('scrap')} scrap. This bench crafts and unlocks up to level ${tier}.</p>
+        <div class="row ttTabs">${tabs}</div>
+        <div class="ttWrap${open ? '' : ' closed'}"><div class="tt" style="width:${W}px;height:${H}px"><svg width="${W}" height="${H}">${lines}</svg>${root}${L.list.map(([id]) => node(id)).join('')}</div></div>${det}`;
+    };
+    const redraw = () => { const sc = document.querySelector('#modal .ttWrap'); const keep = sc ? sc.scrollLeft : 0; this.modal(draw(), onClick, null, 'wide'); const n = document.querySelector('#modal .ttWrap'); if (n) n.scrollLeft = keep; };
+    const onClick = e => {
+      const tab = e.target.closest('[data-tttab]'); if (tab) { this.ttTier = +tab.dataset.tttab; this.ttSel = null; this.modal(draw(), onClick, null, 'wide'); return; }
+      const n = e.target.closest('[data-tt]'); if (n) { this.ttSel = n.dataset.tt; redraw(); return; }
+      const u = e.target.closest('[data-unlock]');
+      if (u) { if (G.crafting.unlock(P, u.dataset.unlock, tier)) { this.toast(`Unlocked ${ITEMS[u.dataset.unlock].name}`); G.audio.craftDone(); } redraw(); }
+    };
+    this.ttTier = Math.min(tier, this.ttTier || tier);
+    this.modal(draw(), onClick, null, 'wide');
   }
 
   // ================= MAP =================
@@ -532,7 +590,11 @@ export class UIManager {
       let grade = 0; if (st) { let g = 0, n = 0; for (const p of st.pieces.values()) { g += p.grade; n++; } grade = n ? g / n : 0; }
       const pieces = st ? st.pieces.size : 0;
       const score = t.size * 30 + pieces * 2 + prog.bench * 60 + grade * 30 + t.stats.raidsWon * 30 + t.stats.kills * 0.5;
-      out.push({ t, st, alive, pieces, bench: prog.bench, grade, score });
+      // how loaded they are: everything in their boxes plus what members carry and wear
+      let loot = 0;
+      for (const d of prog.deps) if (d.cont && d.type !== 'recycler') loot += d.cont.totalValue();
+      for (const m of G.teams.membersOf(t)) loot += m.inv.totalValue();
+      out.push({ t, st, alive, pieces, bench: prog.bench, grade, score, loot });
     }
     return out.sort((a, b) => b.score - a.score);
   }
@@ -543,15 +605,28 @@ export class UIManager {
     const clans = this.clanTable();
     const top = clans[0];
     const biggest = top ? `<p><b style="color:${top.t.color}">${esc(top.t.name)}</b> run the island: ${top.t.size} members, ${top.pieces ? `a ${GR[Math.round(top.grade)]} base of ${top.pieces} pieces` : 'no base yet'}, ${top.t.stats.raidsWon} ${top.t.stats.raidsWon === 1 ? 'raid' : 'raids'} won and ${top.t.stats.kills} ${top.t.stats.kills === 1 ? 'kill' : 'kills'}.</p>` : '';
-    const clanRows = clans.slice(0, 10).map((c, i) => `<tr><td>${i + 1}</td><td><span class="swatch" style="background:${c.t.color}"></span>${esc(c.t.name)}<div class="muted">${(STYLES[c.t.style] || STYLES.balanced).name}, ${c.t.tier}</div></td><td>${c.alive}/${c.t.size}</td><td>${c.pieces ? `${c.pieces} ${GR[Math.round(c.grade)]}` : 'none'}</td><td>${c.bench ? 'T' + c.bench : '-'}</td><td>${c.t.stats.raidsWon}/${c.t.stats.raids}</td><td>${c.t.stats.kills}</td></tr>`).join('');
-    const clanHTML = O.clans ? `<h3>Clans</h3><table class="clanTable"><tr><th></th><th>Clan</th><th>Alive</th><th>Base</th><th>Bench</th><th>Raids won</th><th>Kills</th></tr>${clanRows}</table>` : '';
+    const LOOT = [[150, 'Fresh'], [600, 'Getting there'], [2000, 'Geared'], [5000, 'Loaded'], [Infinity, 'Stacked']];
+    const lootCell = (v) => { const lab = LOOT.find(l => v < l[0])[1]; const w = Math.max(4, Math.min(100, Math.log10(1 + v) / 4.2 * 100)); return `<div class="lootBar"><i style="width:${w}%"></i></div><div class="muted">${lab}</div>`; };
+    const clanRows = clans.slice(0, 10).map((c, i) => `<tr><td>${i + 1}</td><td><span class="swatch" style="background:${c.t.color}"></span>${esc(c.t.name)}<div class="muted">${(STYLES[c.t.style] || STYLES.balanced).name}, ${c.t.tier}</div></td><td>${c.alive}/${c.t.size}</td><td>${c.pieces ? `${c.pieces} ${GR[Math.round(c.grade)]}` : 'none'}</td><td>${c.bench ? 'T' + c.bench : '-'}</td><td>${lootCell(c.loot)}</td><td>${c.t.stats.raidsWon}/${c.t.stats.raids}</td><td>${c.t.stats.kills}</td></tr>`).join('');
+    const clanHTML = O.clans ? `<h3>Clans</h3><table class="clanTable"><tr><th></th><th>Clan</th><th>Alive</th><th>Base</th><th>Bench</th><th>Loot</th><th>Raids won</th><th>Kills</th></tr>${clanRows}</table>` : '';
     const log = G.log.slice(-12).reverse().map(l => `<p><span class="muted">Day ${l.day} ${l.clock}</span> ${esc(l.text)}</p>`).join('') || '<p class="muted">Nothing has happened yet.</p>';
     const won = G.raidHistory.filter(r => r.result === 'success').length;
     const raids = G.raidHistory.slice(-10).reverse().map(r => `<p><span class="swatch" style="background:${r.color || '#888'}"></span>Day ${r.day}: ${esc(r.team)} vs ${esc(r.target)}, ${esc(r.result === 'success' ? 'raided' : r.result)}${r.value ? ` (${r.value} scrap worth)` : ''}</p>`).join('') || '<p class="muted">No raids yet.</p>';
     const teams = [...G.teams.teams.values()];
     const bases = teams.filter(t => t.base && t.base.st).length;
+    // leaderboard (Normal difficulty and up): raids defended and kill/death ratio, you included
+    let board = '';
+    if (G.settings.difficulty !== 'easy') {
+      const P = this.P, kd = (k, d) => (k / Math.max(1, d));
+      const rows = [...G.teams.teams.values()].map(t => ({ name: t.name, color: t.color, def: t.stats.defended || 0, k: t.stats.kills || 0, d: t.stats.deaths || 0 }));
+      if (P) rows.push({ name: 'You', color: '#ffffff', def: G.pstats.defended, k: P.kills || 0, d: P.deaths || 0, you: true });
+      const line = (r, i, val) => `<tr class="${r.you ? 'you' : ''}"><td>${i + 1}</td><td><span class="swatch" style="background:${r.color}"></span>${esc(r.name)}</td><td>${val}</td></tr>`;
+      const defs = rows.filter(r => r.def > 0 || r.you).sort((a, b) => b.def - a.def).slice(0, 6).map((r, i) => line(r, i, r.def)).join('');
+      const kds = rows.filter(r => r.k >= 3 || r.you).sort((a, b) => kd(b.k, b.d) - kd(a.k, a.d)).slice(0, 6).map((r, i) => line(r, i, `${kd(r.k, r.d).toFixed(2)} <span class="muted">(${r.k}/${r.d})</span>`)).join('');
+      board = `<h3>Leaderboard</h3><div class="boards"><table class="clanTable"><tr><th></th><th>Raids defended</th><th></th></tr>${defs}</table><table class="clanTable"><tr><th></th><th>Best K/D</th><th></th></tr>${kds}</table></div>`;
+    }
     $('mapSide').innerHTML = `<div class="mapOpts">${check('bases', 'Show every clan base')}${check('raids', 'Show raid spots')}${check('clans', 'Show clan list')}</div>
-      <h3>Biggest clan</h3>${biggest || '<p class="muted">No clans yet.</p>'}${clanHTML}
+      <h3>Biggest clan</h3>${biggest || '<p class="muted">No clans yet.</p>'}${clanHTML}${board}
       <h3>Raids</h3><p class="muted">${G.raidHistory.length} raids so far, ${won} of them successful.</p>${raids}
       <h3>Island news</h3>${log}
       <h3>World</h3><p>${G.bots.list.filter(b => b.alive).length} of ${G.bots.list.length} survivors alive in ${teams.length} groups, ${bases} of them with a base.</p>`;

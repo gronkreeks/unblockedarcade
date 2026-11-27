@@ -108,6 +108,17 @@ const GUNS = {
     const bolt = part(bbox(0.012, 0.012, 0.03, 0.003), mat('gunmetal'), 0.028, 0.07, -0.1); bolt.name = 'bolt'; g.add(bolt);
     return { sight: 0.104 };
   },
+  rocket_launcher(g) {
+    const tube = mat('gunmetal', 0x4f5a3c), dark = mat('gunmetal');
+    g.add(part(cyl(0.045, 0.045, 0.9, 16), tube, 0, 0.06, -0.25, Math.PI / 2, 0, 0));
+    g.add(part(cyl(0.055, 0.05, 0.08, 16), dark, 0, 0.06, -0.72, Math.PI / 2, 0, 0));
+    g.add(part(cyl(0.06, 0.055, 0.07, 16), dark, 0, 0.06, 0.2, Math.PI / 2, 0, 0));
+    g.add(part(bbox(0.02, 0.09, 0.04), dark, 0, -0.03, -0.05));
+    g.add(part(bbox(0.02, 0.08, 0.035), dark, 0, -0.02, -0.3));
+    g.add(part(bbox(0.012, 0.03, 0.05), dark, -0.05, 0.12, -0.15));
+    const tip = part(cyl(0.005, 0.03, 0.08, 10), mat('paint', 0xb03a2e), 0, 0.06, -0.74, -Math.PI / 2, 0, 0); tip.name = 'mag'; g.add(tip);
+    return { sight: 0.12 };
+  },
   bolt_rifle(g) {
     const b = rifleBase(g, { receiver: 0.24, barrel: 0.5, stock: 'wood', hgLen: 0.36, hgMat: mat('gunwood') });
     const metal = mat('gunmetal');

@@ -1,4 +1,4 @@
-# Scrap Isle: design notes
+# Clan Wars: design notes
 
 A singleplayer, first-person survival game for EduArcade (`scrapisle.html`). It borrows the core loop of the
 survival-crafting genre that Rust made popular (gather, craft, build, loot, recycle, fight, raid), but every name,
@@ -6,7 +6,7 @@ model, map and monument here is original.
 
 ## 1. Mechanics researched (genre reference: Rust)
 
-| Area | How the reference game works | What Scrap Isle does |
+| Area | How the reference game works | What Clan Wars does |
 |---|---|---|
 | Gathering | Rock/tool hits on trees and ore nodes; yields scale with tool tier; a "weak spot" bonus; nodes deplete and respawn | Hit trees, stone, metal and sulfur nodes, hemp, corpses. Tool tables (rock < stone < metal < salvaged). Final-hit bonus, respawn timers, HQM chance on metal nodes |
 | Smelting | Furnace burns wood (makes charcoal) and smelts ore | Furnace container with fuel, ore and output slots, real tick |

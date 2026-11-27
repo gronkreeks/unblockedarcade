@@ -57,6 +57,8 @@ r('explosives', 1, { gunpowder: 50, low_grade: 3, sulfur: 10, metal_frag: 10 }, 
 
 // Raid
 r('satchel_charge', 1, { gunpowder: 120, metal_frag: 40, cloth: 10, rope: 1 }, 10, 1, { unlock: 90 });
+r('rocket', 1, { explosives: 6, metal_pipe: 1, gunpowder: 60 }, 15, 2, { unlock: 200 });
+r('rocket_launcher', 1, { hqm: 40, metal_pipe: 4 }, 40, 2, { unlock: 250 });
 r('timed_charge', 1, { explosives: 20, cloth: 5, tech_trash: 2 }, 30, 3, { unlock: 600 });
 
 // Clothing
@@ -130,7 +132,7 @@ export const TECH_TREE = {
     ['pump_shotgun', null], ['slug', 'pump_shotgun'],
     ['scrap_smg', null], ['drum_smg', 'scrap_smg'],
     ['hazmat_suit', null], ['large_medkit', 'hazmat_suit'],
-    ['explosives', null],
+    ['explosives', null], ['rocket', 'explosives'], ['rocket_launcher', 'rocket'],
   ],
   3: [
     ['assault_rifle', null], ['bolt_rifle', null],

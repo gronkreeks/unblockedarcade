@@ -5,8 +5,9 @@ import { STRUCT_DMG, DOORS, CELL } from '../data/building.js';
 import { SKILL, PERSONALITIES } from './BotProfiles.js';
 import { dist, randRange } from '../core/util.js';
 
-const COOLDOWN = { easy: 500, normal: 800, hard: 900, expert: 1300 };
-const WORTH = { easy: 0.35, normal: 0.6, hard: 0.85, expert: 1.15 };
+const COOLDOWN = { easy: 300, normal: 420, hard: 480, expert: 600 };
+const WORTH = { easy: 0.25, normal: 0.42, hard: 0.6, expert: 0.8 };
+const ROCKET = 250;   // a rocket's blast against buildings (before the grade/door multiplier)
 
 export class BotRaiding {
   constructor(game) {
@@ -46,7 +47,7 @@ export class BotRaiding {
     const cell = nav.cellOf(st, goal.x, goal.z);
     const r = nav.basePath(st, team.id, from.x, from.z, cell, true);
     if (!r) return null;
-    let sat = 0, c4 = 0, melee = 0;
+    let sat = 0, c4 = 0, melee = 0, rockets = 0;
     for (const p of r.breaches) {
       const isDoor = p.type === 'doorway' && p.door;
       const hp = isDoor ? p.door.hp : p.hp;
@@ -54,9 +55,10 @@ export class BotRaiding {
       const mm = isDoor ? DOORS[p.door.type].dmg.melee : STRUCT_DMG.melee[p.grade];
       sat += Math.ceil(hp / (75 * em * 0.95));
       c4 += Math.ceil(hp / (275 * em * 0.95));
+      rockets += Math.ceil(hp / (ROCKET * em * 0.9));
       melee += mm > 0 ? hp / (25 * mm) : Infinity;
     }
-    return { path: r.path, breaches: r.breaches.map(p => p.id), sat, c4, melee, goal: goal.id };
+    return { path: r.path, breaches: r.breaches.map(p => p.id), sat, c4, melee, rockets, goal: goal.id };
   }
 
   // ---------- decision (team leader, every ~15 s) ----------
@@ -73,10 +75,15 @@ export class BotRaiding {
     if (prog.bench < 1 || !prog.tc) return; // raiding starts once a group is established
     const canSatchel = prog.knows('satchel_charge') && prog.bench >= 1;
     const canC4 = prog.knows('timed_charge') && prog.bench >= 3;
+    const canRocket = prog.knows('rocket') && prog.knows('rocket_launcher') && prog.bench >= 2;
     const pers = alive.reduce((a, b) => a + PERSONALITIES[b.ai.pers].raid, 0) / alive.length;
     const ours = G.teams.strength(team);
     let best = null, bs = 0;
-    for (const [stId, k] of team.known) {
+    // everyone knows where the biggest bases on the island are (yours included): big bases draw raids
+    const cand = new Map(team.known);
+    const famous = [...G.build.structures.values()].filter(st => st.team !== team.id && st.pieces.size >= 12).map(st => [st, this.estimateValue(st)]).sort((a, b) => b[1] - a[1]).slice(0, 4);
+    for (const [st, v] of famous) if (!cand.has(st.id)) { const z = G.build.zoneOf(st); cand.set(st.id, { x: z.x, z: z.z, team: st.team, value: v, famous: true }); }
+    for (const [stId, k] of cand) {
       const st = G.build.structures.get(stId);
       if (!st) { team.known.delete(stId); continue; }
       const home = G.build.structures.get(team.base.st);
@@ -89,12 +96,14 @@ export class BotRaiding {
       if (meleeHits < 35 * alive.length) { method = 'melee'; cost = meleeHits * 0.15; }
       if (canC4 && plan.c4 <= 6 && (!method || plan.c4 * 40 < cost)) { method = 'timed_charge'; charges = plan.c4; cost = plan.c4 * 40; }
       if (canSatchel && plan.sat <= 14 && (!method || plan.sat * 8 < cost)) { method = 'satchel_charge'; charges = plan.sat; cost = plan.sat * 8; }
+      if (canRocket && plan.rockets <= 24 && (!method || method === 'melee' || plan.rockets * 9 < cost)) { method = 'rocket'; charges = plan.rockets; cost = plan.rockets * 9; }
       if (!method) continue;
       if (plan.breaches.length === 0) { method = 'walk'; cost = 0; }
       const theirs = st.team === G.player?.team ? G.bots.powerOf(G.player) : (G.teams.get(st.team) ? G.teams.strength(G.teams.get(st.team)) : 10);
       const risk = Math.max(0.3, theirs / Math.max(1, ours));
       const travel = dist(from.x, from.z, k.x, k.z) / 400;
-      const worth = k.value * pers / ((cost + 10) * risk * (1 + travel));
+      const size = st.pieces.size;
+      const worth = k.value * pers * (1 + size / 30) / ((cost + 10) * risk * (1 + travel));
       const grudge = 1 + (team.threats.get(st.team) || 0) * 0.02;
       const score = worth * grudge * (0.75 + Math.random() * 0.5);
       if (score > WORTH[team.tier] && score > bs) { bs = score; best = { st, plan, method, charges }; }
@@ -106,12 +115,12 @@ export class BotRaiding {
     const ang = Math.atan2(hz.x - z.x, hz.z - z.z);
     team.raid = {
       state: best.method === 'melee' || best.method === 'walk' ? 'rally' : 'prep', target: best.st.id, targetTeam: best.st.team, method: best.method,
-      need: best.charges + (best.method === 'satchel_charge' ? 2 : best.method === 'timed_charge' ? 1 : 0),
+      need: best.charges + (best.method === 'satchel_charge' ? 2 : best.method === 'timed_charge' ? 1 : best.method === 'rocket' ? 2 : 0),
       rally: { x: z.x + Math.sin(ang) * (z.r + 30), z: z.z + Math.cos(ang) * (z.r + 30) }, started: G.now, stateT: G.now, looted: 0, lootedValue: 0,
       targetName: this.teamLabel(best.st.team), tx: z.x, tz: z.z,
     };
     team.raidDrive = 0;
-    this.log(`${team.name} are planning a raid on ${team.raid.targetName}'s base`);
+    this.log(`${team.name} are planning a ${best.method === 'rocket' ? 'rocket raid' : 'raid'} on ${team.raid.targetName}'s base`);
   }
   teamLabel(id) { if (this.game.player && id === this.game.player.team) return 'you'; const t = this.game.teams.get(id); return t ? t.name : 'a lone survivor'; }
 
@@ -130,6 +139,12 @@ export class BotRaiding {
     const end = (result) => {
       team.lastRaid = G.now; team.stats.raids++;
       if (result === 'success') team.stats.raidsWon++;
+      // the side that was hit gets a defence when the raid was beaten back
+      const beaten = /^(failed|stalled|ran out of charges|timed out)/.test(result) && r.state !== 'prep';
+      if (beaten) {
+        if (G.player && r.targetTeam === G.player.team) G.pstats.defended++;
+        else { const def = G.teams.get(r.targetTeam); if (def) def.stats.defended = (def.stats.defended || 0) + 1; }
+      }
       if (result === 'success' && r.lootedValue < 1) result = 'found nothing worth taking';
       this.log(result === 'success' ? `${team.name} raided ${r.targetName} and took ${Math.round(r.lootedValue)} scrap worth of loot` : `${team.name}'s raid on ${r.targetName}: ${result}`);
       G.raidHistory.push({ t: G.now, day: G.env.day, team: team.name, teamId: team.id, color: team.color, target: r.targetName, result, value: Math.round(r.lootedValue), x: r.tx !== undefined ? Math.round(r.tx) : undefined, z: r.tz !== undefined ? Math.round(r.tz) : undefined });
@@ -140,7 +155,8 @@ export class BotRaiding {
     if (G.now - r.started > 2400) return end('timed out');
     switch (r.state) {
       case 'prep': {
-        if (this.chargesOwned(team) >= r.need) { r.state = 'rally'; r.stateT = G.now; this.log(`${team.name} are heading out to raid ${r.targetName}`); }
+        const launcher = r.method !== 'rocket' || alive.some(m => m.inv.count('rocket_launcher') > 0) || G.bots.progressOf(team).stash('rocket_launcher') > 0;
+        if (this.chargesOwned(team) >= r.need && launcher) { r.state = 'rally'; r.stateT = G.now; this.log(`${team.name} are heading out to ${r.method === 'rocket' ? 'rocket ' : ''}raid ${r.targetName}`); }
         else if (G.now - r.stateT > 1800) end('was called off (not enough charges)');
         break;
       }
@@ -186,6 +202,10 @@ export class BotRaiding {
     if (r.state === 'prep') {
       // everyone helps build charges: whoever can craft them does
       const prog = G.bots.progressOf(team);
+      if (r.method === 'rocket' && !G.teams.alive(team).some(m => m.inv.count('rocket_launcher') > 0) && G.teams.alive(team)[0] === b) {
+        const act = G.bots.prog.resolve(b, prog, 'rocket_launcher', 1);
+        return act ? { type: 'activity', act } : null;
+      }
       const per = Math.ceil(r.need / Math.max(1, G.teams.alive(team).length));
       if (b.inv.count(r.method) < per && this.chargesOwned(team) < r.need) {
         const act = G.bots.prog.resolve(b, prog, r.method, per);
@@ -199,6 +219,14 @@ export class BotRaiding {
       const p = this.findPiece(st, pid);
       if (!p) return null;
       // the member with charges (or everyone, for melee) works the breach; others guard
+      if (r.method === 'rocket') {
+        if (b.inv.count('rocket_launcher') > 0) {
+          // teammates nearby pass their rockets to the shooter
+          if (b.inv.count('rocket') < 2) for (const m of G.teams.alive(team)) { if (m === b) continue; const n = m.inv.count('rocket'); if (n && dist(m.x, m.z, b.x, b.z) < 40) { m.inv.remove('rocket', n); b.inv.give('rocket', n); } }
+          if (b.inv.count('rocket') > 0) return { type: 'breach', piece: p, st, method: 'rocket', path: r.path };
+        }
+        return { type: 'guard', x: r.rally.x, z: r.rally.z, near: { x: p.wx, z: p.wz } };
+      }
       const carrier = r.method === 'melee' || r.method === 'walk' || b.inv.count(r.method) > 0;
       if (!carrier) {
         if (r.method !== 'melee' && this.chargesOwned(team) > 0 && G.bots.progressOf(team).stash(r.method) > 0 && dist(b.x, b.z, r.rally.x, r.rally.z) > 200) return null;

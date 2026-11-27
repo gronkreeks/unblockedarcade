@@ -13,12 +13,15 @@ const R = {
   pipe_pistol: { pts: [[0, 6.0, 1.0]], kick: 0.08, recover: 0.5, ads: 0.85, crouch: 0.9, punch: 3.2, kickback: 0.1, bloom: 0, maxBloom: 0, sway: 0.15 },
   double_barrel: { pts: [[0, 7.5, -1.2], [1, 8.5, 1.4]], kick: 0.09, recover: 0.45, ads: 0.85, crouch: 0.9, punch: 3.8, kickback: 0.13, bloom: 0, maxBloom: 0, sway: 0.1 },
   pump_shotgun: { pts: [[0, 6.5, 0.8]], kick: 0.085, recover: 0.5, ads: 0.85, crouch: 0.9, punch: 3.4, kickback: 0.12, bloom: 0, maxBloom: 0, sway: 0.1 },
+  rocket_launcher: { pts: [[0, 6.0, 1.0]], kick: 0.12, recover: 0.5, ads: 0.85, crouch: 0.85, punch: 3.4, kickback: 0.16, bloom: 0, maxBloom: 0, sway: 0.3, cycle: 1.0 },
   bolt_rifle: { pts: [[0, 5.0, 0.6]], kick: 0.09, recover: 0.65, ads: 0.8, crouch: 0.85, punch: 2.6, kickback: 0.11, bloom: 0, maxBloom: 0, sway: 0.18, cycle: 1.0 },
   crossbow: { pts: [[0, 2.0, 0.3]], kick: 0.07, recover: 0.7, ads: 0.9, crouch: 0.9, punch: 1.0, kickback: 0.05, bloom: 0, maxBloom: 0, sway: 0.1 },
   hunting_bow: { pts: [[0, 0.6, 0.1]], kick: 0.06, recover: 0.8, ads: 1, crouch: 1, punch: 0.4, kickback: 0.02, bloom: 0, maxBloom: 0, sway: 0.22 },
 };
 const DEFAULT = { pts: [[0, 1.5, 0.2]], kick: 0.07, recover: 0.5, ads: 0.8, crouch: 0.9, punch: 1, kickback: 0.05, bloom: 0.1, maxBloom: 1.5, sway: 0.1 };
 export const recoilProfile = (id) => R[id] || DEFAULT;
+const KICK = 1.4;         // recoil strength on top of each weapon's pattern
+const GUN_SPREAD = 0.4;   // gun spread is kept tight
 
 // Pattern value for shot index i (deterministic).
 export function patternAt(id, i) {
@@ -59,7 +62,7 @@ export function onShot(s, def, now, opts = {}) {
   if (opts.moving) mult *= 1.15;
   // tiny per-shot variation keeps it from feeling mechanical while the pattern stays learnable
   const jitter = 1 + (Math.sin(st.i * 12.9898 + def.id.length) * 0.5) * 0.06;
-  st.pendP += r.p * mult * jitter; st.pendY += r.y * mult;
+  st.pendP += r.p * mult * jitter * KICK; st.pendY += r.y * mult * KICK;
   st.punch = Math.min(6, st.punch + P.punch * mult);
   st.punchY += (r.y >= 0 ? 1 : -1) * P.punch * 0.25 * mult;
   st.kickZ = Math.min(0.25, st.kickZ + P.kickback);
@@ -71,7 +74,9 @@ export function onShot(s, def, now, opts = {}) {
 // Current spread in degrees for the next shot.
 export function spreadFor(s, def, opts = {}) {
   const st = rc(s);
-  let sp = (opts.aiming ? def.aimSpread : def.spread) + (st.weapon === def.id ? st.bloom : 0);
+  // guns are precise; where the bullets go is about controlling the kick (bows keep their own spread)
+  const tight = def.type === 'gun' ? GUN_SPREAD : 1;
+  let sp = ((opts.aiming ? def.aimSpread : def.spread) + (st.weapon === def.id ? st.bloom * 0.5 : 0)) * tight;
   if (opts.moving) sp *= opts.aiming ? 1.6 : 1.8;
   if (s.crouch) sp *= 0.8;
   if (!s.onGround && s.onGround !== undefined) sp *= 2.2;

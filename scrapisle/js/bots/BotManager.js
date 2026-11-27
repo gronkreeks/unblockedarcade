@@ -1,7 +1,8 @@
 // Owns every bot: spawning, teams, level-of-detail scheduling, avatars, respawns, save/load.
 import { Survivor } from '../entities/Survivor.js';
 import { HumanoidAvatar } from '../entities/Avatars.js';
-import { makeStack } from '../data/items.js';
+import { makeStack, ITEMS } from '../data/items.js';
+import { RECIPE } from '../data/recipes.js';
 import { SKILL, PERSONALITIES, rollTier, rollPersonality, botName, styleOf } from './BotProfiles.js';
 import { BotNav } from './BotNav.js';
 import { BotBuilder } from './BotBuilder.js';
@@ -53,7 +54,10 @@ export class BotManager {
   }
   create(o) {
     const b = new Survivor({ name: o.name, id: o.id });
-    b.ai = { tier: o.tier, S: SKILL[o.tier], pers: o.pers, P: PERSONALITIES[o.pers], teamId: null, goal: 'task', task: null, thinkT: 0, mode: 'far', acc: Math.random() * 2 };
+    // each bot controls recoil a little differently from others of its tier
+    const h = [...String(b.id)].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7) % 1000 / 1000;
+    const S = Object.assign({}, SKILL[o.tier], { recoilCtrl: Math.max(0.05, Math.min(0.97, SKILL[o.tier].recoilCtrl + (h - 0.5) * 0.36)) });
+    b.ai = { tier: o.tier, S, pers: o.pers, P: PERSONALITIES[o.pers], teamId: null, goal: 'task', task: null, thinkT: 0, mode: 'far', acc: Math.random() * 2 };
     b.spawnedAt = this.game.now;
     if (!o.noKit) this.starterKit(b);
     b.avatar = null;
@@ -74,6 +78,7 @@ export class BotManager {
     if (v.avatar) { if (v.avatar.root.visible) v.avatar.die(); else v.avatar.root.visible = false; }
     const k = e.killer;
     if (k && k.kind === 'survivor' && k.ai) { const t = this.game.teams.of(k); if (t) t.stats.kills++; }
+    const vt = this.game.teams.of(v); if (vt) vt.stats.deaths = (vt.stats.deaths || 0) + 1;
   }
   onNoise(e) {
     if (!e.src || e.kind === 'charge') return;
@@ -129,6 +134,14 @@ export class BotManager {
         if (b.ai.thinkAcc >= every) b.ai.thinkAcc = 0;
       }
       this.updateAvatar(b, dt, d);
+    }
+    // arms race: the best weapon tier the player has had (0 bow, 1 pistols/shotguns, 2 semi/SMG, 3 AK/bolt)
+    this.armsT = (this.armsT || 0) - dt;
+    if (this.armsT <= 0 && P) {
+      this.armsT = 5;
+      let t = -1;
+      for (const st of P.inv.all()) { const d = ITEMS[st.id]; if (d.type === 'gun' || d.type === 'bow') t = Math.max(t, d.type === 'bow' ? 0 : (RECIPE[st.id] ? RECIPE[st.id].tier : 1)); }
+      if (t > (G.armsRace ?? -1)) { G.armsRace = t; if (t >= 1) G.logEvent(`Word spreads that someone has a ${t >= 3 ? 'military rifle' : t >= 2 ? 'semi-automatic' : 'gun'}. Every clan is racing to catch up`); }
     }
     // team-level planning
     this.teamT -= dt;

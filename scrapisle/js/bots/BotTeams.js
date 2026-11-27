@@ -105,7 +105,7 @@ export class BotTeams {
       const sizeF = 0.4 + t.size * 0.35;
       // rushers don't waste sulfur and lives on raids until they have tier 2 gear
       const hold = t.style === 'rush' && this.game.bots.progressOf(t).bench < 2;
-      if (!hold) t.raidDrive = Math.min(1.5, t.raidDrive + dt * S.raidRate * styleOf(t).raid * sizeF / 2400);
+      if (!hold) t.raidDrive = Math.min(1.5, t.raidDrive + dt * S.raidRate * styleOf(t).raid * sizeF / 1300);
     }
   }
   serialize() { return [...this.teams.values()].map(t => t.serialize()); }

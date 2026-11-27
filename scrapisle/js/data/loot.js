@@ -6,7 +6,7 @@ export const LOOT_TABLES = {
     rolls: [2, 3],
     guaranteed: [['scrap', 2, 4]],
     entries: [
-      ['metal_frag', 10, 10, 25], ['low_grade', 6, 3, 8], ['cloth', 6, 5, 15], ['rope', 7, 1, 2], ['tarp', 3, 1, 1],
+      ['metal_frag', 10, 10, 25], ['low_grade', 10, 4, 10], ['cloth', 6, 5, 15], ['rope', 7, 1, 2], ['tarp', 3, 1, 1],
       ['sewing_kit', 5, 1, 1], ['gears', 5, 1, 2], ['metal_pipe', 6, 1, 2], ['metal_spring', 3, 1, 1],
       ['metal_blade', 6, 1, 2], ['sheet_metal', 3, 1, 1], ['road_sign', 6, 1, 2], ['propane_tank', 5, 1, 1],
       ['semi_body', 1.2, 1, 1], ['electric_fuse', 1, 1, 1], ['tech_trash', 1, 1, 1],
@@ -19,7 +19,7 @@ export const LOOT_TABLES = {
     guaranteed: [['scrap', 4, 8]],
     entries: [
       ['metal_frag', 6, 20, 50], ['hqm', 2, 2, 5], ['gears', 6, 1, 3], ['metal_pipe', 6, 1, 3], ['metal_spring', 6, 1, 2],
-      ['sheet_metal', 4, 1, 2], ['road_sign', 5, 1, 3], ['semi_body', 4, 1, 1], ['smg_body', 1.5, 1, 1], ['rifle_body', 0.7, 1, 1],
+      ['sheet_metal', 4, 1, 2], ['road_sign', 5, 1, 3], ['semi_body', 4, 1, 1], ['smg_body', 1.5, 1, 1], ['rifle_body', 1.1, 1, 1],
       ['tech_trash', 3, 1, 2], ['electric_fuse', 1.5, 1, 1], ['tarp', 3, 1, 1], ['sewing_kit', 4, 1, 2], ['rope', 3, 1, 2],
       ['pistol_ammo', 4, 8, 20], ['buckshot', 3, 4, 10], ['rifle_ammo', 1, 6, 12], ['hv_arrow', 2, 4, 10],
       ['med_syringe', 2, 1, 2], ['bandage', 3, 1, 3], ['anti_rad', 2, 1, 2],

@@ -154,4 +154,38 @@ label select { display: block; margin-top: 0.3rem; font-family: inherit; font-si
 .clanTable td { padding: 0.2rem; vertical-align: top; }
 .clanTable td .muted { font-size: 0.72rem; }
 .swatch { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 2px; margin-right: 0.35rem; vertical-align: baseline; }
-#mapSide { width: 380px; }
+#mapSide { width: 430px; }
+
+#modal .box.wide { max-width: 1080px; }
+.ttTabs { gap: 0.4rem; margin: 0.6rem 0; }
+.ttWrap { overflow: auto; max-height: 58vh; padding: 0.4rem 0 0.8rem; }
+.ttWrap.closed { opacity: 0.55; }
+.tt { position: relative; margin: 0 auto; }
+.tt svg { position: absolute; inset: 0; pointer-events: none; }
+.tt path { fill: none; stroke: #4a4d50; stroke-width: 3; }
+.tt path.next { stroke: #8a8d90; }
+.tt path.got { stroke: var(--go); }
+.ttNode { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px;
+  font-family: inherit; color: var(--text); background: #26292c; border: 2px solid #3a3d40; border-radius: 8px; cursor: pointer; text-align: center; }
+.ttNode img { width: 38px; height: 38px; }
+.ttNode span { font-size: 0.68rem; font-weight: 800; line-height: 1.1; }
+.ttNode em { font-style: normal; font-size: 0.66rem; color: var(--muted); }
+.ttNode.root { background: #3a2e22; border-color: var(--rust); cursor: default; }
+.ttNode.known { border-color: var(--go); background: #24301e; }
+.ttNode.known em { color: #8ccf5e; }
+.ttNode.avail { border-color: #8a8d90; }
+.ttNode.avail.afford em { color: var(--warn); }
+.ttNode.locked { opacity: 0.45; }
+.ttNode.sel { outline: 3px solid var(--warn); outline-offset: 1px; }
+.ttNode:hover:not(.root) { background: #33373a; }
+.ttDet { display: flex; align-items: center; gap: 0.8rem; margin-top: 0.4rem; }
+.ttDet img { width: 48px; height: 48px; }
+.ttDet h3 { margin: 0; }
+.ttAct { margin-left: auto; }
+
+.lootBar { width: 54px; height: 6px; background: #3a3d40; border-radius: 3px; overflow: hidden; margin-top: 3px; }
+.lootBar i { display: block; height: 100%; background: var(--warn); }
+
+.boards { display: flex; gap: 0.8rem; }
+.boards table { flex: 1; }
+.clanTable tr.you td { color: var(--warn); font-weight: 800; }

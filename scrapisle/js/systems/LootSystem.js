@@ -100,7 +100,9 @@ export class LootSystem {
     const qty = (id, a, b) => { const d = ITEMS[id]; const n = randInt(a, b); return d.stack > 1 && !hasCondition(id) ? Math.max(1, Math.round(n * mult)) : 1; };
     for (const [id, a, b] of T.guaranteed) out.push(makeStack(id, qty(id, a, b)));
     const rolls = Math.round(randRange(T.rolls[0], T.rolls[1] + 0.99) * (1 + (mult - 1) * 0.12));
-    const entries = T.entries.map(e => [e, e[1]]);
+    // gun bodies are the bottleneck for rifles: higher loot settings make them turn up more often too
+    const BODY = new Set(['rifle_body', 'smg_body', 'semi_body']);
+    const entries = T.entries.map(e => [e, BODY.has(e[0]) ? e[1] * (1 + (mult - 1) * 0.5) : e[1]]);
     for (let r = 0; r < rolls; r++) {
       const e = weightedPick(entries);
       const s = makeStack(e[0], qty(e[0], e[2], e[3]));

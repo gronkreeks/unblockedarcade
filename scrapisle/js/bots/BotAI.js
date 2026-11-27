@@ -8,6 +8,9 @@ import * as Recoil from '../systems/Recoil.js';
 import { dist, randRange, angleWrap, clamp, pick } from '../core/util.js';
 
 const KEEP_CATS = new Set(['Ammo', 'Medical', 'Food', 'Raid']);
+const RAW = ['wood', 'stones', 'metal_ore', 'metal_frag', 'sulfur_ore', 'sulfur', 'hqm_ore', 'hqm', 'charcoal', 'cloth', 'leather', 'animal_fat', 'low_grade', 'scrap'];
+// How much raw material a bot is hauling (scrap and refined metal count extra).
+export function rawLoad(b) { let n = 0; for (const k of RAW) n += b.inv.count(k) * (k === 'scrap' || k === 'hqm' ? 8 : k === 'metal_frag' || k === 'sulfur' ? 2 : 1); return n; }
 
 export class BotAI {
   constructor(game, mgr) { this.game = game; this.mgr = mgr; }
@@ -158,7 +161,7 @@ export class BotAI {
     const cur = ai.target;
     const switchTo = !cur || !cur.alive || cur === a || (cur.kind !== 'survivor' && a.kind === 'survivor') || dist(b.x, b.z, a.x, a.z) < dist(b.x, b.z, cur.x, cur.z) * 0.7;
     if (switchTo) {
-      if (cur !== a) { this.startCombat(b, a); ai.reactT *= nearMiss ? 0.9 : 0.6; }
+      if (cur !== a) this.startCombat(b, a);
       ai.targetSeen = G.now; ai.lastSeen = { x: a.x, z: a.z };
       if (ai.ignore instanceof Map) ai.ignore.delete(a.id);
       const dec = this.engageDecision(b, a);
@@ -169,7 +172,7 @@ export class BotAI {
   underFire(b, a) { const s = b.ai.shotAt; return s && s.src === a && this.game.now - s.t < 10; }
   startCombat(b, t) {
     const ai = b.ai;
-    ai.target = t; ai.reactT = ai.S.react * randRange(0.8, 1.3); ai.targetSeen = this.game.now; ai.lastSeen = { x: t.x, z: t.z };
+    ai.target = t; ai.reactT = ai.S.react * randRange(0.9, 1.3);   // expert about 0.3-0.45 s, a touch slower than a real player ai.targetSeen = this.game.now; ai.lastSeen = { x: t.x, z: t.z }; ai.engagedAt = this.game.now;
     ai.aimErrX = randRange(-1, 1); ai.aimErrY = randRange(-1, 1); ai.aimFor = null;
     const team = this.game.teams.of(b);
     if (team && t.kind === 'survivor') { if (b.lastHitBy === t) team.alert = { id: t.id, x: b.x, z: b.z, t: this.game.now }; this.game.teams.hostility(team, t.team, 1); }
@@ -185,6 +188,7 @@ export class BotAI {
   }
   engageDecision(b, t) {
     const G = this.game, ai = b.ai, S = ai.S, P = PERSONALITIES[ai.pers];
+    if (ai.cornered > G.now && ai.target === t) return 'fight';   // nowhere left to run
     if (ai.ignore instanceof Map && (ai.ignore.get(t.id) || 0) > G.now && b.lastHitBy !== t) return 'ignore';
     const mine = this.powerOf(b), theirs = this.powerOf(t);
     const attacked = b.lastHitBy === t && G.now - b.lastHitTime < 12;
@@ -203,6 +207,7 @@ export class BotAI {
     // carrying loot home? cautious bots avoid optional fights
     const carrying = b.inv.main.totalValue();
     if (carrying > 40 + 80 * (1 - S.caution) && S.caution > 0.5 && d > 25) return 'ignore';
+    if (rawLoad(b) > 1200 && d > 15) return 'ignore';   // hauling materials home: not now
     if (ai.goal === 'fight') return 'fight';
     // fresh spawns and two rock-holders mostly leave each other alone
     if (t.kind === 'survivor' && G.now - (t.spawnedAt || 0) < 90) return 'ignore';
@@ -232,13 +237,25 @@ export class BotAI {
     if (bag) return this.setTask(b, { type: 'lootbag', bag });
     // 3. tidy up: drop spare copies of tools and weapons, then deposit when heavy (needs room in a base box)
     this.cleanInventory(b);
-    const boxRoom = prog.boxes.some(d => d.cont.emptyCount() > 1);
+    const boxRoom = prog.boxes.some(d => d.cont.emptyCount() > 1) || (prog.tc && prog.tc.cont.emptyCount() > 1);
     const holding = ai.keep && G.now < ai.keepUntil;   // carrying materials taken out for a job
-    if (prog.st && boxRoom && (b.inv.main.emptyCount() <= (holding ? 1 : 4) || (!holding && b.inv.main.totalValue() > 60 + 140 * (1 - S.caution)))) return this.setTask(b, { type: 'deposit' });
+    const load = rawLoad(b);
+    const loaded = load > 1500;   // thousands of materials: bank them and build, don't wander off
+    // only what a deposit actually puts away counts (ammo, meds and food stay on the bot)
+    let bankable = 0, bankSlots = 0;
+    for (const sl of b.inv.main.slots) if (sl && !(KEEP_CATS.has(ITEMS[sl.id].cat) && sl.id !== 'raw_meat')) { bankable += (ITEMS[sl.id].value || 0) * sl.n; bankSlots++; }
+    if (prog.st && boxRoom && bankSlots > 0 && (b.inv.main.emptyCount() <= (holding ? 1 : 4) || (!holding && (bankable > 60 + 140 * (1 - S.caution) || loaded)))) {
+      // first spend what's needed on the base, then bank the rest
+      const affordable = team && team.base && this.mgr.builder.nextSteps(team, prog).find(st => st.kind !== 'deploy' && Object.keys(st.cost).length && Object.keys(st.cost).every(k => b.inv.count(k) >= st.cost[k]));
+      if (affordable && !holding) { const t = this.stepTask(b, team, prog, affordable); if (t && t.type === 'build') return this.setTask(b, t); }
+      return this.setTask(b, { type: 'deposit' });
+    }
     // 4. base: the leader picks a site
     if (team && !team.base) {
       const leader = G.teams.leader(team);
-      if (leader === b && (b.inv.count('wood') >= 120 || G.now - b.spawnedAt > 120)) {
+      // the leader picks the spot; anyone hauling lots of wood does if the leader is far away
+      const leaderFar = leader && leader !== b && dist(leader.x, leader.z, b.x, b.z) > 150;
+      if ((leader === b && (b.inv.count('wood') >= 120 || G.now - b.spawnedAt > 120)) || (leaderFar && b.inv.count('wood') >= 400)) {
         const site = this.mgr.builder.chooseSite(team, b);
         if (site) { team.base = { site: { ox: site.ox, oy: site.oy, oz: site.oz, yaw: site.yaw }, template: site.template, final: site.final, st: null, x: site.ox, z: site.oz }; G.logEvent(`${team.name} started building a base`); }
       }
@@ -246,7 +263,9 @@ export class BotAI {
     // candidates
     const options = [];
     const Y = styleOf(team);
-    const add = (score, task) => { if (task) options.push({ score: score * (1 + randRange(-S.noise, S.noise)), task }); };
+    const heavy = rawLoad(b) > 1200 && !!(team && team.base);
+    const AWAY = new Set(['loot', 'monument', 'roam', 'hunt', 'recycle']);
+    const add = (score, task) => { if (task) { if (heavy) score *= AWAY.has(task.type) ? 0.2 : task.type === 'build' ? 1.6 : 1; options.push({ score: score * (1 + randRange(-S.noise, S.noise)), task }); } };
     const wishes = this.mgr.prog.wishes(b, team, prog);
     const first = wishes[0];
     // base steps (several tracks: shell, doors, deployables, upgrades)
@@ -256,26 +275,36 @@ export class BotAI {
       const urgent = step.kind === 'foundation' || step.kind === 'piece' || (step.kind === 'deploy' && ['claim_cabinet', 'wood_box', 'furnace'].includes(step.item)) || step.kind === 'door';
       const ready = (!step.item || b.inv.count(step.item) > 0) && Object.keys(step.cost).every(k => b.inv.count(k) >= step.cost[k]);
       const tech = step.kind === 'deploy' && /^workbench|research_table/.test(step.item);
-      const sw = tech ? 1.6 * (team.style === 'rush' ? 1.6 : 1) : urgent ? 1 : step.kind === 'upgrade' || step.kind === 'repair' ? Y.build : Math.sqrt(Y.build);
+      const behind = tech && (prog.arms ?? -1) > prog.bench;   // the player is ahead: benches first
+      const sw = tech ? 1.6 * (team.style === 'rush' ? 1.6 : 1) * (behind ? 1.6 : 1) : urgent ? 1 : step.kind === 'upgrade' || step.kind === 'repair' ? Y.build : Math.sqrt(Y.build);
       add((urgent ? 2.2 : 1.3) * P.build * sw * (toolsFirst ? 0.6 : 1) * (ready ? 1.4 : 1) * (1 - i * 0.08), this.stepTask(b, team, prog, step));
     });
     const step = steps[0];
     // upkeep
     if (prog.st && prog.tc && prog.upkeepH < (6 + S.ambition * 8) * Y.upkeepH) add(2.4, this.upkeepTask(b, team, prog));
     // personal wishes (first two)
-    for (const [i, w] of wishes.slice(0, 2).entries()) {
-      const base = { tools: 2.6, weapon: 1.6 * P.fight, ammo: 1.2 * P.fight, clothes: 1.1, meds: 0.9, armour: 1.0 * P.fight }[w.why] || 1;
+    for (const [i, w] of wishes.slice(0, 3).entries()) {
+      const unarmed = !this.mgr.prog.bestGun(b);
+      const base = { race: 3.0, raid: 1.7, tools: 2.6, weapon: unarmed ? 2.5 : 1.6 * P.fight, ammo: unarmed ? 2.0 : 1.2 * P.fight, clothes: 1.1, meds: 0.9, armour: 1.0 * P.fight }[w.why] || 1;
       const act = this.mgr.prog.resolve(b, prog, w.id, w.n);
-      if (act) add(base * (i === 0 ? 1 : 0.8), this.activityTask(b, team, act));
+      if (act) add(base * (i === 0 ? 1 : i === 1 ? 0.8 : 0.65), this.activityTask(b, team, act));
     }
     // loot runs: scrap matters for workbenches and unlocks
-    const scrapNeed = prog.scrap < (prog.bench < 1 ? 60 : prog.bench < 2 ? 500 : 1300) * Math.max(Y.bench, 0.8);
+    const scrapNeed = prog.scrap < (prog.bench < 1 ? 60 : prog.bench < 2 ? 500 : 1300) * Math.max(Y.bench, 0.8) * ((prog.arms ?? -1) > prog.bench ? 1.5 : 1);
     const armed = weaponScore(this.mgr.prog.bestWeapon(b)) > 9;
-    add(P.loot * Y.loot * (scrapNeed ? 1.3 : 0.5) * (armed ? 1 : 0.6) * (prog.st ? 1 : 0.5), this.lootTask(b, team, prog));
+    // no ranged kit, no trips: get a bow first, loot only close to home meanwhile
+    const kitted = !!this.mgr.prog.bestGun(b) && (b.inv.count('wooden_arrow') + b.inv.count('hv_arrow') + b.inv.all().filter(s => ITEMS[s.id].type === 'ammo').length > 0);
+    add(P.loot * Y.loot * (scrapNeed ? 1.3 : 0.5) * (armed ? 1 : 0.6) * (prog.st ? 1 : 0.5) * (kitted ? 1 : 0.3), this.lootTask(b, team, prog, kitted));
     // turtles stockpile: keep gathering the basics for walls and upkeep
     if (team && team.style === 'turtle' && prog.st) {
       const low = ['wood', 'stones', 'metal_frag'].find(k => prog.stash(k) < (k === 'metal_frag' ? 600 : 2500) * Math.max(1, G.settings.mult * 0.5));
       if (low) { const act = this.mgr.prog.resolve(b, prog, low, 400); if (act) add(1.25, this.activityTask(b, team, act)); }
+    }
+    // gun body runs: an AK needs a rifle body, and those come from the military crates at the big monuments
+    if (prog.st && this.mgr.prog.bestGun(b)) {
+      const bodies = (id) => prog.stash(id) + G.teams.membersOf(team).reduce((a, m) => a + m.inv.count(id), 0);
+      if (prog.bench >= 3 && !G.teams.membersOf(team).some(m => m.inv.count('assault_rifle') > 0) && bodies('rifle_body') < 1) add(2.4, this.lootTask(b, team, prog, true, 'rifle_body'));
+      else if (prog.bench >= 2 && bodies('semi_body') < 1 && !b.inv.count('semi_rifle')) add(1.6, this.lootTask(b, team, prog, true, 'semi_body'));
     }
     // recycling when carrying components
     const compValue = b.inv.main.slots.reduce((v, s) => v + (s && ITEMS[s.id].type === 'component' ? ITEMS[s.id].value * s.n : 0), 0);
@@ -329,7 +358,7 @@ export class BotAI {
       case 'smelt': return prog.furnace ? { type: 'smelt', ore: act.ore, out: act.out } : null;
       case 'hemp': { const o = this.homeOrigin(b, team); const n = G.res.nearest(o.x, o.z, 300, n => n.type === 'pick' && n.kind === 'hemp' && !this.unreachable(b, n)); return n ? { type: 'pick', node: n, chain: 'hemp', need: act.need } : { type: 'hunt', animal: this.findPrey(b) }; }
       case 'hunt': { const a = this.findPrey(b); return a ? { type: 'hunt', animal: a } : null; }
-      case 'loot': return this.lootTask(b, team, prog);
+      case 'loot': return this.lootTask(b, team, prog, true, act.res);
       case 'needBench': return null;
     }
     return null;
@@ -375,11 +404,22 @@ export class BotAI {
     }
     return null;
   }
-  lootTask(b, team, prog) {
+  lootTask(b, team, prog, kitted = true, res = null) {
     const G = this.game, ai = b.ai, S = ai.S;
     const gear = weaponScore(this.mgr.prog.bestWeapon(b));
-    // join a team monument run
-    if (team && team.monumentRun && G.now < team.monumentRun.until) return { type: 'monument', mon: team.monumentRun.mon };
+    if (res === 'low_grade') {
+      const o = this.homeOrigin(b, team);
+      const br = G.loot.hash.nearest(o.x, o.z, 400, x => x.kind === 'barrel' && x.alive && !this.unreachable(b, x));
+      if (br) return { type: 'loot', cont: br };
+    }
+    if (!kitted) {
+      const o = this.homeOrigin(b, team);
+      const c = G.loot.hash.nearest(o.x, o.z, 140, x => x.kind && x.alive && !x.mon && !this.unreachable(b, x));
+      return c ? { type: 'loot', cont: c } : null;
+    }
+    // join a team monument run (body runs go to the big monuments regardless)
+    const runMon = team && team.monumentRun && G.now < team.monumentRun.until ? G.world.monuments.find(m => m.id === team.monumentRun.mon) : null;
+    if (runMon && (!res || !/_body$/.test(res) || runMon.tier >= (res === 'rifle_body' ? 3 : 2))) return { type: 'monument', mon: runMon.id };
     // go with a teammate who is already out looting
     if (team && team.size > 1) {
       for (const m of G.teams.alive(team)) {
@@ -388,14 +428,17 @@ export class BotAI {
         if (m.ai.task.type === 'loot' && Math.random() < 0.6) { const c = G.loot.hash.nearest(m.x, m.z, 120, o => o.kind && o.alive && !o.mon && o !== m.ai.task.cont && !this.unreachable(b, o)); if (c) return { type: 'loot', cont: c }; }
       }
     }
-    const wantMon = Math.random() < (ai.pers === 'looter' ? 0.8 : 0.45) * Math.min(1.3, Y_loot(team)) && gear > 8;
+    const wantMon = (res && /_body$/.test(res) && this.mgr.prog.bestGun(b)) || (Math.random() < (ai.pers === 'looter' ? 0.8 : 0.45) * Math.min(1.3, Y_loot(team)) && gear > 8);
     if (wantMon) {
       const gun = this.mgr.prog.bestGun(b);
       const hasGun = gun && ITEMS[gun.id].type === 'gun' && (gun.ammo || 0) + b.inv.count(gun.at) >= 10;
       const armour = b.armorScore();
-      const maxTier = hasGun && gear > 60 && armour > 0.8 ? 3 : hasGun && armour > 0.25 ? 2 : 1;
-      const mons = G.world.monuments.filter(m => m.tier <= maxTier && (m.rad < 2 || b.radProtection() > 0.3 || S.caution < 0.5));
-      mons.sort((a, c) => (dist(b.x, b.z, a.x, a.z) - a.tier * 120 * S.lootGreed) - (dist(b.x, b.z, c.x, c.z) - c.tier * 120 * S.lootGreed));
+      let maxTier = hasGun && gear > 60 && armour > 0.8 ? 3 : hasGun && armour > 0.25 ? 2 : 1;
+      // after a gun body: the military crates at the big monuments are where they are
+      const body = res === 'rifle_body' || res === 'smg_body' || res === 'semi_body';
+      if (body && hasGun) maxTier = res === 'rifle_body' ? 3 : Math.max(maxTier, 2);
+      const mons = G.world.monuments.filter(m => m.tier <= maxTier && (!body || m.tier >= (res === 'rifle_body' ? 3 : 2)) && (m.rad < 2 || b.radProtection() > 0.3 || S.caution < 0.5));
+      mons.sort((a, c) => (dist(b.x, b.z, a.x, a.z) - a.tier * (body ? 400 : 120) * S.lootGreed) - (dist(b.x, b.z, c.x, c.z) - c.tier * (body ? 400 : 120) * S.lootGreed));
       const m = mons[Math.floor(Math.random() * Math.min(2, mons.length))];
       if (m) {
         if (team && team.size > 1) team.monumentRun = { mon: m.id, until: G.now + 300 };
@@ -582,10 +625,15 @@ export class BotAI {
   baseContainers(b) {
     const team = this.game.teams.of(b);
     const prog = this.mgr.progressOf(team);
-    return prog.deps.filter(d => d.cont && (d.type === 'wood_box' || d.type === 'large_box' || d.type === 'furnace'));
+    const boxes = prog.deps.filter(d => d.cont && (d.type === 'wood_box' || d.type === 'large_box' || d.type === 'furnace'));
+    // the claim cabinet holds materials too (and they pay its upkeep) when the boxes are full
+    if (prog.tc && !boxes.some(d => d.type !== 'furnace' && d.cont.emptyCount() > 0)) boxes.push(prog.tc);
+    return boxes;
   }
   t_withdraw(b, t, dt, mode) {
-    const conts = this.baseContainers(b).filter(d => Object.keys(t.items).some(k => d.cont.count(k) > 0));
+    const all = this.baseContainers(b), tc = this.mgr.progressOf(this.game.teams.of(b)).tc;
+    if (tc && !all.includes(tc)) all.push(tc);
+    const conts = all.filter(d => Object.keys(t.items).some(k => d.cont.count(k) > 0 && (d !== tc || !['wood', 'stones', 'metal_frag', 'hqm'].includes(k))));
     if (!conts.length) return 'done';
     const c = conts.sort((a, d) => dist(b.x, b.z, a.x, a.z) - dist(b.x, b.z, d.x, d.z))[0];
     if (!this.goTo(b, c.x, c.z, dt, mode, 1.8)) return;
@@ -851,6 +899,7 @@ export class BotAI {
     const G = this.game, p = t.piece;
     const alive = p.type === 'doorway' ? !!p.door : t.st.pieces.has(p.key);
     if (!alive) return 'done';
+    if (t.method === 'rocket') return this._rocketBreach(b, t, dt, mode);
     // stand on the outside of the piece, on the side we're approaching from
     const nx = Math.sin(p.wyaw + Math.PI / 2), nz = Math.cos(p.wyaw + Math.PI / 2);
     const side = (b.x - p.wx) * nx + (b.z - p.wz) * nz >= 0 ? 1 : -1;
@@ -880,6 +929,32 @@ export class BotAI {
     }
     // back off while it blows
     this.nav.moveTo(b, p.wx + nx * side * 9, p.wz + nz * side * 9, dt, mode, { arrive: 1 });
+  }
+  // Rocket raid: stand off about 18 m with a clear shot and put rockets into the wall or door.
+  _rocketBreach(b, t, dt, mode) {
+    const G = this.game, p = t.piece;
+    if (b.inv.count('rocket') <= 0 || b.inv.count('rocket_launcher') <= 0) return 'done';
+    const nx = Math.sin(p.wyaw + Math.PI / 2), nz = Math.cos(p.wyaw + Math.PI / 2);
+    if (t.side === undefined) t.side = (b.x - p.wx) * nx + (b.z - p.wz) * nz >= 0 ? 1 : -1;
+    if (t.range === undefined) t.range = 18;
+    const sx = p.wx + nx * t.side * t.range, sz = p.wz + nz * t.side * t.range;
+    if (!t.inPos) { if (!this.nav.moveTo(b, sx, sz, dt, mode, { arrive: 3, run: true })) return; t.inPos = true; }
+    b.vx = b.vz = 0;
+    this.equip(b, s => s.id === 'rocket_launcher');
+    const ty = p.wy + 1.2;
+    this.faceTo(b, p.wx, ty, p.wz);
+    b.fireT = (b.fireT || 0) - dt;
+    if (b.fireT > 0) return;
+    const e = b.eye(); const dx = p.wx - e.x, dy = ty - e.y, dz = p.wz - e.z, L = Math.hypot(dx, dy, dz) || 1;
+    if (!G.physics.los(e, { x: p.wx - dx / L * 0.8, y: ty, z: p.wz - dz / L * 0.8 }, c => !(c.ref === p || (p.door && c.ref === p)))) { if (t.range > 6) { t.range -= 4; t.inPos = false; return; } }   // something in the way: step closer
+    const err = b.ai.S.aimErr * 1.5;
+    const ux = dx / L + randRange(-err, err), uy = dy / L + randRange(-err, err) + L * 0.0014, uz = dz / L + randRange(-err, err);
+    const ul = Math.hypot(ux, uy, uz), v = ITEMS.rocket_launcher.vel;
+    b.inv.remove('rocket', 1);
+    G.combat.spawnProjectile({ x: e.x + ux / ul * 0.8, y: e.y + uy / ul * 0.8, z: e.z + uz / ul * 0.8, vx: ux / ul * v, vy: uy / ul * v, vz: uz / ul * v, dmg: 0, owner: b, weapon: 'rocket_launcher', ammo: 'rocket', bleed: 0, rocket: { dmg: ITEMS.rocket.blast, radius: ITEMS.rocket.radius } });
+    G.events.emit('noise', { x: b.x, z: b.z, r: 320, src: b, kind: 'shot', weapon: 'rocket_launcher' });
+    if (mode === 'full' && G.audio) G.audio.shot(ITEMS.rocket_launcher, b);
+    b.ai.swing = 0; b.fireT = 3.5 + Math.random();
   }
   t_raidloot(b, t, dt, mode) {
     const G = this.game, d = t.dep;
@@ -959,13 +1034,15 @@ export class BotAI {
     if (ai.errT <= 0) { ai.errT = 0.4; ai.aimErrX = randRange(-1, 1); ai.aimErrY = randRange(-1, 1); }
     const moving = Math.hypot(t.vx || 0, t.vz || 0) > 1;
     const bow = def && def.type === 'bow';
-    const err = S.aimErr * (1 + d / 70) * (moving ? 1.5 : 1) * (G.env.isNight ? 1.3 : 1) * (bow ? 1.5 : 1) * (Math.hypot(b.vx, b.vz) > 1 ? 1.3 : 1);
+    // the first shots of a fight are rushed; aim settles over a couple of seconds
+    const settle = 1 + 1.6 * Math.exp(-(G.now - (ai.engagedAt ?? -99)) / 1.4);
+    const err = settle * S.aimErr * (1 + d / 70) * (moving ? 1.5 : 1) * (G.env.isNight ? 1.3 : 1) * (bow ? 1.5 : 1) * (Math.hypot(b.vx, b.vz) > 1 ? 1.3 : 1);
     const wantYaw = Math.atan2(px - e.x, pz - e.z) + ai.aimErrX * err;
     const wantPitch = Math.atan2(ty + drop - e.y, Math.hypot(px - e.x, pz - e.z)) + ai.aimErrY * err * 0.6;
     // The bot tracks its intended aim; recoil drift (rs.accP/accY) sits on top of it and is only
     // pulled back as fast as the bot's recoil control allows - the same kick the player feels.
     if (ai.aimYaw === undefined || ai.aimFor !== t) { ai.aimYaw = b.yaw; ai.aimPitch = b.pitch; ai.aimFor = t; }
-    const turn = 4 + S.recoilCtrl * 10;
+    const turn = 2.2 + S.recoilCtrl * 4;   // nobody snaps 180 degrees in a frame
     const dy = angleWrap(wantYaw - ai.aimYaw);
     ai.aimYaw += clamp(dy, -turn * dt, turn * dt);
     ai.aimPitch += clamp(wantPitch - ai.aimPitch, -turn * dt, turn * dt);
@@ -995,7 +1072,7 @@ export class BotAI {
     } else if (d < (def ? def.range : 1.6) + 0.5 && b.swingT <= 0) {
       ai.swing = 1;
       if (st) G.combat.melee(b, st, { dir: b.dir() });
-      else { b.swingT = 0.7; G.combat.damageActor(t, 5, { type: 'melee', area: 'chest', attacker: b }); }
+      else { b.swingT = 0.7; b.slowUntil = G.now + 0.7; G.combat.damageActor(t, 5, { type: 'melee', area: 'chest', attacker: b }); }
     }
   }
   // Long-range simulation of a firefight: same weapons, ammo, armour and health, resolved statistically.
@@ -1028,13 +1105,26 @@ export class BotAI {
     if (!t.alive) this.endCombat(b);
   }
   flee(b, dt, mode) {
-    const ai = b.ai, t = ai.target;
+    const ai = b.ai, t = ai.target, G = this.game;
     if (!t) { ai.goal = 'task'; return; }
-    const team = this.game.teams.of(b);
-    let tx = b.x + (b.x - t.x), tz = b.z + (b.z - t.z);
-    if (team && team.base && team.base.st) { const st = this.game.build.structures.get(team.base.st); if (st) { const z = this.game.build.zoneOf(st); tx = z.x; tz = z.z; } }
-    this.nav.moveTo(b, tx, tz, dt, mode, { arrive: 3, run: true });
-    if (!this.underFire(b, t) && (dist(b.x, b.z, t.x, t.z) > ai.S.sight || this.game.now - ai.targetSeen > 8)) this.endCombat(b, true);
+    const team = G.teams.of(b);
+    // run away from the attacker; head home only if home isn't past them
+    const ax = b.x - t.x, az = b.z - t.z, al = Math.hypot(ax, az) || 1;
+    let tx = b.x + ax / al * 40, tz = b.z + az / al * 40;
+    if (team && team.base && team.base.st) {
+      const st = G.build.structures.get(team.base.st);
+      if (st) { const z = G.build.zoneOf(st); const hx = z.x - b.x, hz = z.z - b.z; if (hx * ax + hz * az > 0 || Math.hypot(hx, hz) < z.core + 2) { tx = z.x; tz = z.z; } }
+    }
+    const arrived = this.nav.moveTo(b, tx, tz, dt, mode, { arrive: 3, run: true });
+    // cornered: stuck against a wall, home with the attacker still on us, or they're right here -> fight
+    ai.fleeT = (ai.fleeT || 0) + dt;
+    if (ai.fleeT > 1.5) { ai.fleeStuck = Math.hypot(b.x - (ai.fleeX ?? b.x + 9), b.z - (ai.fleeZ ?? b.z)) < 1.5; ai.fleeX = b.x; ai.fleeZ = b.z; ai.fleeT = 0; }
+    const d = dist(b.x, b.z, t.x, t.z);
+    if (d < 6 || ((ai.fleeStuck || arrived) && d < 35 && (this.underFire(b, t) || d < 15))) {
+      ai.cornered = G.now + 15; ai.fleeStuck = false; ai.goal = 'fight'; ai.reactT = Math.min(ai.reactT || 0, 0.3);
+      return;
+    }
+    if (!this.underFire(b, t) && (d > ai.S.sight || G.now - ai.targetSeen > 8)) this.endCombat(b, true);
   }
 }
 

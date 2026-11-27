@@ -32,7 +32,8 @@ export class BotProgression {
     let boxSpace = 0; for (const bx of boxes) boxSpace += bx.cont.emptyCount();
     const members = G.teams.membersOf(team);
     const bp = new Set(); for (const m of members) for (const id of m.bp) bp.add(id);
-    const stash = (id) => boxes.reduce((n, bx) => n + bx.cont.count(id), 0) + (deps.find(d => d.type === 'furnace')?.cont.count(id) || 0);
+    const tcDep = deps.find(d => d.type === 'claim_cabinet');
+    const stash = (id) => boxes.reduce((n, bx) => n + bx.cont.count(id), 0) + (deps.find(d => d.type === 'furnace')?.cont.count(id) || 0) + (tcDep && !['wood', 'stones', 'metal_frag', 'hqm'].includes(id) ? tcDep.cont.count(id) : 0);
     let scrap = stash('scrap'); for (const m of members) scrap += m.inv.count('scrap');
     let hqm = stash('hqm'); for (const m of members) hqm += m.inv.count('hqm');
     const mult = G.settings.mult;
@@ -44,8 +45,10 @@ export class BotProgression {
       research: deps.find(d => d.type === 'research_table') || null,
       benchDep: (tier) => deps.filter(d => (d.def.bench || 0) >= tier).sort((a, b) => a.def.bench - b.def.bench)[0] || null,
       upkeepH: st ? G.build.upkeepHours(st) : 0,
-      wantBench2: scrap >= 450 * styleOf(team).bench || hqm >= 20 * mult,
-      wantBench3: scrap >= 1000 * styleOf(team).bench,
+      // the player out-teching everyone pulls every clan up the tree sooner
+      arms: G.armsRace ?? -1,
+      wantBench2: scrap >= 450 * styleOf(team).bench || hqm >= 20 * mult || ((G.armsRace ?? -1) >= 2 && scrap >= 250),
+      wantBench3: scrap >= 1000 * styleOf(team).bench || ((G.armsRace ?? -1) >= 3 && scrap >= 500),
       rich: hqm >= 300 * Math.min(1, styleOf(team).bench),
     };
     // progression milestones (for tests, the island news and the clan list)
@@ -56,6 +59,8 @@ export class BotProgression {
       const guns = members.some(m => [...m.inv.belt.slots, ...m.inv.main.slots].some(x => x && ITEMS[x.id].type === 'gun'));
       mark('gun', guns);
       mark('rifle', members.some(m => [...m.inv.belt.slots, ...m.inv.main.slots].some(x => x && ['semi_rifle', 'assault_rifle', 'bolt_rifle'].includes(x.id))));
+      mark('ak', members.some(m => m.inv.count('assault_rifle') > 0) || stash('assault_rifle') > 0);
+      mark('rockets', members.some(m => m.inv.count('rocket_launcher') > 0) || stash('rocket_launcher') > 0);
     }
     this.cache.set(team.id, { t: G.now, p });
     return p;
@@ -67,20 +72,31 @@ export class BotProgression {
     const W = [];
     const want = (id, n, why) => W.push({ id, n, why });
     const bench = prog.bench;
+    // scrap saved for the next workbench (level 2 costs 500, level 3 costs 1250)
+    const reserve = bench === 1 ? 500 : bench === 2 ? 1250 : 0;
+    const extra = (id) => prog.knows(id) || prog.scrap - this.game.crafting.unlockCost(id) >= reserve;
     // tools
     if (!hasAny(b, ['stone_hatchet', 'hatchet', 'salvaged_axe'])) want('stone_hatchet', 1, 'tools');
     if (!hasAny(b, ['stone_pickaxe', 'pickaxe', 'salvaged_icepick'])) want('stone_pickaxe', 1, 'tools');
     // first weapon
     const best = this.bestWeapon(b);
-    if (weaponScore(best) < 9) {
-      if (ai.pers === 'hunter' || ai.pers === 'fighter' || S === SKILL.expert || S === SKILL.hard) { want('hunting_bow', 1, 'weapon'); want('wooden_arrow', 24, 'ammo'); }
-      else want('wooden_spear', 1, 'weapon');
+    // arms race: a gun as soon as the player has one (pipe pistol is the quickest)
+    const myTier = (() => { const g = this.bestGun(b); return g ? (ITEMS[g.id].type === 'bow' ? 0 : (RECIPE[g.id] ? RECIPE[g.id].tier : 1)) : -1; })();
+    if ((prog.arms ?? -1) >= 1 && myTier < 1 && bench >= 1) want(ai.pers === 'fighter' ? 'double_barrel' : 'pipe_pistol', 1, 'race');
+    if ((prog.arms ?? -1) >= 2 && myTier < 2 && bench >= 2) want('semi_rifle', 1, 'race');
+    if ((prog.arms ?? -1) >= 3 && myTier < 3 && bench >= 3) want('assault_rifle', 1, 'race');
+    // everyone carries a ranged kit: a bow and arrows (a spear only as a stopgap before the base)
+    const ranged = this.bestGun(b);
+    if (!ranged) {
+      if (weaponScore(best) < 9 && !prog.st && b.inv.count('cloth') + prog.stash('cloth') < 50) want('wooden_spear', 1, 'weapon');
+      want('hunting_bow', 1, 'weapon');
     }
+    if (!ranged || ITEMS[ranged.id].type === 'bow') { if (b.inv.count('wooden_arrow') + b.inv.count('hv_arrow') < 20) want('wooden_arrow', 30, 'ammo'); }
     // basic clothes + bandages
     if (!has(b, 'cloth_shirt') && !this.wearsSlot(b, 'chest')) want('cloth_shirt', 1, 'clothes');
     if (!has(b, 'cloth_pants') && !this.wearsSlot(b, 'kilt')) want('cloth_pants', 1, 'clothes');
     if (b.inv.count('bandage') < 2) want('bandage', 3, 'meds');
-    if (!prog.st) return W; // the base comes before anything else past the basics
+    if (!prog.st) return this.order(W); // the base comes before anything else past the basics
     // metal tools once a bench exists
     if (bench >= 1) {
       if (!hasAny(b, ['hatchet', 'salvaged_axe'])) want('hatchet', 1, 'tools');
@@ -94,20 +110,29 @@ export class BotProgression {
     }
     if (bench >= 2) {
       if (!hasAny(b, ['semi_rifle', 'assault_rifle', 'bolt_rifle', 'drum_smg', 'scrap_smg', 'pump_shotgun'])) want(ai.pers === 'fighter' ? 'pump_shotgun' : 'semi_rifle', 1, 'weapon');
-      if (!hasAny(b, ['salvaged_axe'])) want('salvaged_axe', 1, 'tools');
-      if (b.inv.count('large_medkit') < 1) want('large_medkit', 1, 'meds');
-      if (!has(b, 'hazmat_suit') && (ai.pers === 'looter')) want('hazmat_suit', 1, 'armour');
-      if (!this.wearsSlot(b, 'kilt')) want('roadsign_kilt', 1, 'armour');
+      // extras only when they don't eat the scrap saved for the next workbench
+      if (!hasAny(b, ['salvaged_axe']) && extra('salvaged_axe')) want('salvaged_axe', 1, 'tools');
+      if (b.inv.count('large_medkit') < 1 && extra('large_medkit')) want('large_medkit', 1, 'meds');
+      if (!has(b, 'hazmat_suit') && (ai.pers === 'looter') && extra('hazmat_suit')) want('hazmat_suit', 1, 'armour');
+      if (!this.wearsSlot(b, 'kilt') && extra('roadsign_kilt')) want('roadsign_kilt', 1, 'armour');
     }
     if (bench >= 3) {
-      if (!hasAny(b, ['assault_rifle', 'bolt_rifle'])) want(S.headChance > 0.3 && Math.random() < 0.5 ? 'bolt_rifle' : 'assault_rifle', 1, 'weapon');
+      if (!hasAny(b, ['assault_rifle', 'bolt_rifle'])) want(S.headChance > 0.15 && Math.random() < 0.5 ? 'bolt_rifle' : 'assault_rifle', 1, 'weapon');
       if (!this.wearsSlot(b, 'face')) want('metal_facemask', 1, 'armour');
       if (this.armorOf(b, 'chest') < 0.5) want('metal_chest', 1, 'armour');
     }
+    // raid tech: the leader works toward a rocket launcher once the clan has a level 2 bench
+    if (team && bench >= 2 && prog.scrap >= 300 && this.game.teams.leader(team) === b && !this.game.teams.membersOf(team).some(m => m.inv.count('rocket_launcher') > 0) && prog.stash('rocket_launcher') === 0) want('rocket_launcher', 1, 'raid');
     // ammo for whatever gun they carry
     const g = this.bestGun(b);
     if (g) { const d = ITEMS[g.id]; const at = d.ammo.find(a => RECIPE[a]) || d.ammo[0]; const target = d.type === 'bow' ? 24 : Math.max(20, d.mag * 3); if (b.inv.count(at) + (g.ammo || 0) < target) want(at, target, 'ammo'); }
-    return W;
+    return this.order(W);
+  }
+  // Guns before comfort: catching up and better weapons come right after the first tools.
+  order(W) {
+    const PRI = { race: 0, weapon: 2, ammo: 3, raid: 3.5, clothes: 4, meds: 5, armour: 6 };
+    const pri = (w) => w.why === 'tools' ? (/^stone_/.test(w.id) ? 1 : 7) : (PRI[w.why] ?? 8);
+    return W.map((w, i) => [w, i]).sort((a, c) => pri(a[0]) - pri(c[0]) || a[1] - c[1]).map(x => x[0]);
   }
   wearsSlot(b, slot) { return b.inv.wear.slots.some(s => s && ITEMS[s.id].slot === slot); }
   armorOf(b, area) { return b.protection(area, 'proj'); }
@@ -132,6 +157,8 @@ export class BotProgression {
     const need = n - have;
     // in the stash?
     if (prog.st && prog.stash(id) > 0) return { a: 'withdraw', items: { [id]: Math.min(need, prog.stash(id)) } };
+    // low grade fuel: barrels drop it too, so not everyone has to go hunting for fat
+    if (id === 'low_grade' && b.inv.count('animal_fat') + prog.stash('animal_fat') < 20 && ((b.id.charCodeAt(b.id.length - 1) + Math.floor(this.game.now / 300)) & 1)) return { a: 'loot', need, res: 'low_grade' };
     const rc = RECIPE[id];
     if (rc && !LOOT_ONLY.has(id)) {
       if (rc.tier > prog.bench) return { a: 'needBench', tier: rc.tier };

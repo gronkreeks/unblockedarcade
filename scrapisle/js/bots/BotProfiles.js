@@ -11,12 +11,13 @@ export const DISTRIBUTION = {
   expert: { easy: 0.06, normal: 0.17, hard: 0.3, expert: 0.47 },
 };
 
-// Skill parameters per tier. aimErr in radians, react in seconds.
+// Skill parameters per tier. aimErr in radians, react in seconds. Tiers differ in how they fight
+// (aim, reactions, recoil, caution); gathering, building and planning are the same for everyone.
 export const SKILL = {
-  easy: { aimErr: 0.022, headChance: 0.03, react: 0.95, recoilCtrl: 0.25, sight: 70, efficiency: 0.6, noise: 0.35, caution: 0.25, strafe: 0.2, crouch: 0.05, idle: 0.18, ambition: 0.6, raidRate: 1.0, teamSize: [4, 8], healAt: 35, lootGreed: 0.4, siteSkill: 0.2 },
-  normal: { aimErr: 0.016, headChance: 0.06, react: 0.6, recoilCtrl: 0.5, sight: 90, efficiency: 0.8, noise: 0.2, caution: 0.45, strafe: 0.5, crouch: 0.15, idle: 0.08, ambition: 0.8, raidRate: 0.55, teamSize: [2, 5], healAt: 45, lootGreed: 0.6, siteSkill: 0.5 },
-  hard: { aimErr: 0.0115, headChance: 0.12, react: 0.38, recoilCtrl: 0.72, sight: 110, efficiency: 0.95, noise: 0.1, caution: 0.6, strafe: 0.75, crouch: 0.3, idle: 0.03, ambition: 1.0, raidRate: 0.4, teamSize: [1, 3], healAt: 55, lootGreed: 0.8, siteSkill: 0.8 },
-  expert: { aimErr: 0.0088, headChance: 0.18, react: 0.24, recoilCtrl: 0.88, sight: 130, efficiency: 1.05, noise: 0.05, caution: 0.78, strafe: 0.9, crouch: 0.45, idle: 0.01, ambition: 1.15, raidRate: 0.3, teamSize: [1, 3], healAt: 60, lootGreed: 0.95, siteSkill: 1.0 },
+  easy: { aimErr: 0.022, headChance: 0.03, react: 0.8, recoilCtrl: 0.25, sight: 70, efficiency: 1, noise: 0.12, caution: 0.25, strafe: 0.2, crouch: 0.05, idle: 0.03, ambition: 1, raidRate: 1.0, teamSize: [4, 8], healAt: 35, lootGreed: 0.8, siteSkill: 0.75 },
+  normal: { aimErr: 0.016, headChance: 0.06, react: 0.55, recoilCtrl: 0.5, sight: 90, efficiency: 1, noise: 0.12, caution: 0.45, strafe: 0.5, crouch: 0.15, idle: 0.03, ambition: 1, raidRate: 0.55, teamSize: [2, 5], healAt: 45, lootGreed: 0.8, siteSkill: 0.75 },
+  hard: { aimErr: 0.0115, headChance: 0.12, react: 0.42, recoilCtrl: 0.72, sight: 110, efficiency: 1, noise: 0.12, caution: 0.6, strafe: 0.75, crouch: 0.3, idle: 0.03, ambition: 1, raidRate: 0.4, teamSize: [1, 3], healAt: 55, lootGreed: 0.8, siteSkill: 0.75 },
+  expert: { aimErr: 0.0088, headChance: 0.18, react: 0.34, recoilCtrl: 0.88, sight: 130, efficiency: 1, noise: 0.12, caution: 0.78, strafe: 0.9, crouch: 0.45, idle: 0.03, ambition: 1, raidRate: 0.3, teamSize: [1, 3], healAt: 60, lootGreed: 0.8, siteSkill: 0.75 },
 };
 
 // Personality shifts what a bot wants to do with its time.
@@ -43,9 +44,9 @@ export function rollPersonality(tier, r = Math.random) { return weightedPick(PER
 // Team playstyles. rush: races up the tech tree with loot runs and a small base.
 // turtle: slow and steady, gathers, stocks boxes, upgrades walls early, rarely raids.
 export const STYLES = {
-  rush: { name: 'Rushers', craft: 1.8, avoid: 0.35, gather: 1.5, loot: 1.8, build: 0.8, upgrade: -1, bench: 0.55, idle: 0.2, raid: 1.35, stage: 1, boxes: 2, upkeepH: 0.6, research: 1.4 },
-  balanced: { name: 'Balanced', craft: 1.15, avoid: 1, gather: 1.1, loot: 1, build: 1, upgrade: 0, bench: 1, idle: 0.8, raid: 1, stage: 3, boxes: 3, upkeepH: 1, research: 1 },
-  turtle: { name: 'Turtles', craft: 1, avoid: 0.7, gather: 1.15, loot: 0.5, build: 1.55, upgrade: 1, bench: 1.6, idle: 0.6, raid: 0.35, stage: 3, boxes: 5, upkeepH: 1.8, research: 0.7 },
+  rush: { name: 'Rushers', craft: 1.8, avoid: 0.35, gather: 1.5, loot: 1.8, build: 0.8, upgrade: -1, bench: 0.55, idle: 0.03, raid: 1.35, stage: 1, boxes: 2, upkeepH: 0.6, research: 1.4 },
+  balanced: { name: 'Balanced', craft: 1.15, avoid: 1, gather: 1.1, loot: 1, build: 1, upgrade: 0, bench: 1, idle: 0.03, raid: 1, stage: 3, boxes: 3, upkeepH: 1, research: 1 },
+  turtle: { name: 'Turtles', craft: 1, avoid: 0.7, gather: 1.15, loot: 0.5, build: 1.55, upgrade: 1, bench: 1.6, idle: 0.03, raid: 0.35, stage: 3, boxes: 5, upkeepH: 1.8, research: 0.7 },
 };
 const STYLE_WEIGHTS = {
   easy: [['turtle', 4], ['balanced', 4.5], ['rush', 1.5]],
