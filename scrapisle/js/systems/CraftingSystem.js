@@ -1,5 +1,5 @@
 // Crafting queue, blueprint knowledge, workbench tiers, tech-tree unlocks and research.
-import { RECIPE, RECIPES, researchCost } from '../data/recipes.js';
+import { RECIPE, RECIPES, researchCost, TECH_PARENT } from '../data/recipes.js';
 import { ITEMS } from '../data/items.js';
 
 export const BENCH_RANGE = 4.5;
@@ -58,8 +58,13 @@ export class CraftingSystem {
     const rc = RECIPE[id];
     if (!rc || s.bp.has(id) || rc.known) return false;
     if (rc.tier > benchTier || rc.tier === 0) return false;
+    if (!this.prereqMet(s, id)) return false;
     return s.inv.count('scrap') >= this.unlockCost(id);
   }
+  // The tech tree: an item needs the one above it in its branch unlocked first.
+  prereqMet(s, id) { const par = TECH_PARENT[id]; return !par || s.bp.has(par); }
+  // First locked step on the way to an item (the item itself when its branch is open).
+  nextOnPath(s, id) { let cur = id; for (let k = 0; k < 8; k++) { const par = TECH_PARENT[cur]; if (!par || s.bp.has(par)) return cur; cur = par; } return cur; }
   unlock(s, id, benchTier) {
     if (!this.canUnlock(s, id, benchTier)) return false;
     s.inv.remove('scrap', this.unlockCost(id));

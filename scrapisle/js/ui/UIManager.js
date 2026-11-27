@@ -1,6 +1,6 @@
 // All HTML UI: menus, HUD, inventory with drag and drop, crafting, containers, building menus, map, death screen.
 import { ITEMS, WEAR_SLOTS } from '../data/items.js';
-import { RECIPES, RECIPE, CRAFT_CATS, researchCost } from '../data/recipes.js';
+import { RECIPES, RECIPE, CRAFT_CATS, researchCost, TECH_PARENT } from '../data/recipes.js';
 import { PIECES, PIECE_ORDER, GRADES, pieceCost, DEPLOYABLES } from '../data/building.js';
 import { MONUMENT_TYPES, BIOME } from '../world/WorldGeneration.js';
 import { DISTRIBUTION, STYLES } from '../bots/BotProfiles.js';
@@ -483,7 +483,7 @@ export class UIManager {
     const draw = () => {
       const rows = RECIPES.filter(r => !r.known && r.tier >= 1 && r.tier <= tier).sort((a, b) => a.tier - b.tier || a.unlock - b.unlock).map(r => {
         const known = P.bp.has(r.id);
-        return `<div class="qrow"><img src="${iconURL(r.out)}" alt=""><span>${esc(ITEMS[r.out].name)} <span class="muted">(level ${r.tier})</span></span>${known ? '<span class="ok">Known</span>' : `<button class="btn tiny" data-unlock="${r.id}" ${P.inv.count('scrap') >= r.unlock ? '' : 'disabled'}>Unlock for ${r.unlock} scrap</button>`}</div>`;
+        return `<div class="qrow"><img src="${iconURL(r.out)}" alt=""><span>${esc(ITEMS[r.out].name)} <span class="muted">(level ${r.tier})</span></span>${known ? '<span class="ok">Known</span>' : !G.crafting.prereqMet(P, r.id) ? `<span class="muted">Needs ${esc(ITEMS[TECH_PARENT[r.id]].name)} first</span>` : `<button class="btn tiny" data-unlock="${r.id}" ${P.inv.count('scrap') >= r.unlock ? '' : 'disabled'}>Unlock for ${r.unlock} scrap</button>`}</div>`;
       }).join('');
       return `<h2>${esc(bench.def.name)}</h2><p class="muted">You have ${P.inv.count('scrap')} scrap. Crafting next to this bench allows level ${tier} recipes.</p><div class="tech">${rows}</div>`;
     };

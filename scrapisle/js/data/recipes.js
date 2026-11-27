@@ -109,3 +109,36 @@ export function researchCost(id) {
   if (!rc || rc.known) return 0;
   return Math.round(({ 1: 40, 2: 125, 3: 400 })[rc.tier] || 75);
 }
+
+// Tech tree: each workbench level is a tree. Every branch starts at the bench (parent null) and each
+// item needs the one above it unlocked first, like Rust. [id, parent]
+export const TECH_TREE = {
+  1: [
+    ['hatchet', null], ['pickaxe', 'hatchet'],
+    ['large_box', null], ['bed', 'large_box'],
+    ['metal_door', null], ['satchel_charge', 'metal_door'],
+    ['machete', null], ['salvaged_sword', 'machete'],
+    ['hv_arrow', null], ['crossbow', 'hv_arrow'],
+    ['handmade_shell', null], ['double_barrel', 'handmade_shell'], ['buckshot', 'double_barrel'],
+    ['pipe_pistol', null], ['pistol_ammo', 'pipe_pistol'], ['revolver', 'pistol_ammo'],
+    ['anti_rad', null], ['med_syringe', 'anti_rad'],
+    ['coffee_can_helmet', null], ['roadsign_kilt', 'coffee_can_helmet'], ['roadsign_vest', 'roadsign_kilt'],
+  ],
+  2: [
+    ['salvaged_axe', null], ['salvaged_icepick', 'salvaged_axe'],
+    ['semi_pistol', null], ['semi_rifle', 'semi_pistol'], ['rifle_ammo', 'semi_rifle'],
+    ['pump_shotgun', null], ['slug', 'pump_shotgun'],
+    ['scrap_smg', null], ['drum_smg', 'scrap_smg'],
+    ['hazmat_suit', null], ['large_medkit', 'hazmat_suit'],
+    ['explosives', null],
+  ],
+  3: [
+    ['assault_rifle', null], ['bolt_rifle', null],
+    ['metal_facemask', null], ['metal_chest', 'metal_facemask'],
+    ['armored_door', null], ['timed_charge', 'armored_door'],
+  ],
+};
+export const TECH_PARENT = {};
+for (const t in TECH_TREE) for (const [id, par] of TECH_TREE[t]) TECH_PARENT[id] = par;
+// Anything unlockable that isn't placed in the tree hangs off its bench directly.
+for (const rc of R) if (!rc.known && rc.tier > 0 && !(rc.id in TECH_PARENT)) { TECH_PARENT[rc.id] = null; (TECH_TREE[rc.tier] = TECH_TREE[rc.tier] || []).push([rc.id, null]); }

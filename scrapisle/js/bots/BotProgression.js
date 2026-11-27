@@ -140,10 +140,12 @@ export class BotProgression {
         else {
           // found one? research it
           if (prog.research && b.inv.count(id) > 0) return { a: 'research', id };
-          const cost = this.game.crafting.unlockCost(id);
+          // follow the tech tree: unlock the first locked item on the way there
+          const step = this.game.crafting.nextOnPath(b, id);
+          const cost = this.game.crafting.unlockCost(step);
           const scrap = b.inv.count('scrap');
-          if (scrap >= cost) return { a: 'unlock', id, tier: rc.tier };
-          return this.resolve(b, prog, 'scrap', cost + (depth === 0 ? 0 : 0), depth + 1) || { a: 'unlock', id, tier: rc.tier };
+          if (scrap >= cost) return { a: 'unlock', id: step, tier: rc.tier };
+          return this.resolve(b, prog, 'scrap', cost, depth + 1) || { a: 'unlock', id: step, tier: rc.tier };
         }
       }
       const times = Math.ceil(need / rc.n);
