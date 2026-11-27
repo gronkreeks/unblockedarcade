@@ -12,6 +12,23 @@ import { PRESETS, resolve as resolveGfx } from '../gfx/GraphicsSettings.js';
 
 const $ = (id) => document.getElementById(id);
 export const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft', 'ShiftRight', 'Space', 'ControlLeft', 'KeyC']);
+// What a clan is fighting with, best first: "Rockets, 3 AKs", "2 semi rifles", "Bows".
+const GEAR = [
+  [['rocket_launcher'], 'rockets', 'rockets'], [['assault_rifle'], 'AK', 'AKs'], [['bolt_rifle'], 'bolt rifle', 'bolt rifles'],
+  [['semi_rifle'], 'semi rifle', 'semi rifles'], [['drum_smg', 'scrap_smg'], 'SMG', 'SMGs'], [['pump_shotgun', 'double_barrel'], 'shotgun', 'shotguns'],
+  [['semi_pistol', 'revolver', 'pipe_pistol'], 'pistol', 'pistols'], [['crossbow', 'hunting_bow'], 'bow', 'bows'],
+];
+function gearLine(owned) {
+  const parts = [];
+  for (const [ids, one, many] of GEAR) {
+    const n = ids.reduce((a, id) => a + (owned[id] || 0), 0); if (!n) continue;
+    parts.push(one === 'rockets' ? 'rockets' : n === 1 ? `1 ${one}` : `${n} ${many}`);
+    if (parts.length === 2) break;
+  }
+  if (!parts.length) return Object.keys(owned).length ? 'Melee only' : 'Rocks';
+  const txt = parts.join(', ');
+  return txt[0].toUpperCase() + txt.slice(1);
+}
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const WEAR_LABEL = { head: 'Head', face: 'Face', shirt: 'Shirt', chest: 'Chest armour', pants: 'Trousers', kilt: 'Leg armour', feet: 'Feet', hands: 'Hands' };
 const costText = (cost, inv) => Object.entries(cost).map(([k, v]) => { const ok = !inv || inv.count(k) >= v; return `<span class="${ok ? '' : 'bad'}">${v} ${esc(ITEMS[k].name)}</span>`; }).join(', ');
@@ -592,9 +609,11 @@ export class UIManager {
       const score = t.size * 30 + pieces * 2 + prog.bench * 60 + grade * 30 + t.stats.raidsWon * 30 + t.stats.kills * 0.5;
       // how loaded they are: everything in their boxes plus what members carry and wear
       let loot = 0;
-      for (const d of prog.deps) if (d.cont && d.type !== 'recycler') loot += d.cont.totalValue();
-      for (const m of G.teams.membersOf(t)) loot += m.inv.totalValue();
-      out.push({ t, st, alive, pieces, bench: prog.bench, grade, score, loot });
+      const owned = {};   // weapons they have: carried plus stored
+      const count = (sl) => { if (sl && ITEMS[sl.id] && (ITEMS[sl.id].type === 'gun' || ITEMS[sl.id].type === 'bow' || ITEMS[sl.id].type === 'melee')) owned[sl.id] = (owned[sl.id] || 0) + 1; };
+      for (const d of prog.deps) if (d.cont && d.type !== 'recycler') { loot += d.cont.totalValue(); d.cont.slots.forEach(count); }
+      for (const m of G.teams.membersOf(t)) { loot += m.inv.totalValue(); m.inv.belt.slots.forEach(count); m.inv.main.slots.forEach(count); }
+      out.push({ t, st, alive, pieces, bench: prog.bench, grade, score, loot, gear: gearLine(owned) });
     }
     return out.sort((a, b) => b.score - a.score);
   }
@@ -605,10 +624,9 @@ export class UIManager {
     const clans = this.clanTable();
     const top = clans[0];
     const biggest = top ? `<p><b style="color:${top.t.color}">${esc(top.t.name)}</b> run the island: ${top.t.size} members, ${top.pieces ? `a ${GR[Math.round(top.grade)]} base of ${top.pieces} pieces` : 'no base yet'}, ${top.t.stats.raidsWon} ${top.t.stats.raidsWon === 1 ? 'raid' : 'raids'} won and ${top.t.stats.kills} ${top.t.stats.kills === 1 ? 'kill' : 'kills'}.</p>` : '';
-    const LOOT = [[150, 'Fresh'], [600, 'Getting there'], [2000, 'Geared'], [5000, 'Loaded'], [Infinity, 'Stacked']];
-    const lootCell = (v) => { const lab = LOOT.find(l => v < l[0])[1]; const w = Math.max(4, Math.min(100, Math.log10(1 + v) / 4.2 * 100)); return `<div class="lootBar"><i style="width:${w}%"></i></div><div class="muted">${lab}</div>`; };
-    const clanRows = clans.slice(0, 10).map((c, i) => `<tr><td>${i + 1}</td><td><span class="swatch" style="background:${c.t.color}"></span>${esc(c.t.name)}<div class="muted">${(STYLES[c.t.style] || STYLES.balanced).name}, ${c.t.tier}</div></td><td>${c.alive}/${c.t.size}</td><td>${c.pieces ? `${c.pieces} ${GR[Math.round(c.grade)]}` : 'none'}</td><td>${c.bench ? 'T' + c.bench : '-'}</td><td>${lootCell(c.loot)}</td><td>${c.t.stats.raidsWon}/${c.t.stats.raids}</td><td>${c.t.stats.kills}</td></tr>`).join('');
-    const clanHTML = O.clans ? `<h3>Clans</h3><table class="clanTable"><tr><th></th><th>Clan</th><th>Alive</th><th>Base</th><th>Bench</th><th>Loot</th><th>Raids won</th><th>Kills</th></tr>${clanRows}</table>` : '';
+    const lootCell = (v, gear) => { const w = Math.max(4, Math.min(100, Math.log10(1 + v) / 4.2 * 100)); return `<div class="lootBar"><i style="width:${w}%"></i></div><div class="muted">${esc(gear)}</div>`; };
+    const clanRows = clans.slice(0, 10).map((c, i) => `<tr><td>${i + 1}</td><td><span class="swatch" style="background:${c.t.color}"></span>${esc(c.t.name)}<div class="muted">${(STYLES[c.t.style] || STYLES.balanced).name}, ${c.t.tier}</div></td><td>${c.alive}/${c.t.size}</td><td>${c.pieces ? `${c.pieces} ${GR[Math.round(c.grade)]}` : 'none'}</td><td>${c.bench ? 'T' + c.bench : '-'}</td><td>${lootCell(c.loot, c.gear)}</td><td>${c.t.stats.raidsWon}/${c.t.stats.raids}</td><td>${c.t.stats.kills}</td></tr>`).join('');
+    const clanHTML = O.clans ? `<h3>Clans</h3><table class="clanTable"><tr><th></th><th>Clan</th><th>Alive</th><th>Base</th><th>Bench</th><th>Gear</th><th>Raids won</th><th>Kills</th></tr>${clanRows}</table>` : '';
     const log = G.log.slice(-12).reverse().map(l => `<p><span class="muted">Day ${l.day} ${l.clock}</span> ${esc(l.text)}</p>`).join('') || '<p class="muted">Nothing has happened yet.</p>';
     const won = G.raidHistory.filter(r => r.result === 'success').length;
     const raids = G.raidHistory.slice(-10).reverse().map(r => `<p><span class="swatch" style="background:${r.color || '#888'}"></span>Day ${r.day}: ${esc(r.team)} vs ${esc(r.target)}, ${esc(r.result === 'success' ? 'raided' : r.result)}${r.value ? ` (${r.value} scrap worth)` : ''}</p>`).join('') || '<p class="muted">No raids yet.</p>';

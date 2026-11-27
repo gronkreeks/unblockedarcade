@@ -117,11 +117,29 @@ export class Audio {
     else { clack(T * 0.18, 600); clack(T * 0.55, 800, 0.18); clack(T * 0.78, 1000); clack(T * 0.85, 700); }
   }
   // Footsteps: a heel thump plus the texture of the ground (gravel, sand, snow, wood floors).
+  // A footstep: a boot heel striking, then the toe rolling off, with the ground's own texture on top
+  // (crunchy gravel, soft sand, squeaky snow, hollow wooden floors). Slight random variation per step.
   _stepSound(kind, vol, out) {
-    const surf = { sand: [1800, 0.9], snow: [2600, 0.8], wood: [700, 2.5], dirt: [1100, 0.9] }[kind] || [1100, 0.9];
-    this.tone(kind === 'wood' ? 140 : 95, 0.07, vol * 0.9, 'sine', 0.6, 0, out);               // heel
-    this.noise(0.09, surf[0], surf[1], vol, 'bandpass', 0, out);                                // surface
-    this.noise(0.05, surf[0] * 2.2, 0.8, vol * 0.45, 'highpass', 0.035, out);                   // grit / creak
+    const r = () => 0.9 + Math.random() * 0.2;
+    const toe = 0.055 + Math.random() * 0.02;
+    if (kind === 'wood') {
+      this.tone(170 * r(), 0.09, vol * 1.1, 'triangle', 0.7, 0, out);          // hollow knock
+      this.noise(0.05, 900 * r(), 2.5, vol * 0.9, 'bandpass', 0, out);
+      this.tone(150 * r(), 0.06, vol * 0.55, 'triangle', 0.7, toe, out);       // toe
+      this.noise(0.04, 1400 * r(), 3, vol * 0.4, 'bandpass', toe, out);
+      if (Math.random() < 0.25) this.tone(520 * r(), 0.12, vol * 0.12, 'sawtooth', 1.15, toe + 0.02, out); // board creak
+      return;
+    }
+    // heel: a firm, short thud
+    this.tone(85 * r(), 0.06, vol * 1.0, 'sine', 0.55, 0, out);
+    this.noise(0.045, 450 * r(), 0.8, vol * 0.9, 'lowpass', 0, out);
+    // toe roll-off
+    this.noise(0.04, 380 * r(), 0.8, vol * 0.5, 'lowpass', toe, out);
+    // the surface
+    if (kind === 'sand') { this.noise(0.14, 1700 * r(), 0.7, vol * 0.55, 'bandpass', 0.01, out); return; }   // soft shuffle
+    const grains = kind === 'snow' ? 4 : 3, f = kind === 'snow' ? 3400 : 2600;                                // gravel / snow crunch
+    for (let i = 0; i < grains; i++) this.noise(0.012 + Math.random() * 0.01, f * r(), 1.2, vol * (0.55 - i * 0.08), 'bandpass', 0.004 + i * (0.012 + Math.random() * 0.01), out);
+    for (let i = 0; i < 2; i++) this.noise(0.01, f * 1.1 * r(), 1.2, vol * 0.3, 'bandpass', toe + 0.005 + i * 0.012, out);
   }
   step(kind, crouch, run) {
     if (this._throttle('step', 160)) return;
