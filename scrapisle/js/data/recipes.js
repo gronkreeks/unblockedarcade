@@ -85,6 +85,7 @@ r('large_medkit', 1, { med_syringe: 2, low_grade: 10 }, 10, 2, { unlock: 125 });
 
 // Deployables / construction
 r('wood_box', 1, { wood: 100 }, 6, 0);
+r('barricade', 1, { wood: 200 }, 6, 0);
 r('large_box', 1, { wood: 250, metal_frag: 50 }, 10, 1, { unlock: 30 });
 r('furnace', 1, { stones: 200, wood: 100, low_grade: 50 }, 15, 0);
 r('campfire', 1, { wood: 100 }, 4, 0);

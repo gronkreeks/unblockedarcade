@@ -1057,6 +1057,13 @@ export class BotAI {
     // movement
     const want = this.preferredRange(def);
     const tx = t.x, tz = t.z;
+    // taking fire in the open: throw down a barricade between us and them
+    if (ranged && d > 12 && d < 90 && this.underFire(b, t) && b.inv.count('barricade') > 0 && G.now > (ai.barrT || 0) && mode !== 'far') {
+      ai.barrT = G.now + 18 + Math.random() * 10;
+      const ux = (tx - b.x) / d, uz = (tz - b.z) / d, bx = b.x + ux * 1.6, bz = b.z + uz * 1.6;
+      const sup = G.deploy.supportAt(bx, b.y, bz);
+      G.deploy.place(b, 'barricade', bx, sup ? sup.wy : G.world.heightAt(bx, bz), bz, Math.atan2(ux, uz) + Math.PI);
+    }
     // don't chase someone across the island: a target that stays out of range and isn't
     // shooting at us any more is let go (and left alone for a while)
     if (d > want + 45 && !this.underFire(b, t) && !(team && team.underAttack > 0)) { ai.chaseT = (ai.chaseT || 0) + dt; if (ai.chaseT > 10) { ai.chaseT = 0; this.endCombat(b, true); return; } } else ai.chaseT = 0;

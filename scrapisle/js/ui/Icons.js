@@ -25,6 +25,10 @@ const DRAW = {
   can(x, c) { x.fillStyle = c; x.fillRect(20, 16, 24, 34); x.fillStyle = shade(c, 1.3); x.beginPath(); x.ellipse(32, 16, 12, 4, 0, 0, 7); x.fill(); x.fillStyle = '#eee'; x.fillRect(20, 28, 24, 8); },
   scrap(x, c) { x.fillStyle = c; x.beginPath(); x.moveTo(14, 40); x.lineTo(22, 20); x.lineTo(36, 26); x.lineTo(50, 16); x.lineTo(52, 40); x.lineTo(34, 48); x.closePath(); x.fill(); x.fillStyle = shade(c, 0.65); x.fillRect(26, 32, 14, 4); x.fillRect(38, 24, 4, 12); },
   rope(x, c) { x.strokeStyle = c; x.lineWidth = 5; for (let i = 0; i < 3; i++) { x.beginPath(); x.ellipse(32, 32, 18 - i * 5, 12 - i * 3, 0, 0, 7); x.stroke(); } },
+  barricade(x, c) {
+    for (let i = 0; i < 6; i++) { const xx = 8 + i * 8.6; x.fillStyle = i % 2 ? shade(c, 1.1) : shade(c, 0.85); x.fillRect(xx, 22, 7, 30); x.beginPath(); x.moveTo(xx, 22); x.lineTo(xx + 3.5, 14); x.lineTo(xx + 7, 22); x.fill(); }
+    x.fillStyle = '#5a3d22'; x.fillRect(6, 28, 52, 4); x.fillRect(6, 42, 52, 4);
+  },
   kit(x, c) {
     // sewing kit: a wooden spool of red thread with a needle across it
     x.fillStyle = '#8a6440'; x.fillRect(14, 14, 28, 6); x.fillRect(14, 44, 28, 6);
@@ -104,7 +108,7 @@ const SHORT = {
   hazmat_suit: 'Hazmat', cooked_meat: 'Cooked', berries: 'Berries', canned_beans: 'Beans', canned_tuna: 'Tuna', chocolate: 'Choc Bar',
   granola: 'Granola', water_bottle: 'Water', med_syringe: 'Syringe', large_medkit: 'Medkit', anti_rad: 'Anti-Rad', wood_box: 'Box',
   large_box: 'Large Box', workbench1: 'Bench 1', workbench2: 'Bench 2', workbench3: 'Bench 3', research_table: 'Research',
-  sleeping_bag: 'Sleep Bag', claim_cabinet: 'Claim Cab', wood_door: 'Wood Door', metal_door: 'Metal Door', armored_door: 'Armor Door',
+  sleeping_bag: 'Sleep Bag', barricade: 'Barricade', claim_cabinet: 'Claim Cab', wood_door: 'Wood Door', metal_door: 'Metal Door', armored_door: 'Armor Door',
 };
 // Anything not listed: the name if it's short, otherwise abbreviated.
 export function shortName(id) {

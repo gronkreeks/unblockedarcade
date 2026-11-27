@@ -38,6 +38,19 @@ function depBuild(type, g) {
       if (type === 'large_box') for (const x of [-hx * 0.5, hx * 0.5]) g.box(xf, x, hy, 0, 0.03, hy + 0.012, hz + 0.012, 0x8a8a8a);
       g.box(xf, 0, hy * 1.7, hz + 0.02, 0.05, 0.06, 0.015, 0x707070);
       break;
+    case 'barricade': {
+      // upright stakes with pointed tops, two cross beams on the front and props behind
+      g.setMat('wood');
+      for (let i = 0; i < 7; i++) {
+        const x = -hx + 0.18 + i * ((hx * 2 - 0.36) / 6), h = hy * (0.93 + ((i * 37) % 7) * 0.012), sh = i % 2 ? 0xa57a4c : 0x8e6438;
+        g.box(xf, x, h, 0, 0.15, h, 0.05, sh);
+        g.box(xf, x, h * 2 + 0.05, 0, 0.09, 0.05, 0.045, sh); g.box(xf, x, h * 2 + 0.11, 0, 0.04, 0.03, 0.04, sh);
+      }
+      g.setMat('bark');
+      for (const y of [hy * 0.55, hy * 1.45]) g.box(xf, 0, y, hz * 0.55, hx, 0.06, 0.045, 0x6b4a2e);
+      for (const x of [-hx * 0.75, 0, hx * 0.75]) { g.box(xf, x, hy * 0.45, -hz * 1.1, 0.05, hy * 0.45, 0.2, 0x6b4a2e); g.box(xf, x, 0.06, -hz * 1.6, 0.06, 0.06, 0.16, 0x5a3d22); }
+      break;
+    }
     case 'furnace':
       g.setMat('rock'); g.cyl(xf, 0, 0, 0, 0.58, 1.15, 0x9a9590, 14, true, 0.42);
       g.setMat('metal'); g.cyl(xf, 0, 1.12, 0, 0.16, 0.55, 0x6a6a6a, 10, true); g.box(xf, 0, 0.36, 0.47, 0.22, 0.19, 0.04, 0x5a5a5a);
@@ -137,8 +150,8 @@ export class Deployables {
       const st = this.game.build.structures.get(sup.st);
       if (st.tc) return 'This building already has a Claim Cabinet';
     }
-    if (!sup && Math.abs(W.heightAt(x, z) - y) > 0.4) return 'Needs flat ground or a floor';
-    if (!sup && W.slopeAt(x, z) > 0.35) return 'Too steep';
+    if (!sup && Math.abs(W.heightAt(x, z) - y) > (D.quick ? 0.7 : 0.4)) return 'Needs flat ground or a floor';
+    if (!sup && W.slopeAt(x, z) > (D.quick ? 0.75 : 0.35)) return 'Too steep';
     // the whole footprint must rest on the same floor (no hanging over edges)
     if (sup) {
       const c = Math.cos(yaw), sn = Math.sin(yaw);
@@ -176,7 +189,7 @@ export class Deployables {
     if (!opts.free && !surv.inv.remove(type, 1)) return { ok: false, err: 'Missing item' };
     const sup = this.supportAt(x, y, z);
     // items set down on the ground right next to a building still belong to it
-    const stNear = sup ? null : this.game.build.structureNear(x, z, 4);
+    const stNear = sup || type === 'barricade' ? null : this.game.build.structureNear(x, z, 4);
     const d = this.create({ type, x, y, z, yaw, team: surv.team, owner: surv.id, st: sup ? sup.st : stNear ? stNear.id : null, piece: sup ? sup.id : null });
     if (type === 'claim_cabinet' && sup) { const st = this.game.build.structures.get(sup.st); st.tc = d.id; st.version++; }
     this.game.events.emit('deployed', { surv, dep: d });
@@ -278,7 +291,9 @@ export class Deployables {
 
   // ---------- processing ----------
   update(dt, camPos) {
-    for (const d of this.list) {
+    for (const d of [...this.list]) {
+      // barricades left out in the open rot away in about 30 minutes (inside a base they stay)
+      if (d.type === 'barricade' && !d.st) { d.hp -= d.maxHp / 1800 * dt; if (d.hp <= 0) { this.remove(d, false); continue; } }
       if (d.type === 'furnace') this._furnace(d, dt);
       else if (d.type === 'campfire') this._campfire(d, dt);
       else if (d.type === 'recycler') this._recycler(d, dt);

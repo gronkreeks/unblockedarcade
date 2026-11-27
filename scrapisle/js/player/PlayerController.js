@@ -271,7 +271,14 @@ export class PlayerController {
       else { this.depSpot = null; this.buildErr = 'Aim at a door or box'; }
       return;
     }
-    const hit = this.aimPoint(5);
+    let hit = this.aimPoint(5);
+    // barricades go down fast: if you're aiming at someone rather than the ground, it lands
+    // 2.2 m in front of you, facing you
+    if (DEPLOYABLES[d.deploy] && DEPLOYABLES[d.deploy].quick && (!hit || hit.normal.y < 0.7 || Math.hypot(hit.x - s.x, hit.z - s.z) > 3.5)) {
+      const fx = Math.sin(s.yaw), fz = Math.cos(s.yaw), x = s.x + fx * 2.2, z = s.z + fz * 2.2;
+      const sup = G.deploy.supportAt(x, s.y, z);
+      hit = { x, y: sup ? sup.wy : G.world.heightAt(x, z), z, normal: { x: 0, y: 1, z: 0 } };
+    }
     if (!hit || hit.normal.y < 0.7) { this.clearGhost(); this.buildErr = 'Aim at the ground or a floor'; return; }
     const yaw = s.yaw + Math.PI + this.deployYaw;
     const err = G.deploy.check(s.team, d.deploy, hit.x, hit.y, hit.z, yaw);

@@ -121,6 +121,8 @@ export class BotProgression {
       if (!this.wearsSlot(b, 'face')) want('metal_facemask', 1, 'armour');
       if (this.armorOf(b, 'chest') < 0.5) want('metal_chest', 1, 'armour');
     }
+    // a couple of barricades for gunfights once they're armed
+    if (bench >= 1 && this.bestGun(b) && ITEMS[this.bestGun(b).id].type === 'gun' && b.inv.count('barricade') < 1) want('barricade', 2, 'ammo');
     // raid tech: the leader works toward a rocket launcher once the clan has a level 2 bench
     if (team && bench >= 2 && prog.scrap >= 300 && this.game.teams.leader(team) === b && !this.game.teams.membersOf(team).some(m => m.inv.count('rocket_launcher') > 0) && prog.stash('rocket_launcher') === 0) want('rocket_launcher', 1, 'raid');
     // ammo for whatever gun they carry

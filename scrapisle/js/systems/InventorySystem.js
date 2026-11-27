@@ -183,3 +183,24 @@ export function splitSlot(cont, i) {
   cont.touch();
   return true;
 }
+
+// Sort a box: merge matching stacks, then order by category (weapons first, components last),
+// then by name, bigger stacks first. Items with condition or loaded ammo are kept as they are.
+const SORT_CATS = ['Weapons', 'Ammo', 'Tools', 'Medical', 'Food', 'Clothing', 'Raid', 'Construction', 'Items', 'Resources', 'Components'];
+export function sortContainer(cont) {
+  const totals = new Map(), singles = [];
+  for (const s of cont.slots) {
+    if (!s) continue;
+    if (cont.stackable(s.id)) totals.set(s.id, (totals.get(s.id) || 0) + s.n);
+    else singles.push(s);
+  }
+  const stacks = [...singles];
+  for (const [id, n] of totals) { const max = Math.max(1, ITEMS[id].stack || 1); for (let left = n; left > 0; left -= max) stacks.push(makeStack(id, Math.min(max, left))); }
+  const rank = (id) => { const i = SORT_CATS.indexOf(ITEMS[id].cat); return i < 0 ? SORT_CATS.length : i; };
+  stacks.sort((a, b) => rank(a.id) - rank(b.id) || ITEMS[a.id].name.localeCompare(ITEMS[b.id].name) || b.n - a.n);
+  if (stacks.length > cont.size) return false;   // can't happen after merging, but never lose items
+  cont.slots.fill(null);
+  stacks.forEach((s, i) => { cont.slots[i] = s; });
+  cont.touch();
+  return true;
+}

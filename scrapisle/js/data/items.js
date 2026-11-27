@@ -133,6 +133,7 @@ med('anti_rad', 'Anti-Radiation Pills', { icon: 'pills', color: '#e6d34a', rad: 
 
 // ---------- Deployables / construction ----------
 const dep = (id, name, o) => def(id, Object.assign({ name, cat: 'Items', type: 'deploy', stack: 1, icon: 'box' }, o));
+dep('barricade', 'Wooden Barricade', { cat: 'Construction', deploy: 'barricade', icon: 'barricade', color: '#9a6b3f', value: 4, stack: 5 });
 dep('wood_box', 'Wooden Box', { deploy: 'wood_box', color: '#9a6b3f', value: 3 });
 dep('large_box', 'Large Wood Box', { deploy: 'large_box', color: '#7a5130', value: 8 });
 dep('furnace', 'Furnace', { deploy: 'furnace', icon: 'furnace', color: '#8d8d8d', value: 6 });

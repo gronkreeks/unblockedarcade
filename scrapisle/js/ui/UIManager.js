@@ -4,7 +4,7 @@ import { RECIPES, RECIPE, CRAFT_CATS, researchCost, TECH_PARENT, TECH_TREE } fro
 import { PIECES, PIECE_ORDER, GRADES, pieceCost, DEPLOYABLES } from '../data/building.js';
 import { MONUMENT_TYPES, BIOME } from '../world/WorldGeneration.js';
 import { DISTRIBUTION, STYLES } from '../bots/BotProfiles.js';
-import { moveSlot, splitSlot } from '../systems/InventorySystem.js';
+import { moveSlot, splitSlot, sortContainer } from '../systems/InventorySystem.js';
 import { recycleYield } from '../systems/Deployables.js';
 import { iconURL } from './Icons.js';
 import { fmtTime } from '../core/util.js';
@@ -261,7 +261,9 @@ export class UIManager {
     }
     const slots = L.cont.slots.map((s, i) => this.slotHTML('loot', i, s)).join('');
     const cls = d && d.type === 'recycler' ? 'grid6 rec' : 'grid6';
-    return `<h3>${esc(L.title.replace(/^\w/, c => c.toUpperCase()))}</h3><div class="${cls}">${slots}</div>${extra}<div class="row"><button class="btn small" data-act="takeall">Take all</button></div>`;
+    // boxes, cabinets, crates and bags can be sorted; machines keep their own slot layout
+    const sortable = !(d && ['furnace', 'campfire', 'recycler', 'research_table'].includes(d.type));
+    return `<h3>${esc(L.title.replace(/^\w/, c => c.toUpperCase()))}</h3><div class="${cls}">${slots}</div>${extra}<div class="row"><button class="btn small" data-act="takeall">Take all</button>${sortable ? '<button class="btn small" data-act="sort">Sort</button>' : ''}</div>`;
   }
   recyclerHTML(d) {
     const cont = d.cont, P = this.P;
@@ -338,6 +340,7 @@ export class UIManager {
         if (!L.ref.on && L.cont.slots.slice(0, 6).some(Boolean)) G.deploy.toggle(L.ref);
       }
       if (a === 'takeout' && L) { for (let i = 6; i < 12; i++) { const st = L.cont.slots[i]; if (st) L.cont.slots[i] = P.inv.giveStack(st); } L.cont.touch(); }
+      if (a === 'sort' && L) { this.sel = null; sortContainer(L.cont); G.audio.click(); }
       if (a === 'takeall' && L) { for (let i = 0; i < L.cont.size; i++) { const s = L.cont.slots[i]; if (s) L.cont.slots[i] = P.inv.giveStack(s); } L.cont.touch(); }
       if (this.sel) {
         const c = this.cmap()[this.sel.c], s = c && c.slots[this.sel.i];
