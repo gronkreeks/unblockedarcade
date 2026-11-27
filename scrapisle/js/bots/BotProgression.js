@@ -2,7 +2,7 @@
 // Produces a wishlist and resolves the first unmet wish into a concrete activity.
 import { ITEMS, weaponScore } from '../data/items.js';
 import { RECIPE } from '../data/recipes.js';
-import { SKILL, PERSONALITIES } from './BotProfiles.js';
+import { SKILL, PERSONALITIES, styleOf } from './BotProfiles.js';
 
 // Where raw resources come from.
 export const SOURCE = {
@@ -44,10 +44,19 @@ export class BotProgression {
       research: deps.find(d => d.type === 'research_table') || null,
       benchDep: (tier) => deps.filter(d => (d.def.bench || 0) >= tier).sort((a, b) => a.def.bench - b.def.bench)[0] || null,
       upkeepH: st ? G.build.upkeepHours(st) : 0,
-      wantBench2: scrap >= 450 || hqm >= 20 * mult,
-      wantBench3: scrap >= 1000,
-      rich: hqm >= 300,
+      wantBench2: scrap >= 450 * styleOf(team).bench || hqm >= 20 * mult,
+      wantBench3: scrap >= 1000 * styleOf(team).bench,
+      rich: hqm >= 300 * Math.min(1, styleOf(team).bench),
     };
+    // progression milestones (for tests, the island news and the clan list)
+    if (team.ms) {
+      const ms = team.ms, now = G.now, mark = (k, ok) => { if (ok && ms[k] === undefined) ms[k] = Math.round(now); };
+      mark('base', !!st); mark('tc', !!p.tc); mark('furnace', !!p.furnace); mark('bench1', bench >= 1); mark('bench2', bench >= 2); mark('bench3', bench >= 3);
+      if (st) { let g = 9; for (const pc of st.pieces.values()) g = Math.min(g, pc.grade); mark('stone', g >= 2 && g < 9); mark('metal', g >= 3 && g < 9); mark('armored', g >= 4 && g < 9); }
+      const guns = members.some(m => [...m.inv.belt.slots, ...m.inv.main.slots].some(x => x && ITEMS[x.id].type === 'gun'));
+      mark('gun', guns);
+      mark('rifle', members.some(m => [...m.inv.belt.slots, ...m.inv.main.slots].some(x => x && ['semi_rifle', 'assault_rifle', 'bolt_rifle'].includes(x.id))));
+    }
     this.cache.set(team.id, { t: G.now, p });
     return p;
   }

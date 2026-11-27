@@ -108,7 +108,7 @@ export class BotRaiding {
       state: best.method === 'melee' || best.method === 'walk' ? 'rally' : 'prep', target: best.st.id, targetTeam: best.st.team, method: best.method,
       need: best.charges + (best.method === 'satchel_charge' ? 2 : best.method === 'timed_charge' ? 1 : 0),
       rally: { x: z.x + Math.sin(ang) * (z.r + 30), z: z.z + Math.cos(ang) * (z.r + 30) }, started: G.now, stateT: G.now, looted: 0, lootedValue: 0,
-      targetName: this.teamLabel(best.st.team),
+      targetName: this.teamLabel(best.st.team), tx: z.x, tz: z.z,
     };
     team.raidDrive = 0;
     this.log(`${team.name} are planning a raid on ${team.raid.targetName}'s base`);
@@ -132,7 +132,7 @@ export class BotRaiding {
       if (result === 'success') team.stats.raidsWon++;
       if (result === 'success' && r.lootedValue < 1) result = 'found nothing worth taking';
       this.log(result === 'success' ? `${team.name} raided ${r.targetName} and took ${Math.round(r.lootedValue)} scrap worth of loot` : `${team.name}'s raid on ${r.targetName}: ${result}`);
-      G.raidHistory.push({ t: G.now, day: G.env.day, team: team.name, target: r.targetName, result, value: Math.round(r.lootedValue) });
+      G.raidHistory.push({ t: G.now, day: G.env.day, team: team.name, teamId: team.id, color: team.color, target: r.targetName, result, value: Math.round(r.lootedValue), x: r.tx !== undefined ? Math.round(r.tx) : undefined, z: r.tz !== undefined ? Math.round(r.tz) : undefined });
       team.raid = null;
     };
     if (!st) { if (r.state === 'loot' || r.state === 'enter') return end('success'); return end('was called off (target gone)'); }

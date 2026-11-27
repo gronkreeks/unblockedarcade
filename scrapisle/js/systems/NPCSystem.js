@@ -1,4 +1,4 @@
-// Militia: armed guards posted at the bigger monuments. Hostile to every survivor.
+// Militia: armed guards posted at the big monuments only (launch site, airfield). Hostile to every survivor.
 import { HumanoidAvatar } from '../entities/Avatars.js';
 import { ITEMS, makeStack } from '../data/items.js';
 import { uid, randRange, dist, angleWrap, pick } from '../core/util.js';
@@ -9,7 +9,7 @@ const LOADOUT = { 3: ['semi_rifle', 'drum_smg', 'pump_shotgun', 'assault_rifle']
 export class NPCSystem {
   constructor(game) { this.game = game; this.list = []; this.posts = []; }
   init(monumentData) {
-    for (const md of monumentData) for (const p of md.npcs) this.posts.push({ ...p, tier: md.m.tier, npc: null, respawnAt: 0 });
+    for (const md of monumentData) if (md.m.tier >= 3) for (const p of md.npcs) this.posts.push({ ...p, tier: md.m.tier, npc: null, respawnAt: 0 });
     for (const post of this.posts) this.spawn(post);
   }
   spawn(post) {

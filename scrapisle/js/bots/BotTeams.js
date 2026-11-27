@@ -1,5 +1,5 @@
 // Team formation, shared memory (known bases, threats), shared base + stash, raid drive.
-import { TIERS, SKILL, teamName } from './BotProfiles.js';
+import { TIERS, SKILL, teamName, rollStyle, styleOf } from './BotProfiles.js';
 import { randInt, shuffle, uid, dist } from '../core/util.js';
 
 const TEAM_COLORS = ['#e05a4a', '#4a8ae0', '#5ad88a', '#e0b84a', '#b05ae0', '#4ad8d8', '#e08a4a', '#8ae04a', '#e04a9a', '#9a9ae0'];
@@ -29,9 +29,11 @@ export class Team {
     this.attackers = new Set();
     this.stats = o.stats || { raids: 0, raidsWon: 0, defended: 0, kills: 0 };
     this.monumentRun = null;
+    this.style = o.style || rollStyle(o.tier, hashRand(this.id));
+    this.ms = o.ms || {};            // progression milestones: name -> game time reached
   }
   get size() { return this.members.length; }
-  serialize() { return { id: this.id, name: this.name, tier: this.tier, members: this.members, color: this.color, base: this.base, known: [...this.known], raid: this.raid ? { ...this.raid, members: undefined } : null, raidDrive: this.raidDrive, lastRaid: this.lastRaid, stats: this.stats }; }
+  serialize() { return { id: this.id, name: this.name, tier: this.tier, members: this.members, color: this.color, base: this.base, known: [...this.known], raid: this.raid ? { ...this.raid, members: undefined } : null, raidDrive: this.raidDrive, lastRaid: this.lastRaid, stats: this.stats, style: this.style, ms: this.ms }; }
 }
 
 export class BotTeams {
@@ -58,7 +60,9 @@ export class BotTeams {
     return out;
   }
   create(tier, members, rng = Math.random) {
-    const t = new Team({ name: teamName(rng), tier, members: members.map(m => m.id), color: TEAM_COLORS[this.colorI++ % TEAM_COLORS.length] });
+    let name = teamName(rng);
+    for (let k = 0; k < 30 && [...this.teams.values()].some(o => o.name === name); k++) name = teamName(rng);
+    const t = new Team({ name, tier, style: rollStyle(tier, rng), members: members.map(m => m.id), color: TEAM_COLORS[this.colorI++ % TEAM_COLORS.length] });
     for (const m of members) { m.team = t.id; m.ai.teamId = t.id; }
     this.teams.set(t.id, t);
     return t;
@@ -97,7 +101,9 @@ export class BotTeams {
       // raid drive: bigger teams and easier tiers want to raid more often
       const S = SKILL[t.tier];
       const sizeF = 0.4 + t.size * 0.35;
-      t.raidDrive = Math.min(1.5, t.raidDrive + dt * S.raidRate * sizeF / 2400);
+      // rushers don't waste sulfur and lives on raids until they have tier 2 gear
+      const hold = t.style === 'rush' && this.game.bots.progressOf(t).bench < 2;
+      if (!hold) t.raidDrive = Math.min(1.5, t.raidDrive + dt * S.raidRate * styleOf(t).raid * sizeF / 2400);
     }
   }
   serialize() { return [...this.teams.values()].map(t => t.serialize()); }
@@ -108,6 +114,7 @@ export class BotTeams {
   }
 }
 
+function hashRand(str) { let h = 2166136261; for (const ch of str) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return () => ((h >>> 0) % 10000) / 10000; }
 function pickSize(tier, rng) {
   const prefs = SIZE_PREF[tier];
   let tot = 0; for (const p of prefs) tot += p[1];

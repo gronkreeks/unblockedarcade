@@ -20,8 +20,10 @@ export const MONUMENT_TYPES = {
 };
 
 export class World {
-  constructor(seed, size = 2048) {
+  // layout 1 = worlds saved before monuments were spread evenly (kept so old saves load unchanged)
+  constructor(seed, size = 2048, layout = 1) {
     this.seed = seed >>> 0;
+    this.layout = layout;
     this.size = size;
     this.half = size / 2;
     this.cs = 4;                     // heightmap cell size (m)
@@ -191,13 +193,27 @@ export class World {
 
   _placeMonuments(rng) {
     const order = ['launch_site', 'airfield', 'train_yard', 'harbour', 'mining_outpost', 'lighthouse', 'supermarket', 'gas_station', 'fuel_stop', 'supermarket', 'lighthouse', 'mining_outpost'];
-    if (this.size < 2000) order.splice(9);
+    if (this.layout >= 2) order.push('harbour', 'train_yard', 'gas_station', 'fuel_stop', 'mining_outpost');
+    if (this.size < 2000) order.splice(this.layout >= 2 ? 12 : 9);
     const half = this.half;
+    const balanced = this.layout >= 2;
     for (const type of order) {
       const T = MONUMENT_TYPES[type];
       let best = null, bestScore = -Infinity;
-      for (let t = 0; t < 260; t++) {
-        const x = (rng() * 2 - 1) * (half - T.r - 40), z = (rng() * 2 - 1) * (half - T.r - 40);
+      // spread monuments evenly: try the quarter of the island with the least monument area first,
+      // then the next one, and only then anywhere
+      let quads = [null];
+      if (balanced) {
+        const area = [0, 0, 0, 0];
+        for (const m of this.monuments) area[(m.x > 0 ? 1 : 0) + (m.z > 0 ? 2 : 0)] += m.r * m.r + 2500;
+        quads = [0, 1, 2, 3].sort((a, b) => area[a] - area[b]).slice(0, 2).concat([null]);
+      }
+      for (const q of quads) {
+      if (best) break;
+      const tries = balanced ? 220 : 260;
+      for (let t = 0; t < tries; t++) {
+        let x = (rng() * 2 - 1) * (half - T.r - 40), z = (rng() * 2 - 1) * (half - T.r - 40);
+        if (q !== null) { x = Math.abs(x) * (q & 1 ? 1 : -1); z = Math.abs(z) * (q & 2 ? 1 : -1); }
         const h = this.heightAt(x, z);
         if (this.monuments.some(m => dist(x, z, m.x, m.z) < m.r + T.r + 60)) continue;
         let score = 0;
@@ -219,7 +235,9 @@ export class World {
           if (T.rocky) { if (h < 20) continue; score = h * 0.2 - (mx - mn) * 0.3; }
           else score = -(mx - mn) - Math.abs(h - 12) * 0.2;
         }
+        if (balanced) { let near = Infinity; for (const m of this.monuments) near = Math.min(near, dist(x, z, m.x, m.z)); score += Math.min(near, 500) * 0.02; }
         if (score > bestScore) { bestScore = score; best = { x, z }; }
+      }
       }
       if (!best) continue;
       const pad = T.coastal ? clamp(this.heightAt(best.x, best.z), 2.5, 5) : this._padHeight(best.x, best.z, T.r);

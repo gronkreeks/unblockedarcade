@@ -95,7 +95,11 @@ export class PlayerController {
   onRightDown() {
     const d = this.s.activeDef(); if (!d) return;
     if (d.type === 'plan') { this.game.ui.openBuildMenu(); this.mouse.r = false; }
-    else if (d.type === 'hammer') { const p = this.aimPiece(); if (p) { this.game.ui.openHammerMenu(p); this.mouse.r = false; } }
+    else if (d.type === 'hammer') {
+      const t = this.findTarget();
+      if (t && t.dep) { this.game.ui.openDeployMenu(t.dep); this.mouse.r = false; return; }
+      const p = this.aimPiece(); if (p) { this.game.ui.openHammerMenu(p); this.mouse.r = false; }
+    }
   }
 
   // What the player is looking at for E.

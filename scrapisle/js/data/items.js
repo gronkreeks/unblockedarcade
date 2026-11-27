@@ -76,8 +76,8 @@ ammo('rifle_ammo', '5.56 Rifle Ammo', { color: '#9c7a32', value: 0.8, bleed: 0.4
 // ---------- Ranged weapons ----------
 // dmg: damage per projectile with dmgMult 1. vel: m/s. rpm: shots/min. spread/aimSpread: degrees. recoil: degrees per shot.
 const gun = (id, name, o) => def(id, Object.assign({ name, cat: 'Weapons', type: 'gun', icon: 'pistol', auto: false, mag: 1, reload: 2, spread: 2, aimSpread: 0.5, recoil: 1, recoilH: 0.3, zoom: 1.3, dur: 400 }, o));
-gun('hunting_bow', 'Hunting Bow', { type: 'bow', icon: 'bow', color: '#9a6b3f', ammo: ['wooden_arrow', 'hv_arrow'], dmg: 50, vel: 55, rpm: 50, mag: 1, reload: 0, spread: 3, aimSpread: 0.6, recoil: 0, recoilH: 0, dur: 200, value: 6, noise: 20 });
-gun('crossbow', 'Crossbow', { icon: 'bow', color: '#7a5a3a', ammo: ['wooden_arrow', 'hv_arrow'], dmg: 65, vel: 85, rpm: 20, mag: 1, reload: 3.4, spread: 1.5, aimSpread: 0.3, recoil: 2, recoilH: 0.5, dur: 300, value: 12, noise: 25 });
+gun('hunting_bow', 'Hunting Bow', { type: 'bow', icon: 'bow', color: '#9a6b3f', ammo: ['wooden_arrow', 'hv_arrow'], dmg: 50, vel: 80, rpm: 50, mag: 1, reload: 0, spread: 3, aimSpread: 0.6, recoil: 0, recoilH: 0, dur: 200, value: 6, noise: 20 });
+gun('crossbow', 'Crossbow', { icon: 'bow', color: '#7a5a3a', ammo: ['wooden_arrow', 'hv_arrow'], dmg: 65, vel: 110, rpm: 20, mag: 1, reload: 3.4, spread: 1.5, aimSpread: 0.3, recoil: 2, recoilH: 0.5, dur: 300, value: 12, noise: 25 });
 gun('pipe_pistol', 'Pipe Pistol', { icon: 'pistol', color: '#7d6b5a', ammo: ['handmade_shell', 'buckshot', 'slug'], dmg: 28, vel: 120, rpm: 30, mag: 1, reload: 2, spread: 3, aimSpread: 2.5, recoil: 6, recoilH: 2, dur: 120, flint: 0.4, value: 10, noise: 120 });
 gun('revolver', 'Revolver', { icon: 'pistol', color: '#8f969e', ammo: ['pistol_ammo'], dmg: 35, vel: 300, rpm: 343, mag: 8, reload: 3.4, spread: 1.6, aimSpread: 0.35, recoil: 2.2, recoilH: 0.8, dur: 300, value: 25, noise: 160 });
 gun('semi_pistol', 'Semi Pistol', { icon: 'pistol', color: '#55606b', ammo: ['pistol_ammo'], dmg: 40, vel: 300, rpm: 400, mag: 10, reload: 2.9, spread: 1.4, aimSpread: 0.3, recoil: 2.6, recoilH: 0.9, dur: 400, value: 45, noise: 160 });

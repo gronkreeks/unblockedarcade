@@ -53,9 +53,9 @@ export const DOORS = {
 
 // Deployables. size = half extents of the collider. slots = container slots (0 = none).
 export const DEPLOYABLES = {
-  wood_box: { name: 'Wooden Box', hp: 150, size: [0.45, 0.3, 0.3], slots: 12, color: 0x9a6b3f, dmg: { melee: 0.6, bullet: 0.2, explosive: 1 } },
-  large_box: { name: 'Large Wood Box', hp: 300, size: [0.8, 0.42, 0.45], slots: 30, color: 0x7a5130, dmg: { melee: 0.5, bullet: 0.15, explosive: 1 } },
-  furnace: { name: 'Furnace', hp: 500, size: [0.5, 0.75, 0.5], slots: 6, color: 0x8d8d8d, dmg: { melee: 0.1, bullet: 0.02, explosive: 1 } },
+  wood_box: { name: 'Wooden Box', hp: 150, size: [0.45, 0.3, 0.3], slots: 24, color: 0x9a6b3f, dmg: { melee: 0.6, bullet: 0.2, explosive: 1 } },
+  large_box: { name: 'Large Wood Box', hp: 300, size: [0.8, 0.42, 0.45], slots: 48, color: 0x7a5130, dmg: { melee: 0.5, bullet: 0.15, explosive: 1 } },
+  furnace: { name: 'Furnace', hp: 500, size: [0.5, 0.75, 0.5], slots: 12, color: 0x8d8d8d, dmg: { melee: 0.1, bullet: 0.02, explosive: 1 } },
   campfire: { name: 'Campfire', hp: 50, size: [0.5, 0.15, 0.5], slots: 3, color: 0x6b4a2a, solid: false, dmg: { melee: 1, bullet: 0.5, explosive: 1 } },
   workbench1: { name: 'Workbench Level 1', hp: 500, size: [1, 0.5, 0.5], slots: 0, bench: 1, color: 0x9a6b3f, dmg: { melee: 0.3, bullet: 0.05, explosive: 1 } },
   workbench2: { name: 'Workbench Level 2', hp: 750, size: [1, 0.55, 0.55], slots: 0, bench: 2, color: 0x8f969e, dmg: { melee: 0.1, bullet: 0.02, explosive: 1 } },

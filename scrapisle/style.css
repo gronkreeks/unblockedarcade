@@ -137,3 +137,21 @@ label.check { display: flex; gap: 0.5rem; align-items: center; }
 @media (max-width: 900px) { #panel { grid-template-columns: 160px calc(var(--s) * 6 + 57px); } #panel .right { grid-column: 1 / -1; } }
 label select { display: block; margin-top: 0.3rem; font-family: inherit; font-size: 0.95rem; font-weight: 700; color: var(--text); background: #2a2d30; border: 1px solid #44484c; border-radius: 6px; padding: 0.4rem 0.6rem; }
 #settingsScreen .wrap { max-width: 560px; }
+
+.splitRow { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+.splitRow label { margin: 0; display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; }
+.splitRow input[type=range] { width: 130px; accent-color: var(--rust); margin: 0; }
+.splitRow input[type=number] { width: 64px; font-family: inherit; font-weight: 700; color: var(--text); background: #2a2d30; border: 1px solid #44484c; border-radius: 6px; padding: 0.25rem 0.4rem; }
+.recIn .slot { background: rgba(94, 154, 60, 0.18); }
+.recBar { height: 8px; background: var(--slot); border-radius: 4px; margin: 0.5rem 0 0.3rem; overflow: hidden; }
+.recBar i { display: block; height: 100%; background: var(--go); }
+#pRight { max-height: 82vh; overflow-y: auto; }
+
+.mapOpts { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 0.4rem; }
+.mapOpt { display: flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+.clanTable { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.clanTable th { text-align: left; color: var(--muted); font-weight: 700; padding: 0.15rem 0.2rem; }
+.clanTable td { padding: 0.2rem; vertical-align: top; }
+.clanTable td .muted { font-size: 0.72rem; }
+.swatch { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 2px; margin-right: 0.35rem; vertical-align: baseline; }
+#mapSide { width: 380px; }

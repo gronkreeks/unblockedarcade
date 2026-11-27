@@ -260,7 +260,7 @@ export class BuildingSystem {
     }
     if (k < 1) return 'Place floors on top of walls';
     if (this.stairsAt(st, i, j, k - 1)) return 'Stairs below';
-    const walls = this.edgesOfCell(i, j, k - 1).some(key2 => { const w = st.pieces.get(key2); return w && PIECES[w.type].full; });
+    const walls = this.edgesOfCell(i, j, k - 1).some(key2 => { const w = st.pieces.get(key2); return w && PIECES[w.type].kind === 'edge'; });
     if (spec.type === 'roof' && !walls) return 'Roofs need walls below';
     if (!walls) {
       const adj = [[i - 1, j], [i + 1, j], [i, j - 1], [i, j + 1]].some(([a, b]) => { const c = this.cellPiece(st, a, b, k); return c && c.type === 'floor'; });
@@ -391,7 +391,7 @@ export class BuildingSystem {
       for (const p of cells) {
         if (p.type === 'foundation') { S.set(p.key, 1); continue; }
         let best = 0;
-        for (const ek of this.edgesOfCell(p.i, p.j, k - 1)) { const w = get(ek); if (w && PIECES[w.type].full) best = Math.max(best, st(ek)); }
+        for (const ek of this.edgesOfCell(p.i, p.j, k - 1)) { const w = get(ek); if (w && PIECES[w.type].kind === 'edge') best = Math.max(best, st(ek) * (PIECES[w.type].full ? 1 : 0.85)); }
         S.set(p.key, best);
       }
       for (let pass = 0; pass < 4; pass++) for (const p of cells) {
@@ -501,6 +501,18 @@ export class BuildingSystem {
     this._buildDoorVisual(p);
     st.version++;
     this.game.events.emit('doorPlaced', { surv, st, piece: p });
+    return { ok: true };
+  }
+  // Hammer pickup of a door (and its lock).
+  pickupDoor(surv, p) {
+    const d = p.door; if (!d) return { ok: false, err: 'No door' };
+    const st = this.structures.get(p.st);
+    if (this.tcOf(st) && !this.isAuthed(surv.team, st)) return { ok: false, err: 'You need building privilege' };
+    if (!this.tcOf(st) && st.team !== surv.team) return { ok: false, err: 'This isn\'t yours' };
+    if (!this.canOpen(surv.team, p)) return { ok: false, err: 'It\'s locked' };
+    this.removeDoor(p);
+    surv.inv.give(d.type, 1);
+    if (d.lock) surv.inv.give(d.lock.type === 'code' ? 'code_lock' : 'key_lock', 1);
     return { ok: true };
   }
   removeDoor(p) {

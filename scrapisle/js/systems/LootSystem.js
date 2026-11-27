@@ -115,8 +115,21 @@ export class LootSystem {
     if (!c.alive || c.kind !== 'barrel') return false;
     c.hp -= dmg;
     if (c.hp <= 0) {
-      const items = c.cont.slots.filter(Boolean);
-      this.spawnBag(c.x, c.y + 0.3, c.z, items, 'Barrel loot', 90);
+      // the loot goes straight into the breaker's inventory; anything that doesn't fit spills in a bag
+      let items = c.cont.slots.filter(Boolean);
+      if (attacker && attacker.kind === 'survivor' && attacker.inv) {
+        const left = [];
+        for (const st of items) {
+          const id = st.id, n = st.n;
+          const rest = attacker.inv.giveStack(st);
+          if (rest) left.push(rest);
+          const got = n - (rest ? rest.n : 0);
+          if (got > 0 && attacker.isPlayer && this.game.ui) this.game.ui.pickupNote(id, got);
+        }
+        items = left;
+        if (attacker.isPlayer && this.game.audio) this.game.audio.pickup();
+      }
+      if (items.length) this.spawnBag(c.x, c.y + 0.3, c.z, items, 'Barrel loot', 90);
       this._despawn(c);
       this.game.events.emit('barrelBroken', { c, attacker });
       return true;

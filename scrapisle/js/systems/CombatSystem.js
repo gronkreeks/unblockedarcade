@@ -1,6 +1,6 @@
 // Weapons: melee, ballistic projectiles, reloading, recoil, durability, armour, raid charges, deaths.
 import * as THREE from 'three';
-import { ITEMS } from '../data/items.js';
+import { ITEMS, makeStack } from '../data/items.js';
 import { segSphere } from '../physics/Physics.js';
 import { randRange, dist3, uid } from '../core/util.js';
 import * as Recoil from './Recoil.js';
@@ -125,9 +125,10 @@ export class CombatSystem {
       const p = this.projectiles[i];
       p.life -= dt;
       const ox = p.x, oy = p.y, oz = p.z;
-      p.vy -= GRAV * dt * (p.arrow ? 1 : 0.35);
+      p.vy -= GRAV * dt * (p.arrow ? 0.5 : 0.35);
       const nx = ox + p.vx * dt, ny = oy + p.vy * dt, nz = oz + p.vz * dt;
       const hit = this.traceSegment(ox, oy, oz, nx, ny, nz, p.owner);
+      if (p.owner && p.owner.kind === 'survivor') this._nearMiss(p, ox, oy, oz, hit ? hit.point.x : nx, hit ? hit.point.y : ny, hit ? hit.point.z : nz);
       if (hit) { this.applyProjectileHit(p, hit); this._killProj(i); continue; }
       p.x = nx; p.y = ny; p.z = nz;
       if (p.line) {
@@ -148,6 +149,22 @@ export class CombatSystem {
       f.m.position.y += f.vy * dt; f.m.scale.multiplyScalar(f.grow ? 1 + dt * 6 : 1);
       if (f.t <= 0) { this.game.scene.remove(f.m); this.fx.splice(i, 1); }
     }
+  }
+  // Bullets and arrows that fly past someone (within ~3 m) let them know they're being shot at.
+  _nearMiss(p, ax, ay, az, bx, by, bz) {
+    const dx = bx - ax, dy = by - ay, dz = bz - az, L2 = dx * dx + dy * dy + dz * dz;
+    if (L2 < 1e-6) return;
+    const o = p.owner;
+    this.game.actorHash.query((ax + bx) / 2, (az + bz) / 2, Math.sqrt(L2) / 2 + 3.5, a => {
+      if (!a.ai || !a.alive || a === o || (o.team && a.team === o.team)) return;
+      if (p.whiz && p.whiz.has(a.id)) return;
+      const cx = a.x - ax, cy = a.y + 1.2 - ay, cz = a.z - az;
+      const t = Math.max(0, Math.min(1, (cx * dx + cy * dy + cz * dz) / L2));
+      const ex = cx - dx * t, ey = cy - dy * t, ez = cz - dz * t;
+      if (ex * ex + ey * ey + ez * ez > 9) return;
+      (p.whiz || (p.whiz = new Set())).add(a.id);
+      this.game.events.emit('nearmiss', { victim: a, attacker: o });
+    });
   }
   _killProj(i) { const p = this.projectiles[i]; if (p.line) { this.game.scene.remove(p.line); p.line.geometry.dispose(); } this.projectiles.splice(i, 1); }
 
@@ -242,7 +259,12 @@ export class CombatSystem {
     const rn = this.game.res.rayNode(eye, d, range);
     if (rn && rn.t < bt) { bt = rn.t; best = { node: rn.node }; }
     const hc = this.game.physics.rayColliders(eye.x, eye.y, eye.z, d.x, d.y, d.z, range, c => c.tag !== 'drop' && c.tag !== 'bag' && c.ref !== surv);
-    if (hc && hc.t < bt) { bt = hc.t; best = { col: hc.c }; }
+    if (hc && hc.t < bt) {
+      bt = hc.t;
+      // a rock or tree's own collision shape counts as hitting the node, from any angle
+      const r = hc.c.ref;
+      best = r && r.alive && (r.type === 'ore' || r.type === 'tree') && this.game.res.nodes[r.idx] === r ? { node: r } : { col: hc.c };
+    }
     const tt = this.game.physics.rayTerrain(eye.x, eye.y, eye.z, d.x, d.y, d.z, range);
     if (tt !== null && tt < bt) return null;
     if (best) best.point = { x: eye.x + d.x * bt, y: eye.y + d.y * bt, z: eye.z + d.z * bt };
@@ -277,8 +299,12 @@ export class CombatSystem {
     // body bag with everything they carried
     const stacks = [];
     for (const c of [a.inv.belt, a.inv.wear, a.inv.main]) { for (let i = 0; i < c.size; i++) { if (c.slots[i]) stacks.push(c.slots[i]); c.slots[i] = null; } c.touch(); }
-    if (stacks.length) this.game.loot.spawnBag(a.x, a.y + 0.5, a.z, stacks, `${a.name}'s body`, 900);
+    // whatever was still being crafted goes back as its ingredients, into the same bag
+    const refund = {};
+    for (const q of a.craftQueue) for (const k in q.cost) refund[k] = (refund[k] || 0) + q.cost[k];
     a.craftQueue.length = 0;
+    for (const k in refund) { let n = refund[k]; const max = ITEMS[k].stack || 1; while (n > 0) { const c = Math.min(n, max); stacks.push(makeStack(k, c)); n -= c; } }
+    if (stacks.length) this.game.loot.spawnBag(a.x, a.y + 0.5, a.z, stacks, `${a.name}'s body`, 900);
     this.game.events.emit('death', { victim: a, killer, info });
   }
 

@@ -143,7 +143,7 @@ class Game {
     this.mats = new MaterialLibrary(this.tex);
     setMaterials(this.mats); setAvatarMaterials(this.mats);
     await this.step('Shaping the island…');
-    this.world = new World(cfg.seed, cfg.size);
+    this.world = new World(cfg.seed, cfg.size, cfg.layout || 1);
     this.physics = new Physics(this.world);
     this.env = new Environment(this.scene, this.renderer, g);
     await this.step('Laying terrain, rivers and roads…');

@@ -9,6 +9,21 @@ import { GeoBuilder } from '../world/geo.js';
 import { SpatialHash } from '../core/spatial.js';
 import { uid, dist } from '../core/util.js';
 
+// Separating-axis test for two yawed rectangles on the ground plane.
+function obbOverlap(a, b) {
+  const axes = [];
+  for (const r of [a, b]) { const c = Math.cos(r.yaw), s = Math.sin(r.yaw); axes.push([c, -s], [s, c]); }
+  const corners = (r) => { const c = Math.cos(r.yaw), s = Math.sin(r.yaw); return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([u, v]) => [r.x + u * r.hx * c + v * r.hz * s, r.z - u * r.hx * s + v * r.hz * c]); };
+  const A = corners(a), B = corners(b);
+  for (const [ax, az] of axes) {
+    let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+    for (const [px, pz] of A) { const d = px * ax + pz * az; a0 = Math.min(a0, d); a1 = Math.max(a1, d); }
+    for (const [px, pz] of B) { const d = px * ax + pz * az; b0 = Math.min(b0, d); b1 = Math.max(b1, d); }
+    if (a1 <= b0 + 0.01 || b1 <= a0 + 0.01) return false;
+  }
+  return true;
+}
+
 // Builds a deployable into a GeoBuilder using material buckets.
 function depBuild(type, g) {
   const xf = GeoBuilder.xf(0, 0, 0, 0);
@@ -124,21 +139,33 @@ export class Deployables {
     }
     if (!sup && Math.abs(W.heightAt(x, z) - y) > 0.4) return 'Needs flat ground or a floor';
     if (!sup && W.slopeAt(x, z) > 0.35) return 'Too steep';
-    let bad = null;
-    this.hash.query(x, z, 3, d => { if (Math.abs(d.y - y) < 1 && dist(d.x, d.z, x, z) < (D.size[0] + DEPLOYABLES[d.type].size[0]) * 0.8) { bad = 'Too close to another item'; return true; } });
-    if (bad) return bad;
-    if (D.solid !== false) {
-      // don't overlap walls
-      let hit = false;
-      this.game.physics.near(x, z, 3, c => {
-        if (c.type !== 'box' || !c.solid) return;
-        if (c.tag === 'piece' && (c.ref.type === 'foundation' || c.ref.type === 'floor' || c.ref.type === 'roof')) return;
-        if (c.y - c.hy > y + D.size[1] * 2 - 0.05 || c.y + c.hy < y + 0.05) return;
-        const l = this._localIn(c, x, z);
-        if (Math.abs(l.x) < c.hx + D.size[0] * 0.6 && Math.abs(l.z) < c.hz + D.size[2] * 0.6) { hit = true; return true; }
-      });
-      if (hit) return 'Blocked by a wall';
+    // the whole footprint must rest on the same floor (no hanging over edges)
+    if (sup) {
+      const c = Math.cos(yaw), sn = Math.sin(yaw);
+      for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        const lx = a * D.size[0] * 0.9, lz = b * D.size[2] * 0.9;
+        const px = x + lx * c + lz * sn, pz = z - lx * sn + lz * c;
+        const s2 = this.supportAt(px, y, pz);
+        if (!s2 || s2.st !== sup.st) return 'Doesn\'t fit on this floor';
+      }
     }
+    // footprint overlap against walls, doors, other items, trees and rocks (oriented boxes)
+    const me = { x, z, hx: D.size[0], hz: D.size[2], yaw, y0: y + 0.03, y1: y + D.size[1] * 2 };
+    let bad = null;
+    this.hash.query(x, z, 4, d => {
+      const E = DEPLOYABLES[d.type];
+      if (d.y + E.size[1] * 2 < me.y0 || d.y > me.y1) return;
+      if (obbOverlap(me, { x: d.x, z: d.z, hx: E.size[0], hz: E.size[2], yaw: d.yaw })) { bad = 'Too close to another item'; return true; }
+    });
+    if (bad) return bad;
+    this.game.physics.near(x, z, 3, c => {
+      if (!c.solid || c.tag === 'drop' || c.tag === 'bag' || c.tag === 'deploy') return;
+      if (c.type === 'cyl') { if (c.y1 < me.y0 || c.y0 > me.y1) return; if (dist(c.x, c.z, x, z) < c.r + Math.min(me.hx, me.hz)) { bad = 'Something is in the way'; return true; } return; }
+      if (c.y + c.hy <= me.y0 + 0.02 || c.y - c.hy >= me.y1) return;
+      if (obbOverlap(me, { x: c.x, z: c.z, hx: c.hx, hz: c.hz, yaw: c.yaw })) { bad = c.tag === 'piece' || c.tag === 'door' ? 'Blocked by a wall' : 'Something is in the way'; return true; }
+    });
+    if (bad) return bad;
+    // no standing items under a low ceiling
     return null;
   }
   _localIn(c, x, z) { const dx = x - c.x, dz = z - c.z; return { x: dx * c.c - dz * c.s, z: dx * c.s + dz * c.c }; }
@@ -189,6 +216,31 @@ export class Deployables {
     if (dropContents && d.cont && !d.cont.isEmpty()) this.game.loot.spawnBag(d.x, d.y + 0.3, d.z, d.cont.slots.filter(Boolean), d.def.name);
     if (d.type === 'claim_cabinet' && d.st) { const st = this.game.build.structures.get(d.st); if (st && st.tc === d.id) { st.tc = null; st.version++; } }
     this.game.events.emit('deployRemoved', { dep: d });
+  }
+  // Pick an item back up with the hammer. Contents move to the inventory; refuses if they don't fit.
+  canPickup(surv, d) {
+    if (d.type === 'recycler') return 'This can\'t be picked up';
+    const st = d.st ? this.game.build.structures.get(d.st) : null;
+    const tc = st && this.game.build.tcOf(st);
+    if (tc && !this.game.build.isAuthed(surv.team, st)) return 'You need building privilege';
+    if (!tc && d.team !== surv.team) return 'This isn\'t yours';
+    if (d.lock && !d.lock.auth.includes(surv.team)) return 'It\'s locked';
+    if (d.on) return 'Turn it off first';
+    return null;
+  }
+  pickup(surv, d) {
+    const err = this.canPickup(surv, d);
+    if (err) return { ok: false, err };
+    if (d.cont && !d.cont.isEmpty()) {
+      let room = 0; const need = d.cont.slots.filter(Boolean).length + 1;
+      room = surv.inv.main.emptyCount() + surv.inv.belt.emptyCount();
+      if (room < need) return { ok: false, err: 'Not enough room in your inventory for its contents' };
+      for (let i = 0; i < d.cont.size; i++) { const s = d.cont.slots[i]; if (s) { const left = surv.inv.giveStack(s); d.cont.slots[i] = left || null; } }
+    }
+    this.remove(d, true);
+    surv.inv.give(d.type, 1);
+    if (d.lock) surv.inv.give(d.lock.type === 'code' ? 'code_lock' : 'key_lock', 1);
+    return { ok: true };
   }
   damage(d, amount, type, attacker) {
     const m = (d.def.dmg && d.def.dmg[type]) ?? 1;

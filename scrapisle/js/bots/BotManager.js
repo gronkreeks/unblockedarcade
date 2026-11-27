@@ -2,7 +2,7 @@
 import { Survivor } from '../entities/Survivor.js';
 import { HumanoidAvatar } from '../entities/Avatars.js';
 import { makeStack } from '../data/items.js';
-import { SKILL, PERSONALITIES, rollTier, rollPersonality, botName } from './BotProfiles.js';
+import { SKILL, PERSONALITIES, rollTier, rollPersonality, botName, styleOf } from './BotProfiles.js';
 import { BotNav } from './BotNav.js';
 import { BotBuilder } from './BotBuilder.js';
 import { BotProgression } from './BotProgression.js';
@@ -26,7 +26,12 @@ export class BotManager {
     this.counts = { full: 0, mid: 0, far: 0 };
     game.events.on('death', e => this.onDeath(e));
     game.events.on('noise', e => this.onNoise(e));
-    game.events.on('hurt', e => { if (e.victim.ai && e.attacker && e.attacker.kind === 'survivor') { const t = this.game.teams.of(e.victim); if (t) this.game.teams.hostility(t, e.attacker.team, 3); } });
+    game.events.on('hurt', e => {
+      if (!e.victim.ai || !e.attacker) return;
+      if (e.attacker.kind === 'survivor') { const t = this.game.teams.of(e.victim); if (t) this.game.teams.hostility(t, e.attacker.team, 3); }
+      this.ai.onHurt(e.victim, e.attacker, false);
+    });
+    game.events.on('nearmiss', e => this.ai.onHurt(e.victim, e.attacker, true));
   }
   progressOf(team) { return this.prog.progressOf(team || { id: '_none', members: [] }); }
   powerOf(a) { return this.ai.powerOf(a); }
@@ -84,8 +89,16 @@ export class BotManager {
     this.starterKit(b);
     b.alive = true; b.hp = 60 + Math.random() * 20; b.bleed = 0; b.rads = 0; b.poison = 0; b.hot = 0;
     b.lastHitBy = null; b.ai.target = null; b.ai.task = null; b.ai.goal = 'task'; b.ai.path = null;
+    b.ai.keep = null; b.ai.shotAt = null; b.ai.lookUntil = 0;
     if (bags.length) { const d = pick(bags); d.lastUsed = G.now; this.placeAt(b, d.x + randRange(-0.3, 0.3), d.z + randRange(-0.3, 0.3)); b.y = d.y + 0.1; }
-    else { const p = pick(G.world.spawns.beaches); this.placeAt(b, p.x, p.z); }
+    else {
+      // no bag: wake up on a beach near home (or near a teammate) instead of across the island
+      const t = G.teams.of(b), mate = t && G.teams.alive(t).find(m => m !== b);
+      const home = t && t.base ? { x: t.base.x, z: t.base.z } : mate ? { x: mate.x, z: mate.z } : null;
+      const beaches = G.world.spawns.beaches;
+      const p = home ? beaches.slice().sort((a, c) => dist(a.x, a.z, home.x, home.z) - dist(c.x, c.z, home.x, home.z))[Math.floor(Math.random() * 3)] : pick(beaches);
+      this.placeAt(b, p.x, p.z);
+    }
     b.spawnedAt = G.now;
     if (b.avatar) b.avatar.revive();
   }
@@ -131,7 +144,7 @@ export class BotManager {
   }
   tickBot(b, dt, mode, think) {
     const G = this.game;
-    G.crafting.tick(b, dt);
+    G.crafting.tick(b, dt, styleOf(G.teams.of(b)).craft || 1);
     G.surv.tick(b, dt, mode !== 'far' && Math.hypot(b.vx, b.vz) > 4);
     if (!b.alive) return;
     if (mode === 'far') { b.swingT = Math.max(0, b.swingT - dt); b.fireT = 0; if (b.reloadT > 0) { b.reloadT = 0; G.combat.finishReload(b); } }

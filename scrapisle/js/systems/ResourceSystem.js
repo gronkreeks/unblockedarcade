@@ -88,6 +88,8 @@ export class ResourceSystem {
     if (n.type === 'tree' && n.tilt) q.premultiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(n.tilt[1], 0, -n.tilt[0])));
     m4.compose(new THREE.Vector3(n.x, n.y + sink, n.z), q, new THREE.Vector3(scl, scl, scl));
     for (const m of n.group.meshes) { m.setMatrixAt(n.inst, m4); m.instanceMatrix.needsUpdate = true; }
+    // the rock's collision shrinks with it, so what you see is what you hit and bump into
+    if (n.type === 'ore' && n.col) { n.col.r = 1.05 * Math.max(0.5, n.hp / n.hpMax); n.col.y1 = n.y + 1.1 * Math.max(0.55, n.hp / n.hpMax); }
   }
   _addCollider(n) {
     const P = this.game.physics;
@@ -209,7 +211,7 @@ export class ResourceSystem {
         const h = rayCyl(o.x, o.y, o.z, d.x, d.y, d.z, { x: n.x, z: n.z, r: 0.55 * n.s + 0.15, y0: n.y - 1, y1: n.y + 8 });
         t = h ? h.t : null;
       } else {
-        const r = n.type === 'ore' ? 1.15 * Math.max(0.6, n.hp / n.hpMax) : n.type === 'corpse' ? 0.9 : 0.55;
+        const r = n.type === 'ore' ? 1.15 * Math.max(0.55, n.hp / n.hpMax) : n.type === 'corpse' ? 0.9 : 0.55;
         const cy = n.y + (n.type === 'ore' ? 0.3 : n.type === 'corpse' ? 0.4 : 0.3);
         const tt = segSphere(o.x, o.y, o.z, o.x + d.x * maxT, o.y + d.y * maxT, o.z + d.z * maxT, n.x, cy, n.z, r);
         t = tt === null ? null : tt * maxT;

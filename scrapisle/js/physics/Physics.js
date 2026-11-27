@@ -4,6 +4,7 @@
 import { SpatialHash } from '../core/spatial.js';
 
 const STEP = 0.55;
+const MANTLE = 0.85;
 
 export class Physics {
   constructor(world) {
@@ -67,12 +68,14 @@ export class Physics {
         if (Math.abs(lx) > c.hx + r || Math.abs(lz) > c.hz + r) return;
         const top = c.y + c.hy, bot = c.y - c.hy;
         if (ny + h <= bot + 0.02 || ny >= top) {
-          // above the box: maybe stand on it
-          if (ny >= top - 0.001 && Math.abs(lx) <= c.hx + r * 0.6 && Math.abs(lz) <= c.hz + r * 0.6 && top > ground) ground = Math.max(ground, top);
+          // above the box: stand on it while any part of the body's footprint is over it
+          if (ny >= top - 0.001 && top > ground) ground = Math.max(ground, top);
           return;
         }
-        // overlapping vertically: step up if low enough
-        if (top - ny <= STEP && body.vy <= 0.5 && Math.abs(lx) <= c.hx + r * 0.6 && Math.abs(lz) <= c.hz + r * 0.6) { ground = Math.max(ground, top); return; }
+        // overlapping vertically: walk up low steps (foundation edges, stairs)
+        if (top - ny <= STEP && body.vy <= 0.5) { ground = Math.max(ground, top); return; }
+        // jump-up: while airborne, pull onto a ledge that is within reach of the hands
+        if (!body.onGround && opts.mantle !== false && top - ny <= MANTLE && body.vy > -7 && c.hy * 2 < 4) { ground = Math.max(ground, top); body.vy = Math.max(0, body.vy); return; }
         // closest point push-out
         const cx = Math.max(-c.hx, Math.min(c.hx, lx)), cz = Math.max(-c.hz, Math.min(c.hz, lz));
         let ox = lx - cx, oz = lz - cz;

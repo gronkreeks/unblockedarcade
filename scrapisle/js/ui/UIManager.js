@@ -3,7 +3,7 @@ import { ITEMS, WEAR_SLOTS } from '../data/items.js';
 import { RECIPES, RECIPE, CRAFT_CATS, researchCost } from '../data/recipes.js';
 import { PIECES, PIECE_ORDER, GRADES, pieceCost, DEPLOYABLES } from '../data/building.js';
 import { MONUMENT_TYPES, BIOME } from '../world/WorldGeneration.js';
-import { DISTRIBUTION } from '../bots/BotProfiles.js';
+import { DISTRIBUTION, STYLES } from '../bots/BotProfiles.js';
 import { moveSlot, splitSlot } from '../systems/InventorySystem.js';
 import { recycleYield } from '../systems/Deployables.js';
 import { iconURL } from './Icons.js';
@@ -48,7 +48,7 @@ export class UIManager {
     $('nwSeed').value = Math.floor(Math.random() * 1e6);
     $('nwStart').onclick = () => {
       const val = (id) => $(id).querySelector('.on').dataset.v;
-      this.game.startNew({ name: $('nwName').value.trim() || 'My island', seed: parseInt($('nwSeed').value, 10) || Math.floor(Math.random() * 1e6), difficulty: val('nwDiff'), mult: +val('nwMult'), bots: +val('nwBots'), size: +val('nwSize') });
+      this.game.startNew({ name: $('nwName').value.trim() || 'My island', seed: parseInt($('nwSeed').value, 10) || Math.floor(Math.random() * 1e6), difficulty: val('nwDiff'), mult: +val('nwMult'), bots: +val('nwBots'), size: +val('nwSize'), layout: 2 });
     };
     // settings
     $('stSens').oninput = e => { this.game.prefs.sens = +e.target.value; this.game.applyPrefs(); };
@@ -174,6 +174,7 @@ export class UIManager {
     const v = `${P.inv.version}|${lv}|${this.tab}|${this.craftCat}|${this.craftSel}|${this.craftN}|${P.craftQueue.length}|${this.sel ? this.sel.c + this.sel.i : ''}|${G.crafting.benchTier(P)}|${L && L.on}|${L && L.auth ? L.auth.size : ''}`;
     if (!force && v === this.renderV) {
       // live numbers without rebuilding the DOM (rebuilding would eat clicks)
+      const rp = $('recProg'); if (rp && L) rp.style.width = (L.on ? Math.round(L.procT / 5 * 100) : 0) + '%';
       const q = document.querySelector('#pRight .qrow .qt');
       if (q && P.craftQueue[0]) q.textContent = fmtTime(P.craftQueue[0].left);
       return;
@@ -194,6 +195,7 @@ export class UIManager {
     for (const t of ['craft', 'loot']) $('tab' + t[0].toUpperCase() + t.slice(1)).classList.toggle('on', this.tab === t);
     $('pRight').innerHTML = this.tab === 'loot' && this.loot ? this.lootHTML() : this.craftHTML();
     this.wirePanel();
+    this.wireSplit();
   }
   selHTML() {
     if (!this.sel) return '<p class="muted">Drag items to move them. Shift-click moves a stack across, right-click splits it, double-click uses or wears it, and dragging out of this window drops it.</p>';
@@ -211,14 +213,17 @@ export class UIManager {
     const canUse = d.type === 'food' || d.type === 'med';
     return `<h3>${esc(d.name)}${s.n > 1 ? ` x${s.n}` : ''}</h3>${lines.map(l => `<p class="muted">${esc(l)}</p>`).join('')}
       <div class="row">${canUse ? '<button class="btn small" data-act="use">Use</button>' : ''}${d.type === 'wear' ? '<button class="btn small" data-act="wear">Wear</button>' : ''}
-      ${s.n > 1 ? '<button class="btn small" data-act="split">Split</button>' : ''}<button class="btn small" data-act="drop">Drop</button></div>`;
+      <button class="btn small" data-act="drop">Drop all</button></div>
+      ${s.n > 1 ? `<div class="splitRow"><label>Amount <input type="range" id="splitAmt" min="1" max="${s.n - 1}" value="${Math.floor(s.n / 2)}"></label>
+        <input type="number" id="splitNum" min="1" max="${s.n - 1}" value="${Math.floor(s.n / 2)}">
+        <button class="btn small" data-act="splitn">Split off</button><button class="btn small" data-act="dropn">Drop</button></div>` : ''}`;
   }
   lootHTML() {
     const L = this.loot, G = this.game, d = L.ref;
     let extra = '';
     if (L.kind === 'dep') {
       if (d.type === 'furnace' || d.type === 'campfire') extra = `<p class="muted">${d.type === 'furnace' ? 'Put wood in as fuel and ore to smelt. Burning wood makes charcoal. Raw meat cooks here too.' : 'Burns wood and cooks raw meat.'}</p><button class="btn ${d.on ? 'danger' : 'go'}" data-act="toggle">${d.on ? 'Turn off' : 'Turn on'}</button>`;
-      if (d.type === 'recycler') extra = `<p class="muted">Top row is input, the rest is output. One item every 5 seconds.</p><button class="btn ${d.on ? 'danger' : 'go'}" data-act="toggle">${d.on ? 'Stop' : 'Start'}</button>`;
+      if (d.type === 'recycler') return this.recyclerHTML(d);
       if (d.type === 'claim_cabinet') {
         const st = G.build.structures.get(d.st);
         const hrs = st ? G.build.upkeepHours(st) : 0;
@@ -237,6 +242,26 @@ export class UIManager {
     const slots = L.cont.slots.map((s, i) => this.slotHTML('loot', i, s)).join('');
     const cls = d && d.type === 'recycler' ? 'grid6 rec' : 'grid6';
     return `<h3>${esc(L.title.replace(/^\w/, c => c.toUpperCase()))}</h3><div class="${cls}">${slots}</div>${extra}<div class="row"><button class="btn small" data-act="takeall">Take all</button></div>`;
+  }
+  recyclerHTML(d) {
+    const cont = d.cont, P = this.P;
+    const inp = cont.slots.slice(0, 6).map((s, i) => this.slotHTML('loot', i, s)).join('');
+    const out = cont.slots.slice(6, 12).map((s, i) => this.slotHTML('loot', i + 6, s)).join('');
+    const next = cont.slots.slice(0, 6).find(Boolean);
+    const yields = next ? recycleYield(next.id) : null;
+    const comps = [...P.inv.main.slots, ...P.inv.belt.slots].filter(s => s && ITEMS[s.id].type === 'component').length;
+    let status;
+    if (!next) status = 'Put components or items you no longer need in the input slots.';
+    else if (!yields) status = `${ITEMS[next.id].name} can't be recycled.`;
+    else status = `Next: ${ITEMS[next.id].name} becomes ${Object.entries(yields).map(([k, v]) => `${v} ${ITEMS[k].name}`).join(', ')}.`;
+    return `<h3>Recycler</h3>
+      <h4>Input</h4><div class="grid6 recIn">${inp}</div>
+      <div class="recBar"><i id="recProg" style="width:${d.on ? Math.round(d.procT / 5 * 100) : 0}%"></i></div>
+      <p class="muted">${esc(status)}</p>
+      <div class="row"><button class="btn ${d.on ? 'danger' : 'go'}" data-act="toggle">${d.on ? 'Stop' : 'Start'}</button>
+        <button class="btn small" data-act="recall" ${comps ? '' : 'disabled'}>Add all my components (${comps})</button></div>
+      <h4>Output</h4><div class="grid6">${out}</div>
+      <div class="row"><button class="btn small" data-act="takeout">Take all output</button></div>`;
   }
   craftHTML() {
     const P = this.P, G = this.game;
@@ -281,16 +306,46 @@ export class UIManager {
       if (a === 'auth' && L) { if (G.deploy.authorize(P.team, L.ref)) this.toast('Authorised'); else this.toast('The cabinet is locked'); }
       if (a === 'clearauth' && L) { if (G.deploy.clearAuth(P.team, L.ref)) this.toast('Authorisation list cleared'); }
       if (a === 'research' && L) { const id = L.cont.slots[0] && L.cont.slots[0].id; if (G.crafting.research(P, L.cont, 0)) this.toast(`Learned ${ITEMS[id].name}`); }
+      if (a === 'recall' && L) {
+        for (const src of [P.inv.main, P.inv.belt]) for (let i = 0; i < src.size; i++) {
+          const st = src.slots[i]; if (!st || ITEMS[st.id].type !== 'component') continue;
+          const k = L.cont.slots.slice(0, 6).findIndex(x => !x || (x.id === st.id && x.n < ITEMS[x.id].stack));
+          if (k < 0) break;
+          if (!L.cont.slots[k]) { L.cont.slots[k] = st; src.slots[i] = null; }
+          else { const room = ITEMS[st.id].stack - L.cont.slots[k].n, mv = Math.min(room, st.n); L.cont.slots[k].n += mv; st.n -= mv; if (st.n <= 0) src.slots[i] = null; }
+          src.touch(); L.cont.touch();
+        }
+        if (!L.ref.on && L.cont.slots.slice(0, 6).some(Boolean)) G.deploy.toggle(L.ref);
+      }
+      if (a === 'takeout' && L) { for (let i = 6; i < 12; i++) { const st = L.cont.slots[i]; if (st) L.cont.slots[i] = P.inv.giveStack(st); } L.cont.touch(); }
       if (a === 'takeall' && L) { for (let i = 0; i < L.cont.size; i++) { const s = L.cont.slots[i]; if (s) L.cont.slots[i] = P.inv.giveStack(s); } L.cont.touch(); }
       if (this.sel) {
         const c = this.cmap()[this.sel.c], s = c && c.slots[this.sel.i];
         if (a === 'use') this.useSlot(this.sel.c, this.sel.i);
         if (a === 'wear' && s) { const left = P.inv.equip(s); if (!left) { c.slots[this.sel.i] = null; c.touch(); this.sel = null; } else this.toast('That slot is taken'); }
         if (a === 'split') splitSlot(c, this.sel.i);
+        if ((a === 'splitn' || a === 'dropn') && s && s.n > 1) {
+          const n = Math.max(1, Math.min(s.n - 1, Math.round(+$('splitNum').value || 1)));
+          if (a === 'dropn') { s.n -= n; c.touch(); const d = P.dir(); G.loot.dropItem(s.id, n, P.x + d.x, P.y + 1.2, P.z + d.z, { ...s, n }); }
+          else {
+            // put the split stack in an empty slot of the same container, or anywhere in the inventory
+            const targets = [c, P.inv.main, P.inv.belt, this.loot && this.loot.cont].filter(Boolean);
+            const dest = targets.find(x => x.firstEmpty() >= 0 && x.canAccept(s.id, x.firstEmpty()));
+            if (!dest) this.toast('No empty slot to split into');
+            else { const k = dest.firstEmpty(); dest.slots[k] = { ...s, n }; s.n -= n; c.touch(); dest.touch(); this.sel = { c: Object.entries(this.cmap()).find(([, v]) => v === dest)[0], i: k }; }
+          }
+        }
         if (a === 'drop' && s) { c.take(this.sel.i); const d = P.dir(); G.loot.dropItem(s.id, s.n, P.x + d.x, P.y + 1.2, P.z + d.z, s); this.sel = null; }
       }
       this.render(true);
     };
+  }
+  wireSplit() {
+    const r = $('splitAmt'), n = $('splitNum');
+    if (!r || !n) return;
+    r.oninput = () => { n.value = r.value; };
+    n.oninput = () => { r.value = n.value; };
+    n.onkeydown = e => e.stopPropagation();
   }
   useSlot(cn, i) {
     const P = this.P, G = this.game, c = this.cmap()[cn], s = c && c.slots[i];
@@ -385,14 +440,23 @@ export class UIManager {
     if (p.door !== undefined && p.type) {
       const opts = GRADES.map((g, i) => i > p.grade ? `<button class="piece" data-grade="${i}"><b>Upgrade to ${g.name}</b><span class="muted">${costText(pieceCost(p.type, i), P.inv)}</span></button>` : '').join('');
       const extra = (G.build.canDemolish(P, p) ? `<button class="piece" data-act2="demolish"><b>Demolish</b><span class="muted">Only in the first 10 minutes</span></button>` : '') + (p.type === 'stairs' && G.build.canDemolish(P, p) ? `<button class="piece" data-act2="rotate"><b>Rotate</b></button>` : '');
+      const doorPick = p.door ? `<button class="piece" data-act2="pickdoor"><b>Pick up door</b><span class="muted">Returns the door${p.door.lock ? ' and its lock' : ''}</span></button>` : '';
       const doorInfo = p.door ? `<p>${esc(p.door.type.replace('_', ' '))}: ${Math.round(p.door.hp)}/${p.door.maxHp} health${p.door.lock ? `, ${p.door.lock.type} lock` : ''}</p>` : '';
-      this.modal(`<h2>${PIECES[p.type].name} (${GRADES[p.grade].name})</h2><p>Health ${Math.round(p.hp)}/${p.maxHp}, stability ${Math.round(p.stab * 100)}%</p>${doorInfo}<div class="pieces">${opts}${extra}</div>`, e => {
+      this.modal(`<h2>${PIECES[p.type].name} (${GRADES[p.grade].name})</h2><p>Health ${Math.round(p.hp)}/${p.maxHp}, stability ${Math.round(p.stab * 100)}%</p>${doorInfo}<div class="pieces">${opts}${extra}${doorPick}</div>`, e => {
         const g = e.target.closest('[data-grade]'), a = e.target.closest('[data-act2]');
         if (g) { const r = G.build.upgrade(P, p, +g.dataset.grade); this.toast(r.ok ? 'Upgraded' : r.err); if (r.ok) { G.audio.build(); this.close(true); } }
         if (a && a.dataset.act2 === 'demolish') { if (G.build.demolish(P, p)) this.toast('Demolished'); this.close(true); }
         if (a && a.dataset.act2 === 'rotate') { G.build.rotate(P, p); this.close(true); }
+        if (a && a.dataset.act2 === 'pickdoor') { const r = G.build.pickupDoor(P, p); this.toast(r.ok ? 'Door picked up' : r.err); this.close(true); }
       });
     }
+  }
+  openDeployMenu(d) {
+    const G = this.game, P = this.P;
+    const err = G.deploy.canPickup(P, d);
+    const html = `<h2>${esc(d.def.name)}</h2><p>Health ${Math.round(d.hp)}/${d.maxHp}</p>${d.cont && !d.cont.isEmpty() ? '<p class="muted">Its contents will go into your inventory.</p>' : ''}
+      <div class="pieces"><button class="piece" data-act2="pickup" ${err ? 'disabled' : ''}><b>Pick up</b><span class="muted">${esc(err || 'Returns the item to your inventory')}</span></button></div>`;
+    this.modal(html, e => { const b = e.target.closest('[data-act2="pickup"]'); if (b && !b.disabled) { const r = G.deploy.pickup(P, d); this.toast(r.ok ? `${d.def.name} picked up` : r.err); if (r.ok) G.audio.pickup(); this.close(true); } });
   }
   openCodeEntry(cb, title = 'Enter the code') {
     let code = '';
@@ -451,13 +515,44 @@ export class UIManager {
     this.open = 'map';
     this.unlockForUI();
     $('mapScreen').hidden = false;
+    this.mapSide();
     this.drawMap();
-    const G = this.game;
-    const log = G.log.slice(-14).reverse().map(l => `<p><span class="muted">Day ${l.day} ${l.clock}</span> ${esc(l.text)}</p>`).join('') || '<p class="muted">Nothing has happened yet.</p>';
-    const raids = G.raidHistory.slice(-8).reverse().map(r => `<p>Day ${r.day}: ${esc(r.team)} vs ${esc(r.target)}, ${esc(r.result)}${r.value ? ` (${r.value} scrap worth)` : ''}</p>`).join('') || '<p class="muted">No raids yet.</p>';
+  }
+  get mapOpts() { const G = this.game; return (G.prefs.map = Object.assign({ bases: false, raids: true, clans: true }, G.prefs.map || {})); }
+  // Clans ranked by size and strength from what they really own.
+  clanTable() {
+    const G = this.game, out = [];
+    for (const t of G.teams.teams.values()) {
+      const st = t.base && t.base.st ? G.build.structures.get(t.base.st) : null;
+      const prog = G.bots.progressOf(t);
+      const alive = G.teams.alive(t).length;
+      let grade = 0; if (st) { let g = 0, n = 0; for (const p of st.pieces.values()) { g += p.grade; n++; } grade = n ? g / n : 0; }
+      const pieces = st ? st.pieces.size : 0;
+      const score = t.size * 30 + pieces * 2 + prog.bench * 60 + grade * 30 + t.stats.raidsWon * 30 + t.stats.kills * 0.5;
+      out.push({ t, st, alive, pieces, bench: prog.bench, grade, score });
+    }
+    return out.sort((a, b) => b.score - a.score);
+  }
+  mapSide() {
+    const G = this.game, O = this.mapOpts;
+    const GR = ['twig', 'wood', 'stone', 'metal', 'armoured'];
+    const check = (k, label) => `<label class="mapOpt"><input type="checkbox" data-mopt="${k}" ${O[k] ? 'checked' : ''}> ${label}</label>`;
+    const clans = this.clanTable();
+    const top = clans[0];
+    const biggest = top ? `<p><b style="color:${top.t.color}">${esc(top.t.name)}</b> run the island: ${top.t.size} members, ${top.pieces ? `a ${GR[Math.round(top.grade)]} base of ${top.pieces} pieces` : 'no base yet'}, ${top.t.stats.raidsWon} ${top.t.stats.raidsWon === 1 ? 'raid' : 'raids'} won and ${top.t.stats.kills} ${top.t.stats.kills === 1 ? 'kill' : 'kills'}.</p>` : '';
+    const clanRows = clans.slice(0, 10).map((c, i) => `<tr><td>${i + 1}</td><td><span class="swatch" style="background:${c.t.color}"></span>${esc(c.t.name)}<div class="muted">${(STYLES[c.t.style] || STYLES.balanced).name}, ${c.t.tier}</div></td><td>${c.alive}/${c.t.size}</td><td>${c.pieces ? `${c.pieces} ${GR[Math.round(c.grade)]}` : 'none'}</td><td>${c.bench ? 'T' + c.bench : '-'}</td><td>${c.t.stats.raidsWon}/${c.t.stats.raids}</td><td>${c.t.stats.kills}</td></tr>`).join('');
+    const clanHTML = O.clans ? `<h3>Clans</h3><table class="clanTable"><tr><th></th><th>Clan</th><th>Alive</th><th>Base</th><th>Bench</th><th>Raids won</th><th>Kills</th></tr>${clanRows}</table>` : '';
+    const log = G.log.slice(-12).reverse().map(l => `<p><span class="muted">Day ${l.day} ${l.clock}</span> ${esc(l.text)}</p>`).join('') || '<p class="muted">Nothing has happened yet.</p>';
+    const won = G.raidHistory.filter(r => r.result === 'success').length;
+    const raids = G.raidHistory.slice(-10).reverse().map(r => `<p><span class="swatch" style="background:${r.color || '#888'}"></span>Day ${r.day}: ${esc(r.team)} vs ${esc(r.target)}, ${esc(r.result === 'success' ? 'raided' : r.result)}${r.value ? ` (${r.value} scrap worth)` : ''}</p>`).join('') || '<p class="muted">No raids yet.</p>';
     const teams = [...G.teams.teams.values()];
     const bases = teams.filter(t => t.base && t.base.st).length;
-    $('mapSide').innerHTML = `<h3>Island news</h3>${log}<h3>Raid history</h3>${raids}<h3>World</h3><p>${G.bots.list.filter(b => b.alive).length} of ${G.bots.list.length} survivors alive in ${teams.length} groups, ${bases} of them with a base. Bots near you: ${G.bots.counts.full}, mid range ${G.bots.counts.mid}, far ${G.bots.counts.far}.</p>`;
+    $('mapSide').innerHTML = `<div class="mapOpts">${check('bases', 'Show every clan base')}${check('raids', 'Show raid spots')}${check('clans', 'Show clan list')}</div>
+      <h3>Biggest clan</h3>${biggest || '<p class="muted">No clans yet.</p>'}${clanHTML}
+      <h3>Raids</h3><p class="muted">${G.raidHistory.length} raids so far, ${won} of them successful.</p>${raids}
+      <h3>Island news</h3>${log}
+      <h3>World</h3><p>${G.bots.list.filter(b => b.alive).length} of ${G.bots.list.length} survivors alive in ${teams.length} groups, ${bases} of them with a base.</p>`;
+    $('mapSide').onchange = e => { const k = e.target.dataset.mopt; if (!k) return; this.mapOpts[k] = e.target.checked; G.applyPrefs(); this.mapSide(); this.drawMap(); };
   }
   drawMap() {
     if (this.open !== 'map') return;
@@ -471,9 +566,29 @@ export class UIManager {
       x.fillStyle = m.rad ? '#e0c040' : '#f0ece4'; x.beginPath(); x.arc(a, b, 4, 0, 7); x.fill();
       x.fillStyle = '#111'; x.fillText(m.name, a + 1, b - 7); x.fillStyle = '#f4f1ea'; x.fillText(m.name, a, b - 8);
     }
-    // structures the player has seen
-    x.fillStyle = '#d0583a';
-    for (const s of G.seen.values()) { const [a, b] = toM(s.x, s.z); x.fillRect(a - 3, b - 3, 6, 6); }
+    const O = this.mapOpts;
+    // every clan's base, in the clan's colour (optional)
+    if (O.bases) {
+      x.font = '700 11px Nunito, sans-serif';
+      for (const t of G.teams.teams.values()) {
+        const st = t.base && t.base.st ? G.build.structures.get(t.base.st) : null; if (!st) continue;
+        const z = G.build.zoneOf(st); const [a, b] = toM(z.x, z.z);
+        x.fillStyle = t.color; x.strokeStyle = '#111'; x.lineWidth = 1.5; x.beginPath(); x.rect(a - 4, b - 4, 8, 8); x.fill(); x.stroke();
+        x.fillStyle = '#111'; x.fillText(t.name, a + 1, b + 15); x.fillStyle = '#f4f1ea'; x.fillText(t.name, a, b + 14);
+      }
+      x.font = '600 13px Nunito, sans-serif';
+    } else {
+      // structures the player has seen
+      x.fillStyle = '#d0583a';
+      for (const s of G.seen.values()) { const [a, b] = toM(s.x, s.z); x.fillRect(a - 3, b - 3, 6, 6); }
+    }
+    // where raids happened: a ring in the raiders' colour, filled when the raid succeeded
+    if (O.raids) for (const r of G.raidHistory.slice(-30)) {
+      if (r.x === undefined) continue;
+      const [a, b] = toM(r.x, r.z);
+      x.strokeStyle = r.color || '#e05a4a'; x.lineWidth = 2.5; x.beginPath(); x.arc(a, b, 9, 0, 7); x.stroke();
+      if (r.result === 'success') { x.fillStyle = r.color || '#e05a4a'; x.globalAlpha = 0.35; x.fill(); x.globalAlpha = 1; }
+    }
     // own buildings + bags
     x.fillStyle = '#6ea3e0';
     for (const st of G.build.structures.values()) if (st.team === this.P.team) { const z = G.build.zoneOf(st); const [a, b] = toM(z.x, z.z); x.fillRect(a - 4, b - 4, 8, 8); }

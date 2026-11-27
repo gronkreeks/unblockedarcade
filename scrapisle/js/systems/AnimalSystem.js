@@ -5,11 +5,11 @@ import { BIOME } from '../world/WorldGeneration.js';
 import { uid, randRange, dist, angleWrap, pick } from '../core/util.js';
 
 export const SPECIES = {
-  chicken: { hp: 25, walk: 1.2, run: 4.5, size: 0.3, temper: 'shy', sense: 12 },
-  deer: { hp: 100, walk: 1.6, run: 8, size: 0.7, temper: 'shy', sense: 30 },
-  boar: { hp: 150, walk: 1.3, run: 6.5, size: 0.6, temper: 'defensive', dmg: 7, sense: 14 },
-  wolf: { hp: 120, walk: 1.6, run: 8.5, size: 0.6, temper: 'hunter', dmg: 9, sense: 24 },
-  bear: { hp: 400, walk: 1.4, run: 7.5, size: 1.0, temper: 'defensive', dmg: 20, sense: 16 },
+  chicken: { hp: 25, walk: 1.2, run: 3.8, size: 0.3, temper: 'shy', sense: 12 },
+  deer: { hp: 100, walk: 1.6, run: 5.2, size: 0.7, temper: 'shy', sense: 30 },
+  boar: { hp: 150, walk: 1.3, run: 4.6, size: 0.6, temper: 'defensive', dmg: 7, sense: 14 },
+  wolf: { hp: 120, walk: 1.6, run: 5.0, size: 0.6, temper: 'hunter', dmg: 9, sense: 24 },
+  bear: { hp: 400, walk: 1.4, run: 4.8, size: 1.0, temper: 'defensive', dmg: 20, sense: 16 },
 };
 const BIOME_SPECIES = {
   [BIOME.FOREST]: [['deer', 3], ['boar', 3], ['wolf', 1], ['bear', 0.6], ['chicken', 1]],
@@ -126,7 +126,8 @@ export class AnimalSystem {
     }
     if (a.state === 'chase' && a.target) {
       const d = dist(a.x, a.z, a.target.x, a.target.z);
-      if (d < 1.6 + a.size && a.atkT <= 0) {
+      // must actually reach the target: no biting from above or below
+      if (d < 1.6 + a.size && Math.abs(a.target.y - a.y) < 1.2 && a.atkT <= 0) {
         a.atkT = 1.2;
         this.game.combat.damageActor(a.target, S.dmg || 5, { type: 'melee', area: Math.random() < 0.5 ? 'legs' : 'chest', attacker: a, bleed: 0.3 });
       }
@@ -138,7 +139,13 @@ export class AnimalSystem {
     if (a.state === 'wander' && a.goal) { tx = a.goal.x; tz = a.goal.z; sp = S.walk; if (dist(a.x, a.z, tx, tz) < 1.5) a.state = 'idle'; }
     else if (a.state === 'flee' && a.target) { tx = a.x + (a.x - a.target.x); tz = a.z + (a.z - a.target.z); sp = S.run; }
     else if (a.state === 'chase' && a.target) { tx = a.target.x; tz = a.target.z; sp = dist(a.x, a.z, tx, tz) < 1.5 + a.size ? 0 : S.run; }
-    if (tx === null || sp === 0) { a.speed = 0; a.avatar.animate(dt, 0); return; }
+    if (tx === null || sp === 0) {
+      a.speed = 0;
+      // standing still still falls to the ground
+      if (near) { a.vx = a.vz = 0; a.vy = (a.vy || 0) - 9.8 * dt; this.game.physics.move(a, dt); } else a.y = this.game.world.heightAt(a.x, a.z);
+      a.avatar.root.position.set(a.x, a.y, a.z);
+      a.avatar.animate(dt, 0); return;
+    }
     const want = Math.atan2(tx - a.x, tz - a.z);
     a.yaw += angleWrap(want - a.yaw) * Math.min(1, dt * 5);
     const nx = a.x + Math.sin(a.yaw) * sp * dt, nz = a.z + Math.cos(a.yaw) * sp * dt;
@@ -146,7 +153,7 @@ export class AnimalSystem {
     const ws = W.waterSurface(nx, nz);
     if ((ws && ws.y - W.heightAt(nx, nz) > 0.8) || !W.inBounds(nx, nz, 40)) { a.yaw += Math.PI * 0.6; a.state = 'idle'; a.timer = 1; return; }
     if (near) {
-      a.vx = Math.sin(a.yaw) * sp; a.vz = Math.cos(a.yaw) * sp; a.vy = 0;
+      a.vx = Math.sin(a.yaw) * sp; a.vz = Math.cos(a.yaw) * sp; a.vy = (a.vy || 0) - 9.8 * dt;
       this.game.physics.move(a, dt);
     } else { a.x = nx; a.z = nz; a.y = W.heightAt(nx, nz); }
     a.speed = sp;

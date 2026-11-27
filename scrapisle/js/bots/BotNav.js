@@ -6,6 +6,14 @@ export class BotNav {
   constructor(game) { this.game = game; }
 
   // Move a bot toward (tx,tz). mode: 'full' | 'mid' | 'far'. Returns true when within arrive radius.
+  // Blocked by a ledge (a foundation edge, a half wall, a rock): jump up it like a player would.
+  _hop(b, px, pz, speed, dt) {
+    const ai = b.ai;
+    if (!b.onGround || Math.hypot(b.x - px, b.z - pz) >= speed * dt * 0.35) return;
+    if (this.game.now < (ai.hopT || 0)) return;
+    ai.hopT = this.game.now + 0.6 + Math.random() * 0.5;
+    b.vy = 5.4; b.onGround = false;
+  }
   moveTo(b, tx, tz, dt, mode, opts = {}) {
     const ai = b.ai, W = this.game.world;
     const arrive = opts.arrive ?? 1.2;
@@ -51,12 +59,11 @@ export class BotNav {
       b.landSpeed = 0;
       this.game.physics.move(b, dt);
       if (b.landSpeed > 10) this.game.surv.fallDamage(b, b.landSpeed);
-      // jump small obstacles
-      if (b.onGround && Math.hypot(b.x - px, b.z - pz) < speed * dt * 0.2 && Math.random() < 0.08) b.vy = 5;
+      this._hop(b, px, pz, speed, dt);
     } else {
       // mid detail: collide with structures only near bases, otherwise terrain-follow
       const nearBase = this.game.build.structureNear(b.x, b.z, 12);
-      if (nearBase) this.game.physics.move(b, dt);
+      if (nearBase) { this.game.physics.move(b, dt); this._hop(b, px, pz, speed, dt); }
       else { b.x += b.vx * dt; b.z += b.vz * dt; b.y = Math.max(W.heightAt(b.x, b.z), swim ? water.y - 1.3 : -99); b.vy = 0; }
     }
     // progress tracking

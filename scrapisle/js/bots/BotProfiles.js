@@ -40,6 +40,22 @@ export function rollTier(difficulty, r = Math.random) {
 }
 export function rollPersonality(tier, r = Math.random) { return weightedPick(PERS_WEIGHTS[tier], r); }
 
+// Team playstyles. rush: races up the tech tree with loot runs and a small base.
+// turtle: slow and steady, gathers, stocks boxes, upgrades walls early, rarely raids.
+export const STYLES = {
+  rush: { name: 'Rushers', craft: 1.8, avoid: 0.35, gather: 1.5, loot: 1.8, build: 0.8, upgrade: -1, bench: 0.55, idle: 0.2, raid: 1.35, stage: 1, boxes: 2, upkeepH: 0.6, research: 1.4 },
+  balanced: { name: 'Balanced', craft: 1.15, avoid: 1, gather: 1.1, loot: 1, build: 1, upgrade: 0, bench: 1, idle: 0.8, raid: 1, stage: 3, boxes: 3, upkeepH: 1, research: 1 },
+  turtle: { name: 'Turtles', craft: 1, avoid: 0.7, gather: 1.15, loot: 0.5, build: 1.55, upgrade: 1, bench: 1.6, idle: 0.6, raid: 0.35, stage: 3, boxes: 5, upkeepH: 1.8, research: 0.7 },
+};
+const STYLE_WEIGHTS = {
+  easy: [['turtle', 4], ['balanced', 4.5], ['rush', 1.5]],
+  normal: [['turtle', 3], ['balanced', 4.5], ['rush', 2.5]],
+  hard: [['turtle', 2.5], ['balanced', 3.5], ['rush', 4]],
+  expert: [['turtle', 2], ['balanced', 3], ['rush', 5]],
+};
+export function rollStyle(tier, r = Math.random) { return weightedPick(STYLE_WEIGHTS[tier] || STYLE_WEIGHTS.normal, r); }
+export const styleOf = (team) => STYLES[(team && team.style) || 'balanced'] || STYLES.balanced;
+
 const A = ['Ash', 'Brick', 'Cinder', 'Dusty', 'Echo', 'Flint', 'Gravel', 'Hollow', 'Iron', 'Jinx', 'Kettle', 'Lumen', 'Moss', 'Nettle', 'Onyx', 'Pike', 'Quill', 'Rust', 'Sable', 'Thorn', 'Umber', 'Vex', 'Wick', 'Yarrow', 'Zinc', 'Birch', 'Coal', 'Drift', 'Ember', 'Fern', 'Grim', 'Hawk', 'Ivy', 'Jade', 'Knox', 'Lark', 'Mako', 'Nova', 'Oak', 'Pebble', 'Raven', 'Slate', 'Tusk', 'Volt', 'Wren'];
 const B = ['', '', '', 'y', 'er', 'ie', '_x', '99', '01', 'Fox', 'Wolf', 'Bear', 'Jaw', 'Eye', 'Hand', 'Kid', 'Boss', 'Byte', 'Tail', 'Run'];
 const used = new Set();

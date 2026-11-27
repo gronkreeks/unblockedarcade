@@ -10,16 +10,19 @@ const ease = t => t < 0 ? 0 : t > 1 ? 1 : t * t * (3 - 2 * t);
 const seg = (p, a, b) => ease((p - a) / (b - a));          // 0..1 over [a,b]
 const bump = (p, a, b) => Math.sin(Math.PI * Math.min(1, Math.max(0, (p - a) / (b - a))));
 
-function handMesh(mats, skin, sleeve) {
+// A hand (palm, fingers, thumb, cuff). The forearm is a separate mesh that always runs from the wrist
+// to a fixed elbow anchor below the screen edge, so swings move the hand and tool, never the whole arm.
+function handMesh(skin, sleeve) {
   const g = new THREE.Group();
   const palm = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.03, 0.09), skin); g.add(palm);
   for (let i = 0; i < 4; i++) { const f = new THREE.Mesh(new THREE.CapsuleGeometry(0.009, 0.045, 3, 6), skin); f.rotation.x = Math.PI / 2 + 0.6; f.position.set(-0.026 + i * 0.017, -0.012, -0.06); g.add(f); }
   const th = new THREE.Mesh(new THREE.CapsuleGeometry(0.01, 0.035, 3, 6), skin); th.rotation.set(Math.PI / 2, 0, 0.9); th.position.set(-0.04, 0.0, -0.02); g.add(th);
-  const fore = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.03, 0.34, 10), sleeve); fore.rotation.x = Math.PI / 2; fore.position.set(0, 0, 0.21); g.add(fore);
-  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.03, 10), sleeve); cuff.rotation.x = Math.PI / 2; cuff.position.set(0, 0, 0.05); g.add(cuff);
+  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.037, 0.037, 0.035, 10), sleeve); cuff.rotation.x = Math.PI / 2; cuff.position.set(0, 0, 0.055); g.add(cuff);
+  g.userData.wrist = new THREE.Vector3(0, 0, 0.06);
   g.traverse(o => { if (o.isMesh) o.renderOrder = 10; });
   return g;
 }
+const ARM_GEO = (() => { const g = new THREE.CylinderGeometry(0.046, 0.033, 1, 10); g.translate(0, 0.5, 0); return g; })();
 
 export class ViewModel {
   constructor(camera, mats) {
@@ -28,8 +31,12 @@ export class ViewModel {
     this.pivot = new THREE.Group(); this.root.add(this.pivot);
     this.skin = mats.get('skin', { color: 0xb88462 });
     this.sleeveMat = mats.get('cloth', { color: 0x9a9080 });
-    this.rHand = handMesh(mats, this.skin, this.sleeveMat); this.pivot.add(this.rHand);
-    this.lHand = handMesh(mats, this.skin, this.sleeveMat); this.root.add(this.lHand);
+    this.rHand = handMesh(this.skin, this.sleeveMat); this.pivot.add(this.rHand);
+    this.lHand = handMesh(this.skin, this.sleeveMat); this.root.add(this.lHand);
+    this.rArm = new THREE.Mesh(ARM_GEO, this.sleeveMat); this.lArm = new THREE.Mesh(ARM_GEO, this.sleeveMat);
+    this.rArm.renderOrder = this.lArm.renderOrder = 10; this.root.add(this.rArm); this.root.add(this.lArm);
+    // elbows sit just off the bottom corners of the screen
+    this.rElbow = V(0.34, -0.5, -0.05); this.lElbow = V(-0.34, -0.5, -0.05);
     this.holder = new THREE.Group(); this.pivot.add(this.holder);
     // muzzle flash: star sprite planes + light
     const fm = new THREE.MeshBasicMaterial({ color: 0xffd38a, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
@@ -43,7 +50,19 @@ export class ViewModel {
     this.equipT = 0; this.swing = 0; this.flashT = 0; this.bobT = 0; this.inertia = V(0, 0, 0); this.aimT = 0; this.sprintT = 0; this.cycle = 0; this.cycleDur = 0; this.reloadDur = 1; this.swingDir = 1;
     this.root.traverse(o => { o.renderOrder = 10; });
   }
-  setSleeve(color) { this.sleeveMat = this.mats.get('cloth', { color }); for (const h of [this.rHand, this.lHand]) h.children.slice(-2).forEach(m => { m.material = this.sleeveMat; }); }
+  setSleeve(color) { this.sleeveMat = this.mats.get('cloth', { color }); for (const h of [this.rHand, this.lHand]) h.children[h.children.length - 1].material = this.sleeveMat; this.rArm.material = this.lArm.material = this.sleeveMat; }
+  // Stretch a forearm from a hand's wrist to its elbow anchor (root space).
+  placeArm(arm, hand, elbow) {
+    if (!hand.visible) { arm.visible = false; return; }
+    arm.visible = true;
+    hand.updateWorldMatrix(true, false);
+    const w = hand.userData.wrist.clone().applyMatrix4(hand.matrixWorld);
+    this.root.worldToLocal(w);
+    const dir = elbow.clone().sub(w), len = dir.length();
+    arm.position.copy(w);
+    arm.quaternion.setFromUnitVectors(V(0, 1, 0), dir.normalize());
+    arm.scale.set(1, len, 1);
+  }
   setItem(id) {
     if (id === this.id) return;
     this.id = id;
@@ -63,12 +82,12 @@ export class ViewModel {
     if (d.icon === 'spear') this.kind = 'spear';
     // hand-held tools stand upright in the fist; guns, spears and bows point forward
     this.holder.rotation.set(0, 0, 0);
-    if (this.kind === 'melee') this.holder.rotation.set(1.2, 0.1, 0.2);
+    if (this.kind === 'melee') this.holder.rotation.set(1.25, 0.15, 0.1);
     // rest positions of animated parts
     this.rest = {};
     for (const [k, o] of Object.entries(this.info.parts)) this.rest[k] = { p: o.position.clone(), r: o.rotation.clone() };
   }
-  doSwing() { this.swing = 1; this.swingDir = -this.swingDir; }
+  doSwing() { this.swing = 1; }
   doShot(def) {
     this.flashT = def && def.type === 'bow' ? 0 : 0.045;
     if (this.flash) { this.flash.rotation.z = Math.random() * Math.PI; const s = 0.8 + Math.random() * 0.5; this.flash.scale.set(s, s, s); }
@@ -124,18 +143,25 @@ export class ViewModel {
       rz += 0.12; pos.x -= 0.02 * dr;
     }
     if (def && def.id === 'crossbow' && parts.arrow) parts.arrow.visible = (o.stack && o.stack.ammo > 0) || false;
-    // melee swing arcs
+    // melee: Rust-style wind-up then a down-and-across strike; the arm stays anchored below the screen
     if (this.kind === 'melee' || this.kind === 'item' || this.kind === 'spear') {
-      const s = this.swing;
-      if (this.kind === 'spear') { pos.z -= Math.sin(s * Math.PI) * 0.35; rx += Math.sin(s * Math.PI) * 0.1; }
-      else { const a = Math.sin(s * Math.PI); rx += -a * 1.3 + (1 - s) * 0; ry += a * 0.5 * this.swingDir; rz += a * 0.4 * this.swingDir; pos.y += a * 0.06; pos.z -= a * 0.1; }
-      if (this.kind === 'melee') { rx += -0.35; pos.y += 0.02; }
+      const t = this.swing > 0 ? 1 - this.swing : 1;
+      const wind = seg(t, 0, 0.18) * (1 - seg(t, 0.18, 0.32));
+      const strike = seg(t, 0.18, 0.42) * (1 - seg(t, 0.55, 1));
+      if (this.kind === 'spear') { pos.z += wind * 0.08 - strike * 0.32; pos.x -= strike * 0.04; }
+      else if (this.kind === 'item') { pos.add(V(0.02 * wind - 0.09 * strike, 0.03 * wind + 0.02 * strike, 0.05 * wind - 0.2 * strike)); rx += 0.25 * wind - 0.2 * strike; }
+      else {
+        pos.add(V(0.04 * wind - 0.13 * strike, 0.08 * wind - 0.12 * strike, 0.05 * wind - 0.1 * strike));
+        rx += 0.55 * wind - 1.25 * strike; ry += -0.15 * wind + 0.35 * strike; rz += -0.25 * wind + 0.45 * strike;
+      }
+      if (this.kind === 'melee') { pos.add(V(0.03, -0.03, 0.08)); rx -= 0.1; }
+      if (this.kind === 'item') pos.add(V(0.03, -0.02, 0.1));
     }
     if (parts.flame) { const f = 1 + Math.sin(performance.now() * 0.03) * 0.15; parts.flame.scale.set(f, f, 1 + Math.sin(performance.now() * 0.021) * 0.2); }
     P.position.copy(pos);
     P.rotation.set(rx, ry, rz, 'YXZ');
     // right hand sits on the grip; left hand on the support marker (or animated during reload)
-    this.rHand.position.set(0.005, -0.02, 0.03); this.rHand.rotation.set(0.55, 0.15, -0.2);
+    this.rHand.position.set(0.005, -0.02, 0.03); this.rHand.rotation.set(this.kind === 'melee' ? 0.2 : 0.55, 0.15, -0.2);
     this.rHand.visible = true;
     const showL = this.kind === 'rifle' || this.kind === 'pistol' || this.kind === 'bow' || this.kind === 'spear';
     this.lHand.visible = showL;
@@ -147,6 +173,8 @@ export class ViewModel {
       this.lHand.position.copy(target).add(V(-0.02, -0.02, 0.0));
       this.lHand.rotation.set(0.45 + rx * 0.8, ry - (this.kind === 'pistol' ? 0.3 : 0.75), rz + 0.5);
     }
+    this.placeArm(this.rArm, this.rHand, this.rElbow);
+    this.placeArm(this.lArm, this.lHand, this.lElbow);
     // muzzle flash + light
     this.flash.visible = this.flashT > 0;
     this.light.intensity = o.torch ? 2.4 + Math.sin(performance.now() * 0.02) * 0.3 : this.flashT > 0 ? 4 : 0;

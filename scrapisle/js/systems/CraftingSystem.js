@@ -38,10 +38,10 @@ export class CraftingSystem {
     for (const k in q.cost) { const left = s.inv.give(k, q.cost[k]); if (left) this.game.loot.dropItem(k, left, s.x, s.y + 1, s.z); }
   }
   // Advance a survivor's queue. speed > 1 for abstract simulation.
-  tick(s, dt) {
+  tick(s, dt, speed = 1) {
     if (!s.craftQueue.length || !s.alive) return;
     const q = s.craftQueue[0];
-    q.left -= dt;
+    q.left -= dt * speed;
     if (q.left <= 0) {
       s.craftQueue.shift();
       const left = s.inv.give(q.id, q.n);
