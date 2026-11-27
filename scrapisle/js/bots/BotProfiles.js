@@ -1,0 +1,57 @@
+// Bot skill tiers, difficulty distributions, personalities and names.
+import { weightedPick, pick } from '../core/util.js';
+
+export const TIERS = ['easy', 'normal', 'hard', 'expert'];
+
+// Share of each skill tier for every world difficulty setting.
+export const DISTRIBUTION = {
+  easy: { easy: 0.68, normal: 0.24, hard: 0.07, expert: 0.01 },
+  normal: { easy: 0.2, normal: 0.52, hard: 0.21, expert: 0.07 },
+  hard: { easy: 0.07, normal: 0.23, hard: 0.5, expert: 0.2 },
+  expert: { easy: 0.06, normal: 0.17, hard: 0.3, expert: 0.47 },
+};
+
+// Skill parameters per tier. aimErr in radians, react in seconds.
+export const SKILL = {
+  easy: { aimErr: 0.075, headChance: 0.05, react: 0.95, recoilCtrl: 0.25, sight: 70, efficiency: 0.6, noise: 0.35, caution: 0.25, strafe: 0.2, crouch: 0.05, idle: 0.18, ambition: 0.6, raidRate: 1.0, teamSize: [4, 8], healAt: 35, lootGreed: 0.4, siteSkill: 0.2 },
+  normal: { aimErr: 0.045, headChance: 0.12, react: 0.6, recoilCtrl: 0.5, sight: 90, efficiency: 0.8, noise: 0.2, caution: 0.45, strafe: 0.5, crouch: 0.15, idle: 0.08, ambition: 0.8, raidRate: 0.55, teamSize: [2, 5], healAt: 45, lootGreed: 0.6, siteSkill: 0.5 },
+  hard: { aimErr: 0.026, headChance: 0.25, react: 0.38, recoilCtrl: 0.72, sight: 110, efficiency: 0.95, noise: 0.1, caution: 0.6, strafe: 0.75, crouch: 0.3, idle: 0.03, ambition: 1.0, raidRate: 0.4, teamSize: [1, 3], healAt: 55, lootGreed: 0.8, siteSkill: 0.8 },
+  expert: { aimErr: 0.014, headChance: 0.4, react: 0.24, recoilCtrl: 0.88, sight: 130, efficiency: 1.05, noise: 0.05, caution: 0.78, strafe: 0.9, crouch: 0.45, idle: 0.01, ambition: 1.15, raidRate: 0.3, teamSize: [1, 3], healAt: 60, lootGreed: 0.95, siteSkill: 1.0 },
+};
+
+// Personality shifts what a bot wants to do with its time.
+export const PERSONALITIES = {
+  builder: { gather: 1.35, build: 1.5, loot: 0.75, fight: 0.6, hunt: 0.9, raid: 0.8 },
+  looter: { gather: 0.85, build: 0.9, loot: 1.6, fight: 1.0, hunt: 0.8, raid: 1.1 },
+  fighter: { gather: 0.8, build: 0.8, loot: 1.15, fight: 1.6, hunt: 1.1, raid: 1.5 },
+  hunter: { gather: 1.0, build: 1.0, loot: 0.9, fight: 1.1, hunt: 1.6, raid: 0.9 },
+  balanced: { gather: 1, build: 1, loot: 1, fight: 1, hunt: 1, raid: 1 },
+};
+const PERS_WEIGHTS = {
+  easy: [['builder', 3], ['balanced', 3], ['hunter', 2], ['looter', 1.5], ['fighter', 1]],
+  normal: [['balanced', 3], ['builder', 2], ['looter', 2], ['fighter', 1.5], ['hunter', 1.5]],
+  hard: [['balanced', 2], ['looter', 2.5], ['fighter', 2], ['builder', 1.5], ['hunter', 1]],
+  expert: [['looter', 2.5], ['fighter', 2.5], ['balanced', 2], ['builder', 1]],
+};
+
+export function rollTier(difficulty, r = Math.random) {
+  const d = DISTRIBUTION[difficulty] || DISTRIBUTION.normal;
+  return weightedPick(TIERS.map(t => [t, d[t]]), r);
+}
+export function rollPersonality(tier, r = Math.random) { return weightedPick(PERS_WEIGHTS[tier], r); }
+
+const A = ['Ash', 'Brick', 'Cinder', 'Dusty', 'Echo', 'Flint', 'Gravel', 'Hollow', 'Iron', 'Jinx', 'Kettle', 'Lumen', 'Moss', 'Nettle', 'Onyx', 'Pike', 'Quill', 'Rust', 'Sable', 'Thorn', 'Umber', 'Vex', 'Wick', 'Yarrow', 'Zinc', 'Birch', 'Coal', 'Drift', 'Ember', 'Fern', 'Grim', 'Hawk', 'Ivy', 'Jade', 'Knox', 'Lark', 'Mako', 'Nova', 'Oak', 'Pebble', 'Raven', 'Slate', 'Tusk', 'Volt', 'Wren'];
+const B = ['', '', '', 'y', 'er', 'ie', '_x', '99', '01', 'Fox', 'Wolf', 'Bear', 'Jaw', 'Eye', 'Hand', 'Kid', 'Boss', 'Byte', 'Tail', 'Run'];
+const used = new Set();
+export function botName(r = Math.random) {
+  for (let i = 0; i < 40; i++) {
+    const n = pick(A, r) + pick(B, r);
+    if (!used.has(n)) { used.add(n); return n; }
+  }
+  return pick(A, r) + Math.floor(r() * 1000);
+}
+export function resetNames() { used.clear(); }
+
+const TEAM_WORDS = ['Wolves', 'Crows', 'Tide', 'Rats', 'Clan', 'Crew', 'Pack', 'Squad', 'Order', 'Syndicate', 'Union', 'Gang', 'Hive', 'Circle'];
+const TEAM_ADJ = ['Red', 'Iron', 'Salt', 'Night', 'Grey', 'Stone', 'Bone', 'Ash', 'Copper', 'Frost', 'Dune', 'Pine', 'Rust', 'Sulfur', 'Smoke'];
+export function teamName(r = Math.random) { return `${pick(TEAM_ADJ, r)} ${pick(TEAM_WORDS, r)}`; }
