@@ -54,6 +54,9 @@ export class PlayerController {
       this.selectSlot((this.s.active + (e.deltaY > 0 ? 1 : 5)) % 6);
     }, { passive: true });
     document.addEventListener('keydown', e => {
+      // Ctrl is crouch: stop the browser's Ctrl shortcuts (save, bookmark, select all...) while playing.
+      // Ctrl+W can only be caught in fullscreen, where the keyboard is locked to the game.
+      if (e.ctrlKey && this.locked && !e.metaKey) e.preventDefault();
       if (this.game.ui.captureKeys(e)) return;
       if (e.code === 'Tab') e.preventDefault();
       if (!this.locked) { if (this.game.ui.open === 'inv' && MOVE_KEYS.has(e.code)) this.keys.add(e.code); return; }
@@ -70,7 +73,10 @@ export class PlayerController {
     });
     document.addEventListener('keyup', e => this.keys.delete(e.code));
   }
-  lock() { if (!this.locked) this.canvas.requestPointerLock(); }
+  lock() {
+    if (!this.locked) this.canvas.requestPointerLock();
+    if (document.fullscreenElement && navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock().catch(() => {});
+  }
   isGun() { const d = this.s && this.s.activeDef(); return !!d && (d.type === 'gun' || d.type === 'bow'); }
   selectSlot(i) {
     const s = this.s; if (s.active === i) return;
@@ -299,7 +305,7 @@ export class PlayerController {
     const water = W.waterSurface(s.x, s.z);
     const depth = water ? water.y - s.y : 0;
     const swimming = depth > 1.25;
-    s.crouch = !still && (k.has('ControlLeft') || k.has('KeyC')) && !swimming;
+    s.crouch = !still && (k.has('ControlLeft') || k.has('ControlRight')) && !swimming;
     const sprint = !still && (k.has('ShiftLeft') || k.has('ShiftRight')) && !s.crouch && !this.mouse.r && k.has('KeyW');
     let fx = 0, fz = 0;
     if (!still) {

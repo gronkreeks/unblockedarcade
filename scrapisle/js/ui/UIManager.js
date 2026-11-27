@@ -11,7 +11,7 @@ import { fmtTime } from '../core/util.js';
 import { PRESETS, resolve as resolveGfx } from '../gfx/GraphicsSettings.js';
 
 const $ = (id) => document.getElementById(id);
-export const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft', 'ShiftRight', 'Space', 'ControlLeft', 'KeyC']);
+export const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft', 'ShiftRight', 'Space', 'ControlLeft', 'ControlRight']);
 // What a clan is fighting with, best first: "Rockets, 3 AKs", "2 semi rifles", "Bows".
 const GEAR = [
   [['rocket_launcher'], 'rockets', 'rockets'], [['assault_rifle'], 'AK', 'AKs'], [['bolt_rifle'], 'bolt rifle', 'bolt rifles'],
@@ -86,6 +86,14 @@ export class UIManager {
     $('psSettings').onclick = () => { this.settingsBack = 'pauseScreen'; this.showSettings(); };
     $('psQuit').onclick = async () => { await this.game.saveGame(true); this.game.quitToMenu(); };
     $('psMap').onclick = () => { this.hideScreens(); this.openMap(); };
+    // fullscreen also locks the keyboard to the game, so crouch-walking (Ctrl+W) can't close the tab
+    $('psFull').onclick = async () => {
+      try {
+        if (document.fullscreenElement) { await document.exitFullscreen(); if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); }
+        else { await document.documentElement.requestFullscreen(); if (navigator.keyboard && navigator.keyboard.lock) await navigator.keyboard.lock(); }
+      } catch (e) { this.toast('Fullscreen is not available here'); }
+      $('psFull').textContent = document.fullscreenElement ? 'Leave fullscreen' : 'Fullscreen';
+    };
   }
   renderDist(d) {
     const D = DISTRIBUTION[d];

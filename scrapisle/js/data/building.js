@@ -64,8 +64,8 @@ export const DEPLOYABLES = {
   sleeping_bag: { name: 'Sleeping Bag', hp: 50, size: [0.45, 0.06, 1], slots: 0, solid: false, spawn: true, color: 0x5a7a3a, dmg: { melee: 1, bullet: 0.5, explosive: 1 } },
   bed: { name: 'Bed', hp: 200, size: [0.55, 0.25, 1.1], slots: 0, spawn: true, color: 0x3a5a7a, dmg: { melee: 0.5, bullet: 0.2, explosive: 1 } },
   claim_cabinet: { name: 'Claim Cabinet', hp: 500, size: [0.45, 0.9, 0.3], slots: 24, color: 0x7a5130, dmg: { melee: 0.2, bullet: 0.05, explosive: 1 } },
-  // wide wooden cover you can throw down mid-fight (2.5 m wide, 1.3 m tall)
-  barricade: { name: 'Wooden Barricade', hp: 300, size: [1.25, 0.65, 0.2], slots: 0, color: 0x9a6b3f, quick: true, dmg: { melee: 0.6, bullet: 0.35, explosive: 1.5 } },
+  // wide wooden cover you can throw down mid-fight (2.5 m wide, 1.8 m tall: it hides your head)
+  barricade: { name: 'Wooden Barricade', hp: 300, size: [1.25, 0.9, 0.2], slots: 0, color: 0x9a6b3f, quick: true, dmg: { melee: 0.6, bullet: 0.35, explosive: 1.5 } },
   recycler: { name: 'Recycler', hp: 99999, size: [0.9, 0.9, 0.7], slots: 12, color: 0x3d6b4a, dmg: { melee: 0, bullet: 0, explosive: 0 } },
 };
 
