@@ -135,3 +135,5 @@ label.check { display: flex; gap: 0.5rem; align-items: center; }
 #dragGhost { position: fixed; z-index: 40; width: 56px; height: 56px; pointer-events: none; }
 @media (max-width: 1180px) { #panel { --s: 50px; grid-template-columns: 160px calc(var(--s) * 6 + 57px) 380px; gap: 8px; } }
 @media (max-width: 900px) { #panel { grid-template-columns: 160px calc(var(--s) * 6 + 57px); } #panel .right { grid-column: 1 / -1; } }
+label select { display: block; margin-top: 0.3rem; font-family: inherit; font-size: 0.95rem; font-weight: 700; color: var(--text); background: #2a2d30; border: 1px solid #44484c; border-radius: 6px; padding: 0.4rem 0.6rem; }
+#settingsScreen .wrap { max-width: 560px; }

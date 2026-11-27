@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { ITEMS } from '../data/items.js';
 import { PIECES, PIECE_ORDER, DEPLOYABLES, pieceCost } from '../data/building.js';
 import { ViewModel } from './ViewModel.js';
+import * as Recoil from '../systems/Recoil.js';
 import { clamp } from '../core/util.js';
 
 const WALK = 3.0, RUN = 5.6, CROUCH = 1.6, SWIM = 2.2, JUMP = 5.4;
@@ -13,7 +14,7 @@ export class PlayerController {
     this.keys = new Set();
     this.mouse = { l: false, r: false, lPressed: false };
     this.sens = 0.0022;
-    this.vm = new ViewModel(camera);
+    this.vm = new ViewModel(camera, game.mats);
     this.buildType = 'foundation'; this.buildRot = 0; this.deployYaw = 0;
     this.ghost = null; this.ghostKey = null; this.spec = null; this.aimT = 0;
     this.target = null; this.drawT = 0; this.useT = 0;
@@ -29,6 +30,7 @@ export class PlayerController {
       if (!this.locked || !this.s || !this.s.alive) return;
       const zoom = this.mouse.r && this.isGun() ? 1 / (ITEMS[this.s.activeStack().id].zoom || 1.3) : 1;
       this.s.yaw -= e.movementX * this.sens * zoom;
+      this.mouseDX = (this.mouseDX || 0) + e.movementX; this.mouseDY = (this.mouseDY || 0) + e.movementY;
       this.s.pitch = clamp(this.s.pitch - e.movementY * this.sens * zoom, -1.5, 1.5);
     });
     c.addEventListener('mousedown', e => {
@@ -85,7 +87,7 @@ export class PlayerController {
   onR() {
     const s = this.s, d = s.activeDef();
     if (!d) return;
-    if (d.type === 'gun') { if (this.game.combat.startReload(s, s.activeStack(), d)) this.game.audio.reload(); }
+    if (d.type === 'gun') { if (this.game.combat.startReload(s, s.activeStack(), d)) this.game.audio.reload(d); }
     else if (d.type === 'plan') this.buildRot = (this.buildRot + 1) % 4;
     else if (d.type === 'deploy') this.deployYaw += Math.PI / 2;
     else if (d.type === 'hammer') { const p = this.aimPiece(); if (p && this.game.build.rotate(s, p)) this.game.ui.toast('Rotated'); }
@@ -272,12 +274,36 @@ export class PlayerController {
     G.physics.move(s, dt);
     if (s.landSpeed > 0 && !swimming) G.surv.fallDamage(s, s.landSpeed);
     this.sprinting = sprint && Math.hypot(s.vx, s.vz) > 4;
-    // camera
-    this.cam.position.set(s.x, s.y + s.eyeH, s.z);
-    this.cam.rotation.set(s.pitch, s.yaw + Math.PI, 0, 'YXZ');
+    // footsteps: dust on soft ground and a step sound
+    const hs = Math.hypot(s.vx, s.vz);
+    if (s.onGround && hs > 0.6 && !swimming) {
+      this.stepAcc = (this.stepAcc || 0) + hs * dt;
+      if (this.stepAcc > (this.sprinting ? 2.1 : 1.6)) {
+        this.stepAcc = 0;
+        const kind = G.combat.groundKind(s);
+        if (s.y - W.heightAt(s.x, s.z) < 0.2 && kind !== 'dirt' || G.world.biomeAt(s.x, s.z) === 2 && Math.random() < 0.3) G.fx.footstep(s.x, s.y, s.z, kind === 'dirt' ? 'dust' : kind);
+        G.audio.step(kind, s.crouch);
+      }
+    }
+    // sleeves follow the worn shirt
+    if (this.wearV !== s.inv.wear.version) {
+      this.wearV = s.inv.wear.version;
+      const shirt = s.inv.wear.slots[2] || s.inv.wear.slots[3];
+      this.vm.setSleeve(shirt ? new THREE.Color(ITEMS[shirt.id].color).getHex() : 0xc8a07a);
+    }
     // fov / zoom
     const d = s.activeDef();
     const aiming = !uiOpen && this.mouse.r && !!d && (d.type === 'gun' || d.type === 'bow');
+    // recoil: queued kick is applied smoothly to the aim; punch and sway move the view
+    const isGun = !!d && (d.type === 'gun' || d.type === 'bow');
+    const rs = Recoil.update(s, isGun ? d : null, dt, G.now, 0);
+    const sw = isGun ? Recoil.sway(s, d, aiming, Math.hypot(s.vx, s.vz)) : { p: 0, y: 0 };
+    const D2R = Math.PI / 180;
+    this.landDip = Math.max(0, (this.landDip || 0) - dt * 3);
+    if (s.landSpeed > 4) this.landDip = Math.min(0.35, s.landSpeed * 0.03);
+    // camera
+    this.cam.position.set(s.x, s.y + s.eyeH - this.landDip * 0.4, s.z);
+    this.cam.rotation.set(s.pitch + (rs.punch * 0.35 + sw.p) * D2R, s.yaw + Math.PI - (rs.punchY * 0.3 + sw.y) * D2R, rs.punchY * 0.15 * D2R, 'YXZ');
     const fov = G.settings.fov / (aiming ? (d.zoom || 1.3) : 1);
     if (Math.abs(this.cam.fov - fov) > 0.1) { this.cam.fov += (fov - this.cam.fov) * Math.min(1, dt * 12); this.cam.updateProjectionMatrix(); }
     // target + prompts
@@ -290,7 +316,8 @@ export class PlayerController {
     if (!uiOpen) this.useItem(dt, st, d, aiming);
     else this.mouse.lPressed = false;
     this.updateBuildPreview();
-    this.vm.update(dt, Math.hypot(s.vx, s.vz), { aim: aiming && d.type === 'gun', reloading: s.reloadT > 0, torch: d && d.light });
+    this.vm.update(dt, Math.hypot(s.vx, s.vz), { aim: aiming, reloading: s.reloadT > 0, reloadT: s.reloadT, torch: d && d.light, sprint: this.sprinting, crouch: s.crouch, onGround: s.onGround, vy: s.vy, recoil: rs, def: d, stack: st, draw: this.drawT, mouseDX: this.mouseDX || 0, mouseDY: this.mouseDY || 0 });
+    this.mouseDX = 0; this.mouseDY = 0;
     this.mouse.lPressed = false;
   }
 
@@ -319,7 +346,7 @@ export class PlayerController {
         if ((d.auto ? lh : lp) && s.reloadT <= 0) {
           const moving = Math.hypot(s.vx, s.vz) > 0.5;
           const r = G.combat.fire(s, st, s.dir(), { aiming, moving });
-          if (r && r.recoil) { this.vm.doShot(0.6); s.pitch = Math.min(1.5, s.pitch + r.recoil.p * Math.PI / 180); s.yaw += r.recoil.y * Math.PI / 180; }
+          if (r && r.recoil) this.vm.doShot(d);
           else if (r && r.empty) { if (lp) { if (!G.combat.startReload(s, st, d)) { G.audio.click(); G.ui.toast('No ammo'); } else G.audio.reload(); } }
           else if (r && r.flint) G.audio.click();
           else if (r && r.broken) G.ui.toast('This weapon is broken');
@@ -331,7 +358,7 @@ export class PlayerController {
         if (lp) {
           if (this.drawT < 0.45) { G.ui.toast('Hold right mouse to draw'); break; }
           const r = G.combat.fire(s, st, s.dir(), { aiming: true, moving: Math.hypot(s.vx, s.vz) > 0.5 });
-          if (r && r.recoil) { this.drawT = 0; G.audio.bow(); } else if (r && r.empty) G.ui.toast('No arrows');
+          if (r && r.recoil) { this.drawT = 0; G.audio.bow(); this.vm.doShot(d); } else if (r && r.empty) G.ui.toast('No arrows');
         }
         break;
       }

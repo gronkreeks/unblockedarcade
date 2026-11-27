@@ -56,7 +56,7 @@ def('hammer', { name: 'Hammer', cat: 'Tools', type: 'hammer', icon: 'hammer', co
 def('building_plan', { name: 'Building Plan', cat: 'Tools', type: 'plan', icon: 'plan', color: '#5b8fd6', range: 6, value: 0.5 });
 
 // ---------- Melee weapons ----------
-const melee = (id, name, o) => def(id, Object.assign({ cat: 'Weapons', type: 'melee', icon: 'spear', gather: { tree: 2, ore: 1, flesh: 8 } }, o));
+const melee = (id, name, o) => def(id, Object.assign({ name, cat: 'Weapons', type: 'melee', icon: 'spear', gather: { tree: 2, ore: 1, flesh: 8 } }, o));
 melee('wooden_spear', 'Wooden Spear', { color: '#9a6b3f', dmg: 25, rate: 0.85, range: 2.8, dur: 150, bleed: 0.3, value: 3 });
 melee('stone_spear', 'Stone Spear', { color: '#9aa0a6', dmg: 35, rate: 0.85, range: 2.8, dur: 200, bleed: 0.4, value: 5 });
 melee('bone_knife', 'Bone Knife', { icon: 'knife', color: '#ece6d6', dmg: 18, rate: 0.5, range: 1.8, dur: 200, bleed: 0.4, gather: { tree: 2, ore: 1, flesh: 15 }, value: 2 });
@@ -64,7 +64,7 @@ melee('machete', 'Machete', { icon: 'knife', color: '#c9ced4', dmg: 35, rate: 0.
 melee('salvaged_sword', 'Salvaged Sword', { icon: 'knife', color: '#d8a24a', dmg: 50, rate: 0.9, range: 2.4, dur: 350, bleed: 0.5, gather: { tree: 6, ore: 1, flesh: 12 }, value: 15 });
 
 // ---------- Ammo ----------
-const ammo = (id, name, o) => def(id, Object.assign({ cat: 'Ammo', type: 'ammo', stack: 128, icon: 'bullet', pellets: 1, spread: 0, dmgMult: 1, velMult: 1 }, o));
+const ammo = (id, name, o) => def(id, Object.assign({ name, cat: 'Ammo', type: 'ammo', stack: 128, icon: 'bullet', pellets: 1, spread: 0, dmgMult: 1, velMult: 1 }, o));
 ammo('wooden_arrow', 'Wooden Arrow', { icon: 'arrow', color: '#9a6b3f', stack: 64, dmgMult: 1, velMult: 1, value: 0.3, bleed: 0.5 });
 ammo('hv_arrow', 'High Velocity Arrow', { icon: 'arrow', color: '#c9ced4', stack: 64, dmgMult: 0.8, velMult: 1.6, value: 0.6, bleed: 0.4 });
 ammo('handmade_shell', 'Handmade Shell', { icon: 'shell', color: '#6b8a3a', stack: 64, pellets: 6, spread: 7, dmgMult: 0.55, velMult: 0.8, value: 0.4, bleed: 0.3 });
@@ -75,7 +75,7 @@ ammo('rifle_ammo', '5.56 Rifle Ammo', { color: '#9c7a32', value: 0.8, bleed: 0.4
 
 // ---------- Ranged weapons ----------
 // dmg: damage per projectile with dmgMult 1. vel: m/s. rpm: shots/min. spread/aimSpread: degrees. recoil: degrees per shot.
-const gun = (id, name, o) => def(id, Object.assign({ cat: 'Weapons', type: 'gun', icon: 'pistol', auto: false, mag: 1, reload: 2, spread: 2, aimSpread: 0.5, recoil: 1, recoilH: 0.3, zoom: 1.3, dur: 400 }, o));
+const gun = (id, name, o) => def(id, Object.assign({ name, cat: 'Weapons', type: 'gun', icon: 'pistol', auto: false, mag: 1, reload: 2, spread: 2, aimSpread: 0.5, recoil: 1, recoilH: 0.3, zoom: 1.3, dur: 400 }, o));
 gun('hunting_bow', 'Hunting Bow', { type: 'bow', icon: 'bow', color: '#9a6b3f', ammo: ['wooden_arrow', 'hv_arrow'], dmg: 50, vel: 55, rpm: 50, mag: 1, reload: 0, spread: 3, aimSpread: 0.6, recoil: 0, recoilH: 0, dur: 200, value: 6, noise: 20 });
 gun('crossbow', 'Crossbow', { icon: 'bow', color: '#7a5a3a', ammo: ['wooden_arrow', 'hv_arrow'], dmg: 65, vel: 85, rpm: 20, mag: 1, reload: 3.4, spread: 1.5, aimSpread: 0.3, recoil: 2, recoilH: 0.5, dur: 300, value: 12, noise: 25 });
 gun('pipe_pistol', 'Pipe Pistol', { icon: 'pistol', color: '#7d6b5a', ammo: ['handmade_shell', 'buckshot', 'slug'], dmg: 28, vel: 120, rpm: 30, mag: 1, reload: 2, spread: 3, aimSpread: 2.5, recoil: 6, recoilH: 2, dur: 120, flint: 0.4, value: 10, noise: 120 });
@@ -95,7 +95,7 @@ def('timed_charge', { name: 'Timed Charge', cat: 'Raid', type: 'raid', icon: 'tn
 
 // ---------- Clothing / armour ----------
 // covers: body areas; prot: { proj, melee } fraction per covered area; cold: warmth points; rad: radiation protection.
-const wear = (id, name, o) => def(id, Object.assign({ cat: 'Clothing', type: 'wear', icon: 'shirt', rad: 0, cold: 0, dur: 300 }, o));
+const wear = (id, name, o) => def(id, Object.assign({ name, cat: 'Clothing', type: 'wear', icon: 'shirt', rad: 0, cold: 0, dur: 300 }, o));
 wear('cloth_hood', 'Cloth Hood', { slot: 'head', icon: 'hat', covers: ['head'], prot: { proj: 0.1, melee: 0.1 }, cold: 4, color: '#c9b78a', value: 1 });
 wear('cloth_shirt', 'Cloth Shirt', { slot: 'shirt', covers: ['chest'], prot: { proj: 0.1, melee: 0.1 }, cold: 6, color: '#c9b78a', value: 2 });
 wear('cloth_pants', 'Cloth Trousers', { slot: 'pants', icon: 'pants', covers: ['legs'], prot: { proj: 0.1, melee: 0.1 }, cold: 6, color: '#b0a070', value: 2 });
@@ -111,7 +111,7 @@ wear('metal_chest', 'Metal Chestplate', { slot: 'chest', icon: 'vest', covers: [
 wear('hazmat_suit', 'Hazmat Suit', { slot: 'shirt', blocks: ['head', 'pants', 'feet', 'hands', 'face'], icon: 'hazmat', covers: ['head', 'chest', 'legs'], prot: { proj: 0.3, melee: 0.3 }, cold: 8, rad: 0.6, color: '#d6c43a', value: 40 });
 
 // ---------- Food / water ----------
-const food = (id, name, o) => def(id, Object.assign({ cat: 'Food', type: 'food', stack: 20, icon: 'food', heal: 0, hyd: 0 }, o));
+const food = (id, name, o) => def(id, Object.assign({ name, cat: 'Food', type: 'food', stack: 20, icon: 'food', heal: 0, hyd: 0 }, o));
 food('raw_meat', 'Raw Meat', { color: '#c0392b', cal: 30, poison: 6, cooks: 'cooked_meat', value: 0.3 });
 food('cooked_meat', 'Cooked Meat', { color: '#7a3b1e', cal: 110, heal: 4, value: 1 });
 food('mushroom', 'Mushroom', { icon: 'mushroom', color: '#b9926a', cal: 15, hyd: 5, heal: 1, value: 0.2 });
@@ -123,14 +123,14 @@ food('granola', 'Granola Bar', { icon: 'bar', color: '#c9a060', cal: 120, hyd: 0
 food('water_bottle', 'Water Bottle', { icon: 'bottle', color: '#5aa0d8', cal: 0, hyd: 120, value: 1 });
 
 // ---------- Medical ----------
-const med = (id, name, o) => def(id, Object.assign({ cat: 'Medical', type: 'med', stack: 10, icon: 'med', heal: 0, hot: 0, stopBleed: false, rad: 0, useTime: 1.5 }, o));
+const med = (id, name, o) => def(id, Object.assign({ name, cat: 'Medical', type: 'med', stack: 10, icon: 'med', heal: 0, hot: 0, stopBleed: false, rad: 0, useTime: 1.5 }, o));
 med('bandage', 'Bandage', { icon: 'bandage', color: '#ece6d6', heal: 5, stopBleed: true, useTime: 1.5, value: 1 });
 med('med_syringe', 'Medical Syringe', { icon: 'syringe', color: '#5ad88a', heal: 15, hot: 20, stopBleed: true, rad: 10, useTime: 1, value: 6 });
 med('large_medkit', 'Large Medkit', { icon: 'med', color: '#d84a4a', heal: 10, hot: 90, stopBleed: true, rad: 25, useTime: 3, value: 15 });
 med('anti_rad', 'Anti-Radiation Pills', { icon: 'pills', color: '#e6d34a', rad: 50, useTime: 1, value: 4 });
 
 // ---------- Deployables / construction ----------
-const dep = (id, name, o) => def(id, Object.assign({ cat: 'Items', type: 'deploy', stack: 1, icon: 'box' }, o));
+const dep = (id, name, o) => def(id, Object.assign({ name, cat: 'Items', type: 'deploy', stack: 1, icon: 'box' }, o));
 dep('wood_box', 'Wooden Box', { deploy: 'wood_box', color: '#9a6b3f', value: 3 });
 dep('large_box', 'Large Wood Box', { deploy: 'large_box', color: '#7a5130', value: 8 });
 dep('furnace', 'Furnace', { deploy: 'furnace', icon: 'furnace', color: '#8d8d8d', value: 6 });

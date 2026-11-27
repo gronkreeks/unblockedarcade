@@ -17,8 +17,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap">
-  <link rel="stylesheet" href="scrapisle/style.css?v=1">
-  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
+  <link rel="stylesheet" href="scrapisle/style.css?v=2">
+  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 </head>
 <body>
 <canvas id="cv"></canvas>
@@ -118,7 +118,22 @@
     <label>Mouse sensitivity <input type="range" id="stSens" min="0.2" max="3" step="0.05"></label>
     <label>Field of view <input type="range" id="stFov" min="60" max="100" step="1"></label>
     <label>Volume <input type="range" id="stVol" min="0" max="1" step="0.05"></label>
-    <label class="check"><input type="checkbox" id="stShadow"> Shadows</label>
+    <h4>Graphics</h4>
+    <div class="seg" id="gfxPreset"><button data-v="low">Low</button><button data-v="medium">Medium</button><button data-v="high">High</button><button data-v="ultra">Ultra</button></div>
+    <label class="check"><input type="checkbox" id="gShadows"> Shadows</label>
+    <label>Shadow quality <select id="gShadowRes"><option value="1024">Low</option><option value="2048">Medium</option><option value="4096">High</option></select></label>
+    <label>Render scale <input type="range" id="gScale" min="0.5" max="1.5" step="0.05"></label>
+    <label>View distance <input type="range" id="gView" min="500" max="1600" step="50"></label>
+    <label>Grass density <input type="range" id="gGrass" min="0" max="2" step="0.1"></label>
+    <label>Ground detail (bushes, stones, logs) <input type="range" id="gDecor" min="0.2" max="1.6" step="0.1"></label>
+    <label>Tree detail distance <input type="range" id="gTrees" min="60" max="320" step="10"></label>
+    <label>Effects <input type="range" id="gFx" min="0.3" max="1.5" step="0.1"></label>
+    <label class="check"><input type="checkbox" id="gAO"> Screen-space ambient occlusion</label>
+    <label class="check"><input type="checkbox" id="gClouds"> Clouds</label>
+    <label class="check"><input type="checkbox" id="gAdaptive"> Lower resolution automatically when the frame rate drops</label>
+    <label>Texture quality <select id="gTex"><option value="256">Normal</option><option value="512">High</option></select></label>
+    <label class="check"><input type="checkbox" id="gAA"> Anti-aliasing</label>
+    <p class="muted small">Texture quality and anti-aliasing apply the next time the game loads. Everything else applies now.</p>
     <div class="row"><button class="btn" data-back="settings">Back</button></div>
   </div>
 </div>
@@ -151,6 +166,6 @@
   <div class="wrap center"><h2>Scrap Isle</h2><p id="loadingTxt"></p></div>
 </div>
 
-<script type="module" src="scrapisle/js/main.js?v=1"></script>
+<script type="module" src="scrapisle/js/main.js?v=2"></script>
 </body>
 </html>

@@ -47,8 +47,11 @@ export class Audio {
     if (v < 0.01 || this._throttle('shot' + (src && src.id), 30)) return;
     if (def.type === 'bow') { this.noise(0.12, 900, 2, 0.25 * v); return; }
     const heavy = def.icon === 'rifle' || def.icon === 'shotgun';
-    this.noise(heavy ? 0.35 : 0.22, heavy ? 700 : 1100, 0.7, 0.6 * v);
-    this.tone(heavy ? 90 : 140, 0.18, 0.35 * v, 'triangle', 0.4);
+    const body = { assault_rifle: [0.32, 650, 95], semi_rifle: [0.3, 750, 110], bolt_rifle: [0.5, 520, 70], pump_shotgun: [0.42, 420, 70], double_barrel: [0.45, 400, 65], drum_smg: [0.22, 950, 140], scrap_smg: [0.2, 1100, 150], revolver: [0.3, 800, 105], semi_pistol: [0.22, 1200, 150], pipe_pistol: [0.4, 380, 60], crossbow: [0.12, 1300, 300] }[def.id] || [heavy ? 0.35 : 0.22, heavy ? 700 : 1100, heavy ? 90 : 140];
+    this.noise(body[0], body[1], 0.7, 0.6 * v);
+    this.tone(body[2], 0.18, 0.35 * v, 'triangle', 0.4);
+    // distant shots lose their high end and arrive as a low thump
+    if (src && !src.isPlayer && v < 0.3) this.noise(0.5, 250, 0.5, 0.25 * v * 3, 'lowpass', 0.02);
   }
   explosion(c) { const v = this._gainFor(c, 600); this.noise(1.4, 180, 0.6, 0.9 * v, 'lowpass'); this.tone(55, 0.9, 0.6 * v, 'sine', 0.5); }
   hit(kind) { if (kind === 'wood') this.noise(0.12, 500, 3, 0.35); else if (kind === 'flesh') this.noise(0.1, 300, 1, 0.3, 'lowpass'); else { this.noise(0.08, 2400, 4, 0.3); this.tone(900, 0.06, 0.08, 'square'); } }
@@ -59,7 +62,20 @@ export class Audio {
   door() { this.noise(0.25, 300, 3, 0.25); this.tone(120, 0.2, 0.1, 'sawtooth', 0.8); }
   deny() { this.tone(200, 0.12, 0.15, 'square'); this.tone(150, 0.15, 0.15, 'square', 1, 0.1); }
   click() { this.tone(1600, 0.03, 0.12, 'square'); }
-  reload() { this.tone(800, 0.04, 0.12, 'square'); this.tone(500, 0.05, 0.12, 'square', 1, 0.25); this.tone(900, 0.04, 0.12, 'square', 1, 0.6); }
+  // Reload sounds follow the weapon's own reload timeline (mag out, mag in, charge / shells / cylinder).
+  reload(def) {
+    const T = def ? def.reload : 2;
+    const clack = (at, f = 700, v = 0.14) => { this.noise(0.05, f * 2, 3, v, 'bandpass', at); this.tone(f, 0.04, v * 0.7, 'square', 0.8, at); };
+    if (def && (def.id === 'pump_shotgun' || def.id === 'bolt_rifle')) { for (let i = 0; i < 4; i++) clack(T * (0.2 + i * 0.15), 900, 0.12); clack(T * 0.9, 500, 0.18); }
+    else if (def && def.id === 'revolver') { clack(T * 0.12, 1200); for (let i = 0; i < 6; i++) clack(T * (0.32 + i * 0.07), 1500, 0.08); clack(T * 0.88, 1000); }
+    else if (def && def.id === 'double_barrel') { clack(T * 0.1, 500, 0.2); clack(T * 0.4, 900); clack(T * 0.6, 900); clack(T * 0.9, 450, 0.22); }
+    else { clack(T * 0.18, 600); clack(T * 0.55, 800, 0.18); clack(T * 0.78, 1000); clack(T * 0.85, 700); }
+  }
+  step(kind, crouch) {
+    if (this._throttle('step', 180)) return;
+    const v = crouch ? 0.03 : 0.07;
+    this.noise(0.08, kind === 'sand' ? 1800 : kind === 'snow' ? 2400 : 500, 1.2, v, 'bandpass');
+  }
   eat() { this.noise(0.2, 800, 1.5, 0.2); }
   bow() { this.noise(0.1, 1200, 2, 0.2); this.tone(300, 0.1, 0.1, 'triangle', 0.6); }
   hurt() { if (this._throttle('hurt', 150)) return; this.tone(220, 0.15, 0.2, 'sawtooth', 0.6); }

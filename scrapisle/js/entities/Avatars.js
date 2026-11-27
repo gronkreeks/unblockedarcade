@@ -1,120 +1,247 @@
-// Low-poly meshes for survivors, militia and animals, with simple walk/swing animation.
+// Characters and animals. Survivors and militia use a jointed body (hips, spine, head, two-part arms
+// and legs, hands, feet) with layered clothing and armour, and procedural animation: idle breathing,
+// walk/run/sprint cycles, crouch, jump/fall/land, aiming, reloading, melee swings and death falls.
 import * as THREE from 'three';
 import { ITEMS, WEAR_SLOTS } from '../data/items.js';
+import { buildItemModel } from './WeaponModels.js';
 
-const SKIN = [0xe0b48a, 0xc68e62, 0x8d5a3a, 0xf0c8a0, 0x6b4430];
-const matCache = new Map();
-function mat(color) { if (!matCache.has(color)) matCache.set(color, new THREE.MeshLambertMaterial({ color })); return matCache.get(color); }
-const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
-const G = { torso: box(0.5, 0.62, 0.28), head: box(0.26, 0.28, 0.26), arm: box(0.15, 0.62, 0.15), leg: box(0.19, 0.78, 0.2), mask: box(0.28, 0.16, 0.06), helm: box(0.3, 0.12, 0.3) };
-G.arm.translate(0, -0.29, 0); G.leg.translate(0, -0.38, 0);
+let M = null;
+export function setAvatarMaterials(m) { M = m; }
+const SKIN = [0xc08a64, 0xa06a48, 0x6e4430, 0xc89a78, 0x4e3022, 0xb07a58];
+const G = {};
+function geo(key, fn) { return G[key] || (G[key] = fn()); }
+const capsule = (r, len, k) => geo(k, () => { const g = new THREE.CapsuleGeometry(r, len, 4, 10); g.translate(0, -len / 2 - r * 0.6, 0); return g; });
+const mesh = (g, m) => { const x = new THREE.Mesh(g, m); x.castShadow = true; return x; };
+const lerp = (a, b, t) => a + (b - a) * t;
 
-export function heldMesh(id) {
-  const d = ITEMS[id]; if (!d) return null;
-  const g = new THREE.Group();
-  const c = mat(new THREE.Color(d.color || '#888').getHex());
-  const dark = mat(0x2e2e2e), wood = mat(0x7a5a3a);
-  if (id === 'rock') { const r = new THREE.Mesh(new THREE.DodecahedronGeometry(0.09, 0), mat(0x9a9a95)); r.position.z = 0.05; g.add(r); return g; }
-  if (d.type === 'gun') {
-    const long = ['rifle', 'shotgun', 'smg'].includes(d.icon);
-    const b = new THREE.Mesh(box(0.07, 0.1, long ? 0.8 : 0.35), dark); b.position.z = long ? 0.3 : 0.12; g.add(b);
-    const s = new THREE.Mesh(box(0.06, 0.14, 0.2), c); s.position.set(0, -0.06, long ? -0.12 : -0.02); g.add(s);
-  } else if (d.type === 'bow') {
-    const b = new THREE.Mesh(box(0.04, 0.9, 0.06), wood); b.position.z = 0.1; g.add(b);
-  } else if (d.type === 'melee' || d.type === 'tool' || d.type === 'hammer') {
-    const len = d.icon === 'spear' ? 1.6 : 0.6;
-    const h = new THREE.Mesh(box(0.05, 0.05, len), wood); h.position.z = len / 2 - 0.1; g.add(h);
-    if (d.icon !== 'spear' && d.icon !== 'torch') { const head = new THREE.Mesh(box(0.08, 0.2, 0.1), c); head.position.set(0, 0.05, len - 0.12); g.add(head); }
-    if (d.icon === 'torch') { const f = new THREE.Mesh(box(0.1, 0.1, 0.14), mat(0xffa040)); f.position.z = len - 0.05; g.add(f); }
-  } else {
-    const b = new THREE.Mesh(box(0.15, 0.15, 0.15), c); b.position.z = 0.1; g.add(b);
-  }
-  return g;
+function torsoGeo(w, h, d, k) {
+  return geo(k, () => {
+    const g = new THREE.CapsuleGeometry(0.5, 0.6, 4, 12);
+    g.scale(w, h / 1.6, d); g.translate(0, h * 0.5, 0);
+    // narrower waist, broader chest
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { const y = p.getY(i) / h; const k2 = 0.82 + 0.22 * Math.min(1, Math.max(0, y)); p.setX(i, p.getX(i) * k2); }
+    g.computeVertexNormals();
+    return g;
+  });
 }
 
 export class HumanoidAvatar {
   constructor(opts = {}) {
     this.root = new THREE.Group();
-    const skin = opts.skin ?? SKIN[Math.floor(Math.random() * SKIN.length)];
-    this.skinMat = mat(skin);
-    const body = new THREE.Group(); body.position.y = 0.8; this.root.add(body); this.body = body;
-    this.torso = new THREE.Mesh(G.torso, this.skinMat); this.torso.position.y = 0.42; body.add(this.torso);
-    this.head = new THREE.Mesh(G.head, this.skinMat); this.head.position.y = 0.88; body.add(this.head);
-    this.helm = new THREE.Mesh(G.helm, mat(0x555555)); this.helm.position.y = 1.03; this.helm.visible = false; body.add(this.helm);
-    this.mask = new THREE.Mesh(G.mask, mat(0x6f7a86)); this.mask.position.set(0, 0.86, 0.14); this.mask.visible = false; body.add(this.mask);
-    this.armL = new THREE.Mesh(G.arm, this.skinMat); this.armL.position.set(-0.33, 0.7, 0); body.add(this.armL);
-    this.armR = new THREE.Mesh(G.arm, this.skinMat); this.armR.position.set(0.33, 0.7, 0); body.add(this.armR);
-    this.legL = new THREE.Mesh(G.leg, this.skinMat); this.legL.position.set(-0.12, 0.0, 0); body.add(this.legL);
-    this.legR = new THREE.Mesh(G.leg, this.skinMat); this.legR.position.set(0.12, 0.0, 0); body.add(this.legR);
-    this.hand = new THREE.Group(); this.hand.position.set(0, -0.55, 0.05); this.armR.add(this.hand);
-    this.root.traverse(o => { if (o.isMesh) o.castShadow = true; });
-    this.phase = 0; this.swing = 0; this.wearV = -1; this.heldId = null; this.dead = false;
+    const skinCol = opts.skin ?? SKIN[Math.floor(Math.random() * SKIN.length)];
+    this.skin = M.get('skin', { color: skinCol });
+    this.hairMat = M.get('flat', { color: [0x2a1e14, 0x4a3420, 0x1a1a1a, 0x8a6a3a][Math.floor(Math.random() * 4)] });
+    const B = this.b = {};
+    B.hips = new THREE.Group(); B.hips.position.y = 0.95; this.root.add(B.hips);
+    B.spine = new THREE.Group(); B.hips.add(B.spine);
+    B.chest = mesh(torsoGeo(0.4, 0.6, 0.23, 'torso'), this.skin); B.chest.position.y = 0.02; B.spine.add(B.chest);
+    B.pelvis = mesh(geo('pelvis', () => new THREE.CapsuleGeometry(0.15, 0.12, 4, 10).rotateZ(Math.PI / 2)), this.skin); B.pelvis.position.y = 0.0; B.hips.add(B.pelvis);
+    B.neck = new THREE.Group(); B.neck.position.y = 0.64; B.spine.add(B.neck);
+    B.neck.add(mesh(geo('neck', () => new THREE.CylinderGeometry(0.05, 0.06, 0.1, 8).translate(0, 0.04, 0)), this.skin));
+    B.head = mesh(geo('head', () => { const g = new THREE.SphereGeometry(0.115, 14, 12); g.scale(0.92, 1.12, 1); g.translate(0, 0.16, 0.01); return g; }), this.skin); B.neck.add(B.head);
+    const nose = mesh(geo('nose', () => new THREE.ConeGeometry(0.018, 0.05, 6).rotateX(Math.PI / 2).translate(0, 0.15, 0.12)), this.skin); B.neck.add(nose);
+    const eyeM = M.get('flat', { color: 0x1a1a1a });
+    for (const x of [-0.04, 0.04]) { const e = mesh(geo('eye', () => new THREE.SphereGeometry(0.014, 6, 6)), eyeM); e.position.set(x, 0.18, 0.1); B.neck.add(e); }
+    this.hair = mesh(geo('hair', () => new THREE.SphereGeometry(0.122, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(0.95, 1.1, 1.05).translate(0, 0.17, -0.005)), this.hairMat); B.neck.add(this.hair);
+    const limbs = (side) => {
+      const s = side === 'L' ? -1 : 1;
+      const ua = new THREE.Group(); ua.position.set(s * 0.22, 0.56, 0); B.spine.add(ua);
+      ua.add(mesh(capsule(0.052, 0.2, 'ua'), this.skin));
+      const fa = new THREE.Group(); fa.position.y = -0.3; ua.add(fa);
+      fa.add(mesh(capsule(0.045, 0.19, 'fa'), this.skin));
+      const hd = new THREE.Group(); hd.position.y = -0.28; fa.add(hd);
+      hd.add(mesh(geo('hand', () => new THREE.BoxGeometry(0.07, 0.09, 0.035).translate(0, -0.04, 0)), this.skin));
+      const th = new THREE.Group(); th.position.set(s * 0.1, -0.04, 0); B.hips.add(th);
+      th.add(mesh(capsule(0.075, 0.3, 'th'), this.skin));
+      const sh = new THREE.Group(); sh.position.y = -0.44; th.add(sh);
+      sh.add(mesh(capsule(0.06, 0.3, 'sh'), this.skin));
+      const ft = new THREE.Group(); ft.position.y = -0.43; sh.add(ft);
+      const foot = mesh(geo('foot', () => new THREE.BoxGeometry(0.09, 0.07, 0.22).translate(0, -0.035, 0.05)), M.get('leather', { color: 0x3a2a1e })); ft.add(foot);
+      B['ua' + side] = ua; B['fa' + side] = fa; B['hd' + side] = hd; B['th' + side] = th; B['sh' + side] = sh; B['ft' + side] = ft; B['foot' + side] = foot;
+    };
+    limbs('L'); limbs('R');
+    this.hand = new THREE.Group(); this.hand.position.set(0, -0.06, 0.02); B.hdR.add(this.hand);
+    this.layers = new THREE.Group(); this.root.add(this.layers);
+    this.clothes = [];
+    this.phase = Math.random() * 6; this.swing = 0; this.wearV = -1; this.heldId = null; this.dead = false; this.deathT = 0; this.air = 0; this.land = 0; this.reloadT = 0; this.breath = Math.random() * 6;
     if (opts.uniform) this.setUniform(opts.uniform);
   }
-  setUniform(c) { this.torso.material = mat(c.torso); this.legL.material = this.legR.material = mat(c.legs); this.armL.material = this.armR.material = mat(c.torso); if (c.helm) { this.helm.visible = true; this.helm.material = mat(c.helm); } if (c.mask) this.mask.visible = true; }
+  // Clothing layers attach to the bones so they follow every animation.
+  clearClothes() { for (const c of this.clothes) c.parent && c.parent.remove(c); this.clothes = []; this.hair.visible = true; }
+  addLayer(bone, g, m) { const x = mesh(g, m); bone.add(x); this.clothes.push(x); return x; }
+  dressShirt(m, sleeves = true) {
+    const B = this.b;
+    this.addLayer(B.spine, torsoGeo(0.43, 0.62, 0.26, 'torsoC'), m).position.y = 0.01;
+    if (sleeves) for (const s of ['L', 'R']) { this.addLayer(B['ua' + s], capsule(0.06, 0.2, 'uaC'), m); this.addLayer(B['fa' + s], capsule(0.052, 0.17, 'faC'), m); }
+  }
+  dressPants(m) {
+    const B = this.b;
+    this.addLayer(B.hips, geo('pelvisC', () => new THREE.CapsuleGeometry(0.165, 0.13, 4, 10).rotateZ(Math.PI / 2)), m);
+    for (const s of ['L', 'R']) { this.addLayer(B['th' + s], capsule(0.084, 0.3, 'thC'), m); this.addLayer(B['sh' + s], capsule(0.068, 0.28, 'shC'), m); }
+  }
+  setUniform(c) {
+    this.clearClothes();
+    this.dressShirt(M.get('cloth', { color: c.torso })); this.dressPants(M.get('cloth', { color: c.legs }));
+    this.addLayer(this.b.spine, geo('vest', () => new THREE.BoxGeometry(0.46, 0.4, 0.3).translate(0, 0.36, 0)), M.get('cloth', { color: 0x2f3a2c }));
+    if (c.helm) { this.addLayer(this.b.neck, geo('helmet', () => new THREE.SphereGeometry(0.14, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55).translate(0, 0.17, 0)), M.get('paint', { color: c.helm })); this.hair.visible = false; }
+    if (c.mask) this.addLayer(this.b.neck, geo('gasmask', () => new THREE.CylinderGeometry(0.05, 0.06, 0.08, 10).rotateX(Math.PI / 2).translate(0, 0.12, 0.11)), M.get('polymer'));
+  }
   applyWear(wear) {
+    this.clearClothes();
+    const B = this.b;
     const get = (slot) => { const s = wear.slots[WEAR_SLOTS.indexOf(slot)]; return s ? ITEMS[s.id] : null; };
-    const shirt = get('shirt'), chest = get('chest'), pants = get('pants'), kilt = get('kilt'), head = get('head'), face = get('face');
-    const top = chest || shirt;
-    this.torso.material = top ? mat(new THREE.Color(top.color).getHex()) : this.skinMat;
-    this.armL.material = this.armR.material = shirt ? mat(new THREE.Color(shirt.color).getHex()) : this.skinMat;
-    const leg = kilt || pants || (shirt && shirt.id === 'hazmat_suit' ? shirt : null);
-    this.legL.material = this.legR.material = leg ? mat(new THREE.Color(leg.color).getHex()) : this.skinMat;
-    const hh = head || (shirt && shirt.id === 'hazmat_suit' ? shirt : null);
-    this.helm.visible = !!hh; if (hh) this.helm.material = mat(new THREE.Color(hh.color).getHex());
-    this.mask.visible = !!face;
+    const shirt = get('shirt'), chest = get('chest'), pants = get('pants'), kilt = get('kilt'), head = get('head'), face = get('face'), feet = get('feet'), hands = get('hands');
+    const cm = (d, k = 'cloth') => M.get(k, { color: new THREE.Color(d.color).getHex() });
+    if (shirt && shirt.id === 'hazmat_suit') {
+      const m = M.get('cloth', { color: 0xd6c43a });
+      this.dressShirt(m); this.dressPants(m);
+      this.addLayer(B.neck, geo('hood', () => new THREE.SphereGeometry(0.15, 14, 10).scale(1, 1.1, 1).translate(0, 0.16, 0)), m);
+      this.addLayer(B.neck, geo('visor', () => new THREE.SphereGeometry(0.12, 12, 8, -0.9, 1.8, 0.9, 1.0).translate(0, 0.16, 0.035)), M.get('glass'));
+      this.hair.visible = false;
+    } else {
+      if (shirt) this.dressShirt(cm(shirt));
+      if (pants) this.dressPants(cm(pants));
+    }
+    if (chest) {
+      const k = chest.id === 'wood_chest' ? 'wood' : chest.id === 'roadsign_vest' ? 'paint' : 'armored';
+      const mat = k === 'paint' ? M.get('paint', { color: 0xd9b84a }) : M.get(k);
+      this.addLayer(B.spine, geo('plateF', () => new THREE.BoxGeometry(0.38, 0.38, 0.04).translate(0, 0.36, 0.14)), mat);
+      this.addLayer(B.spine, geo('plateB', () => new THREE.BoxGeometry(0.38, 0.38, 0.04).translate(0, 0.36, -0.14)), mat);
+      for (const x of [-0.2, 0.2]) this.addLayer(B.spine, geo('strap', () => new THREE.BoxGeometry(0.04, 0.05, 0.3).translate(0, 0.58, 0)), M.get('leather', { color: 0x3a2a1e })).position.x = x;
+    }
+    if (kilt) this.addLayer(B.hips, geo('kilt', () => new THREE.CylinderGeometry(0.2, 0.25, 0.3, 10, 1, true).translate(0, -0.12, 0)), M.get('paint', { color: 0xd9b84a }));
+    if (head) {
+      if (head.id === 'coffee_can_helmet') this.addLayer(B.neck, geo('can', () => new THREE.CylinderGeometry(0.135, 0.135, 0.2, 14).translate(0, 0.22, 0)), M.get('paint', { color: 0x8f969e }));
+      else if (head.id === 'bone_helmet') this.addLayer(B.neck, geo('bone', () => new THREE.SphereGeometry(0.14, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.5).scale(1, 1.15, 1.1).translate(0, 0.17, 0)), M.get('flat', { color: 0xe8e0cc }));
+      else this.addLayer(B.neck, geo('hoodC', () => new THREE.SphereGeometry(0.135, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.62).translate(0, 0.16, -0.01)), cm(head));
+      this.hair.visible = false;
+    }
+    if (face) { this.addLayer(B.neck, geo('mask', () => new THREE.BoxGeometry(0.2, 0.17, 0.05).translate(0, 0.15, 0.115)), M.get('armored')); this.addLayer(B.neck, geo('slit', () => new THREE.BoxGeometry(0.15, 0.02, 0.02).translate(0, 0.18, 0.14)), M.get('flat', { color: 0x111111 })); }
+    if (feet) for (const s of ['L', 'R']) this.addLayer(B['ft' + s], geo('boot', () => new THREE.BoxGeometry(0.1, 0.16, 0.24).translate(0, -0.0, 0.04)), M.get('leather', { color: 0x5a3d22 }));
+    if (hands) for (const s of ['L', 'R']) this.addLayer(B['hd' + s], geo('glove', () => new THREE.BoxGeometry(0.08, 0.1, 0.045).translate(0, -0.04, 0)), M.get('leather', { color: 0x6b4a2e }));
   }
   setHeld(id) {
     if (id === this.heldId) return;
     this.heldId = id;
     while (this.hand.children.length) this.hand.remove(this.hand.children[0]);
-    if (id) { const m = heldMesh(id); if (m) { m.rotation.x = -Math.PI / 2; this.hand.add(m); } }
+    if (!id) return;
+    const m = buildItemModel(id);
+    m.rotation.x = -Math.PI / 2;
+    m.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    this.hand.add(m);
+    const d = ITEMS[id];
+    this.gun = d && (d.type === 'gun' || d.type === 'bow');
+    this.longGun = this.gun && !(m.userData.weapon && m.userData.weapon.pistol);
   }
-  // speed in m/s, aiming bool, crouch bool
-  animate(dt, speed, opts = {}) {
-    if (this.dead) return;
-    this.phase += dt * speed * 2.2;
-    const sw = Math.sin(this.phase) * Math.min(0.7, speed * 0.12);
-    this.legL.rotation.x = sw; this.legR.rotation.x = -sw;
-    this.armL.rotation.x = -sw * 0.8;
-    this.swing = Math.max(0, this.swing - dt * 4);
-    const aim = opts.aim ? -1.45 : -0.35;
-    this.armR.rotation.x = opts.aim ? aim : sw * 0.8 + aim * 0.3 - Math.sin(this.swing * Math.PI) * 1.6;
-    if (opts.aim) this.armL.rotation.x = -1.2;
-    this.body.position.y = opts.crouch ? 0.55 : 0.8;
-    this.legL.scale.y = this.legR.scale.y = opts.crouch ? 0.7 : 1;
+  // opts: aim, crouch, onGround, vy, reloading, sprint
+  animate(dt, speed, o = {}) {
+    const B = this.b;
+    if (this.dead) {
+      this.deathT = Math.min(1, this.deathT + dt * 2.2);
+      const t = this.deathT, e = 1 - Math.pow(1 - t, 3);
+      this.root.rotation.x = -e * Math.PI / 2 * this.fallDir; this.root.position.y += 0; B.hips.position.y = lerp(0.95, 0.2, e);
+      B.uaL.rotation.z = -e * 1.2; B.uaR.rotation.z = e * 1.2; B.thL.rotation.x = e * 0.2; B.thR.rotation.x = -e * 0.3; B.shL.rotation.x = e * 0.4;
+      return;
+    }
+    this.breath += dt;
+    // airborne / landing state
+    if (o.onGround === false) this.air = Math.min(1, this.air + dt * 5); else { if (this.air > 0.5) this.land = 1; this.air = Math.max(0, this.air - dt * 8); }
+    this.land = Math.max(0, this.land - dt * 4);
+    const run = Math.min(1, Math.max(0, (speed - 3) / 2.5)), walk = Math.min(1, speed / 3);
+    this.phase += dt * (speed > 0.1 ? 4.2 + speed * 1.15 : 0);
+    const ph = this.phase;
+    const amp = walk * (0.45 + run * 0.45);
+    const crouch = o.crouch ? 1 : 0;
+    // hips + spine
+    B.hips.position.y = 0.95 - crouch * 0.32 - Math.abs(Math.sin(ph)) * 0.035 * walk + 0.02 * walk - this.land * 0.12;
+    B.spine.rotation.x = run * 0.22 + crouch * 0.25 + (o.aim ? 0.05 : 0);
+    B.spine.rotation.y = Math.sin(ph) * 0.08 * walk * (o.aim ? 0.2 : 1);
+    B.chest.scale.set(1, 1 + Math.sin(this.breath * 1.6) * 0.012, 1);
+    // legs
+    const legSwing = (side, off) => {
+      const s = Math.sin(ph + off);
+      const th = B['th' + side], sh = B['sh' + side], ft = B['ft' + side];
+      th.rotation.x = -s * amp - crouch * 1.05 - this.air * 0.55;
+      sh.rotation.x = Math.max(0, Math.cos(ph + off) * amp * 1.4) + crouch * 1.7 + this.air * 0.9 + this.land * 0.4;
+      ft.rotation.x = -crouch * 0.6 + Math.max(0, -s) * 0.3 * walk;
+    };
+    legSwing('L', 0); legSwing('R', Math.PI);
+    // arms
+    this.swing = Math.max(0, this.swing - dt * 3.5);
+    const armSwing = Math.sin(ph) * amp * 0.9;
+    if (o.aim && this.gun) {
+      const lo = o.reloading ? 0.5 : 0;
+      B.uaR.rotation.set(-1.35 + lo, 0, -0.1); B.faR.rotation.set(-0.25, 0, 0);
+      if (this.longGun) { B.uaL.rotation.set(-1.25 + lo, 0, 0.55); B.faL.rotation.set(-0.5, 0, 0); }
+      else { B.uaL.rotation.set(-1.3 + lo, 0, 0.35); B.faL.rotation.set(-0.3, 0, 0); }
+      if (o.reloading) { const r = Math.sin(this.breath * 5) * 0.3; B.uaL.rotation.x += 0.4 + r; B.faL.rotation.x -= 0.3; }
+    } else {
+      const sw = Math.sin(this.swing * Math.PI);
+      B.uaR.rotation.set(armSwing * 0.8 - (this.gun ? 0.35 : 0.15) - sw * 2.2 - run * 0.2, 0, -0.08 - sw * 0.3);
+      B.faR.rotation.set(-0.25 - run * 0.9 - sw * 0.4, 0, 0);
+      B.uaL.rotation.set(-armSwing * 0.8 - run * 0.2 - this.air * 0.5, 0, 0.08 + this.air * 0.4);
+      B.faL.rotation.set(-0.2 - run * 0.9, 0, 0);
+    }
+    B.neck.rotation.x = -(B.spine.rotation.x * 0.6);
   }
-  die() { this.dead = true; this.root.rotation.z = Math.PI / 2; this.root.position.y += 0.2; }
-  revive() { this.dead = false; this.root.rotation.z = 0; }
+  die() { this.dead = true; this.deathT = 0; this.fallDir = Math.random() < 0.5 ? 1 : -1; }
+  revive() { this.dead = false; this.root.rotation.x = 0; this.deathT = 0; }
 }
 
+// ---------- animals ----------
 const SPECIES_LOOK = {
-  chicken: { body: [0.3, 0.3, 0.4], col: 0xe8e0d0, leg: 0.25, head: 0.16, h: 0.35 },
-  deer: { body: [0.45, 0.6, 1.3], col: 0x9a6a3f, leg: 0.8, head: 0.3, h: 1.0, antler: true },
-  boar: { body: [0.55, 0.55, 1.1], col: 0x4a3a2a, leg: 0.4, head: 0.35, h: 0.55 },
-  wolf: { body: [0.4, 0.5, 1.1], col: 0x7a7a7a, leg: 0.55, head: 0.3, h: 0.75 },
-  bear: { body: [0.9, 1.0, 1.9], col: 0x4a3020, leg: 0.7, head: 0.5, h: 1.0 },
+  chicken: { len: 0.32, h: 0.28, w: 0.2, leg: 0.22, neck: 0.15, head: 0.08, col: 0xe8e0d0, tail: 0.1, beak: true },
+  deer: { len: 1.15, h: 0.5, w: 0.36, leg: 0.85, neck: 0.5, head: 0.17, col: 0x9a6a3f, tail: 0.12, antler: true },
+  boar: { len: 1.0, h: 0.55, w: 0.45, leg: 0.4, neck: 0.15, head: 0.25, col: 0x4a3a2a, tail: 0.1, tusk: true },
+  wolf: { len: 1.0, h: 0.42, w: 0.32, leg: 0.6, neck: 0.25, head: 0.16, col: 0x7a7a7a, tail: 0.45, ears: true },
+  bear: { len: 1.7, h: 0.95, w: 0.85, leg: 0.65, neck: 0.25, head: 0.3, col: 0x4a3020, tail: 0.08, ears: true },
 };
 export class AnimalAvatar {
   constructor(species) {
     const L = SPECIES_LOOK[species];
+    this.L = L;
+    const fur = M.get('fur', { color: L.col }), dark = M.get('flat', { color: 0x1e1a16 });
     this.root = new THREE.Group();
-    const m = mat(L.col), dark = mat(0x2a2a2a);
-    const body = new THREE.Mesh(box(...L.body), m); body.position.y = L.h + L.body[1] / 2 - 0.05; this.root.add(body);
-    const head = new THREE.Mesh(box(L.head, L.head, L.head * 1.3), m); head.position.set(0, L.h + L.body[1] * 0.8, L.body[2] / 2 + L.head * 0.4); this.root.add(head);
-    if (L.antler) { const a = new THREE.Mesh(box(0.5, 0.35, 0.05), dark); a.position.set(0, head.position.y + 0.3, head.position.z); this.root.add(a); }
-    this.legs = [];
-    const lg = box(L.body[0] * 0.25, L.leg, L.body[0] * 0.25); lg.translate(0, -L.leg / 2, 0);
-    for (const [x, z] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) {
-      const leg = new THREE.Mesh(lg, m); leg.position.set(x * L.body[0] * 0.35, L.h, z * L.body[2] * 0.35); this.root.add(leg); this.legs.push(leg);
+    const body = new THREE.Group(); body.position.y = L.leg + L.h * 0.5; this.root.add(body); this.body = body;
+    const torso = mesh(new THREE.CapsuleGeometry(L.h * 0.5, L.len * 0.7, 4, 12).rotateX(Math.PI / 2), fur); torso.scale.set(L.w / L.h, 1, 1); body.add(torso);
+    const neck = new THREE.Group(); neck.position.set(0, L.h * 0.25, L.len * 0.48); body.add(neck); this.neck = neck;
+    neck.add(mesh(new THREE.CapsuleGeometry(L.head * 0.55, L.neck, 3, 8).rotateX(-0.9).translate(0, L.neck * 0.35, L.neck * 0.25), fur));
+    const head = new THREE.Group(); head.position.set(0, L.neck * 0.75, L.neck * 0.5); neck.add(head); this.head = head;
+    head.add(mesh(new THREE.SphereGeometry(L.head, 10, 8).scale(0.85, 0.85, 1.1), fur));
+    head.add(mesh(new THREE.CylinderGeometry(L.head * 0.45, L.head * 0.6, L.head * 1.2, 8).rotateX(Math.PI / 2).translate(0, -L.head * 0.2, L.head * 1.0), fur));
+    head.add(mesh(new THREE.SphereGeometry(L.head * 0.2, 6, 6).translate(0, -L.head * 0.15, L.head * 1.6), dark));
+    for (const s of [-1, 1]) {
+      head.add(mesh(new THREE.SphereGeometry(L.head * 0.12, 6, 6).translate(s * L.head * 0.45, L.head * 0.25, L.head * 0.6), dark));
+      if (L.ears) head.add(mesh(new THREE.ConeGeometry(L.head * 0.25, L.head * 0.55, 5).translate(s * L.head * 0.5, L.head * 0.85, -L.head * 0.1), fur));
+      if (L.antler) { const a = new THREE.Group(); a.position.set(s * L.head * 0.4, L.head * 0.8, 0); head.add(a); a.add(mesh(new THREE.CylinderGeometry(0.015, 0.025, 0.45, 5).translate(0, 0.22, 0).rotateZ(-s * 0.4), M.get('flat', { color: 0xcab89a }))); a.add(mesh(new THREE.CylinderGeometry(0.01, 0.02, 0.25, 5).translate(0, 0.12, 0).rotateZ(s * 0.3).translate(-s * 0.08, 0.25, 0.05), M.get('flat', { color: 0xcab89a }))); }
+      if (L.tusk) head.add(mesh(new THREE.ConeGeometry(0.018, 0.1, 5).rotateX(-0.6).translate(s * L.head * 0.5, -L.head * 0.3, L.head * 1.3), M.get('flat', { color: 0xece6d6 })));
     }
-    this.root.traverse(o => { if (o.isMesh) o.castShadow = true; });
-    this.phase = 0;
+    if (L.beak) head.add(mesh(new THREE.ConeGeometry(0.025, 0.07, 5).rotateX(Math.PI / 2).translate(0, -0.01, L.head * 1.6), M.get('flat', { color: 0xd8a23a })));
+    const tail = mesh(new THREE.CapsuleGeometry(Math.max(0.02, L.h * 0.12), L.tail, 3, 6).translate(0, -L.tail * 0.5, 0), fur); tail.position.set(0, L.h * 0.25, -L.len * 0.5); tail.rotation.x = -0.9; body.add(tail); this.tail = tail;
+    this.legs = [];
+    for (const [x, z] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) {
+      const up = new THREE.Group(); up.position.set(x * L.w * 0.32, -L.h * 0.15, z * L.len * 0.38); body.add(up);
+      up.add(mesh(new THREE.CapsuleGeometry(L.w * 0.13, L.leg * 0.4, 3, 6).translate(0, -L.leg * 0.25, 0), fur));
+      const lo = new THREE.Group(); lo.position.y = -L.leg * 0.5; up.add(lo);
+      lo.add(mesh(new THREE.CapsuleGeometry(L.w * 0.09, L.leg * 0.4, 3, 6).translate(0, -L.leg * 0.22, 0), fur));
+      lo.add(mesh(new THREE.BoxGeometry(L.w * 0.2, 0.04, L.w * 0.25).translate(0, -L.leg * 0.45, 0.02), dark));
+      this.legs.push({ up, lo, z });
+    }
+    this.phase = Math.random() * 6; this.deathT = -1;
   }
   animate(dt, speed) {
-    this.phase += dt * speed * 2.5;
-    const s = Math.sin(this.phase) * Math.min(0.6, speed * 0.1);
-    this.legs[0].rotation.x = s; this.legs[3].rotation.x = s; this.legs[1].rotation.x = -s; this.legs[2].rotation.x = -s;
+    if (this.deathT >= 0) { this.deathT = Math.min(1, this.deathT + dt * 2); this.root.rotation.z = (1 - Math.pow(1 - this.deathT, 3)) * Math.PI / 2; return; }
+    this.phase += dt * (speed > 0.1 ? 3 + speed * 1.4 : 0.6);
+    const a = Math.min(0.8, speed * 0.12), gallop = speed > 5;
+    this.legs.forEach((l, i) => {
+      const off = gallop ? (l.z > 0 ? 0 : Math.PI * 0.6) + (i % 2) * 0.3 : (i === 0 || i === 3 ? 0 : Math.PI);
+      const s = Math.sin(this.phase + off);
+      l.up.rotation.x = s * a; l.lo.rotation.x = Math.max(0, -Math.cos(this.phase + off)) * a * 1.2;
+    });
+    this.body.position.y = this.L.leg + this.L.h * 0.5 + Math.abs(Math.sin(this.phase)) * a * 0.06;
+    this.neck.rotation.x = speed < 0.2 ? Math.sin(this.phase * 0.3) * 0.25 + 0.3 : -0.1 + Math.sin(this.phase * 2) * 0.05;
+    this.tail.rotation.z = Math.sin(this.phase * 1.5) * 0.3;
   }
-  die() { this.root.rotation.z = Math.PI / 2; }
+  die() { this.deathT = 1; this.root.rotation.z = Math.PI / 2; this.root.position.y += this.L.w * 0.3; }
 }

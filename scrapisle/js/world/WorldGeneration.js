@@ -42,6 +42,24 @@ export class World {
   fromGrid(i) { return i * this.cs - this.half; }
 
   heightAt(x, z) {
+    if (this.smooth) return this.heightCubic(x, z);
+    return this.heightLinear(x, z);
+  }
+  // Catmull-Rom bicubic sampling: smooth hills for rendering and physics (enabled after generation,
+  // so generation itself - and therefore every save's spawn layout - is unchanged).
+  heightCubic(x, z) {
+    const N = this.N, H = this.heights;
+    const gx = clamp(this.toGrid(x), 0, N - 1.001), gz = clamp(this.toGrid(z), 0, N - 1.001);
+    const i = Math.floor(gx), j = Math.floor(gz), fx = gx - i, fz = gz - j;
+    const cr = (p0, p1, p2, p3, t) => p1 + 0.5 * t * (p2 - p0 + t * (2 * p0 - 5 * p1 + 4 * p2 - p3 + t * (3 * (p1 - p2) + p3 - p0)));
+    const row = (jj) => {
+      const r = Math.min(N - 1, Math.max(0, jj)) * N;
+      const a = H[r + Math.max(0, i - 1)], b = H[r + i], c = H[r + Math.min(N - 1, i + 1)], d = H[r + Math.min(N - 1, i + 2)];
+      return cr(a, b, c, d, fx);
+    };
+    return cr(row(j - 1), row(j), row(j + 1), row(j + 2), fz);
+  }
+  heightLinear(x, z) {
     const gx = clamp(this.toGrid(x), 0, this.N - 1.001), gz = clamp(this.toGrid(z), 0, this.N - 1.001);
     const i = Math.floor(gx), j = Math.floor(gz), fx = gx - i, fz = gz - j;
     const H = this.heights, N = this.N, k = j * N + i;
@@ -59,6 +77,20 @@ export class World {
   biomeAt(x, z) {
     const i = clamp(Math.round(this.toGrid(x)), 0, this.N - 1), j = clamp(Math.round(this.toGrid(z)), 0, this.N - 1);
     return this.biome[j * this.N + i];
+  }
+  // Smoothly blended biome weights at a point: returns array indexed by BIOME id.
+  biomeWeights(x, z, out) {
+    out.fill(0);
+    const gx = clamp(this.toGrid(x), 0, this.N - 1.001), gz = clamp(this.toGrid(z), 0, this.N - 1.001);
+    const i = Math.floor(gx), j = Math.floor(gz), fx = gx - i, fz = gz - j, N = this.N, B = this.biome;
+    out[B[j * N + i]] += (1 - fx) * (1 - fz); out[B[j * N + i + 1]] += fx * (1 - fz);
+    out[B[(j + 1) * N + i]] += (1 - fx) * fz; out[B[(j + 1) * N + i + 1]] += fx * fz;
+    return out;
+  }
+  roadWeight(x, z) {
+    const gx = clamp(this.toGrid(x), 0, this.N - 1.001), gz = clamp(this.toGrid(z), 0, this.N - 1.001);
+    const i = Math.floor(gx), j = Math.floor(gz), fx = gx - i, fz = gz - j, N = this.N, R = this.roadMask;
+    return R[j * N + i] * (1 - fx) * (1 - fz) + R[j * N + i + 1] * fx * (1 - fz) + R[(j + 1) * N + i] * (1 - fx) * fz + R[(j + 1) * N + i + 1] * fx * fz;
   }
   // Fresh-water surface height at a point, or -999.
   riverAt(x, z) {
@@ -132,6 +164,7 @@ export class World {
     this._assignBiomes();
     // 6. Spawns
     this._spawnLists(rng);
+    this.smooth = true;
   }
 
   _smooth(passes) {

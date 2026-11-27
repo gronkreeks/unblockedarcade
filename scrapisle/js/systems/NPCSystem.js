@@ -38,7 +38,7 @@ export class NPCSystem {
     n.alive = false;
     this.game.actors.delete(n);
     this.list.splice(this.list.indexOf(n), 1);
-    this.game.scene.remove(n.avatar.root);
+    n.avatar.die(); this.corpses = this.corpses || []; this.corpses.push({ av: n.avatar, t: this.game.now });
     const stacks = this.game.loot.roll('militia');
     if (Math.random() < 0.3) { const s = makeStack(n.weapon); s.c = randRange(0.2, 0.6); stacks.push(s); }
     this.game.loot.spawnBag(n.x, n.y + 0.5, n.z, stacks, 'Militia body', 600);
@@ -51,6 +51,8 @@ export class NPCSystem {
       if (P && dist(P.x, P.z, post.x, post.z) < 60) { post.respawnAt = now + 30; continue; }
       this.spawn(post);
     }
+    for (const c of this.corpses || []) { c.av.animate(dt, 0); if (now - c.t > 10) this.game.scene.remove(c.av.root); }
+    if (this.corpses) this.corpses = this.corpses.filter(c => now - c.t <= 10);
     for (const n of this.list) {
       const active = (P && Math.abs(n.x - P.x) + Math.abs(n.z - P.z) < 320) || this._botNear(n);
       n.avatar.root.visible = P && Math.abs(n.x - P.x) + Math.abs(n.z - P.z) < 320;
@@ -123,7 +125,7 @@ export class NPCSystem {
     n.vy -= 9.8 * dt;
     this.game.physics.move(n, dt);
     n.avatar.root.position.set(n.x, n.y, n.z); n.avatar.root.rotation.y = n.yaw;
-    n.avatar.animate(dt, Math.hypot(n.vx, n.vz), { aim: !!n.target });
+    n.avatar.animate(dt, Math.hypot(n.vx, n.vz), { aim: !!n.target, onGround: true, reloading: n.reloadT > 0 });
   }
   serialize() { return this.posts.map(p => [p.npc ? 1 : 0, Math.round(p.respawnAt), p.npc ? Math.round(p.npc.hp) : 0]); }
   load(arr) {

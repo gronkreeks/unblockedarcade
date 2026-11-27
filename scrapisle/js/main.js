@@ -1,7 +1,7 @@
 // Scrap Isle bootstrap: renderer, game object, world setup, save/load, main loop.
 import * as THREE from 'three';
 import { World } from './world/WorldGeneration.js';
-import { buildTerrain } from './world/Terrain.js';
+import { buildTerrain, updateTerrainLOD } from './world/Terrain.js';
 import { buildMonuments } from './world/Monuments.js';
 import { Environment } from './world/Environment.js';
 import { Physics } from './physics/Physics.js';
@@ -25,22 +25,34 @@ import { PlayerController } from './player/PlayerController.js';
 import { Audio } from './audio/Audio.js';
 import { Survivor } from './entities/Survivor.js';
 import { ITEMS, makeStack } from './data/items.js';
+import { TextureLibrary, ALL_TEXTURES } from './gfx/Textures.js';
+import { MaterialLibrary } from './gfx/Materials.js';
+import { PRESETS, detectPreset, resolve as resolveGfx } from './gfx/GraphicsSettings.js';
+import { Particles } from './gfx/Particles.js';
+import { VegetationLibrary, DecorLayer } from './gfx/Vegetation.js';
+import { PostFX } from './gfx/PostFX.js';
+import { setMaterials } from './entities/WeaponModels.js';
+import { setAvatarMaterials } from './entities/Avatars.js';
 
 const PENDING = 'scrapisle.pending';
 
 class Game {
   constructor() {
     this.canvas = document.getElementById('cv');
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
-    this.renderer.setSize(innerWidth, innerHeight);
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 1400);
-    this.scene.add(this.camera);
-    addEventListener('resize', () => { this.camera.aspect = innerWidth / innerHeight; this.camera.updateProjectionMatrix(); this.renderer.setSize(innerWidth, innerHeight); });
     this.save = new SaveSystem();
-    this.prefs = Object.assign({ sens: 1, fov: 75, vol: 0.6, shadows: true }, this.save.loadSettings());
+    this.prefs = Object.assign({ sens: 1, fov: 75, vol: 0.6 }, this.save.loadSettings());
+    if (!this.prefs.gfx) this.prefs.gfx = { preset: detectPreset(), custom: {} };
+    this.gfx = resolveGfx(this.prefs.gfx);
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: this.gfx.antialias, powerPreference: 'high-performance' });
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.dynScale = 1;
+    this.renderer.setSize(innerWidth, innerHeight);
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 2200);
+    this.scene.add(this.camera);
+    addEventListener('resize', () => { this.camera.aspect = innerWidth / innerHeight; this.camera.updateProjectionMatrix(); this.renderer.setSize(innerWidth, innerHeight); if (this.post) this.post.setSize(innerWidth, innerHeight); });
     this.audio = new Audio(this);
     this.events = new EventBus();
     this.running = false; this.paused = false;
@@ -69,8 +81,28 @@ class Game {
     if (this.controls) this.controls.sens = 0.0022 * this.prefs.sens;
     if (this.settings) this.settings.fov = this.prefs.fov;
     this.audio.setVolume(this.prefs.vol);
-    this.renderer.shadowMap.enabled = this.prefs.shadows;
-    if (this.env) this.env.sun.castShadow = this.prefs.shadows;
+    this.applyGraphics();
+  }
+  // Apply graphics settings that can change live (others need a reload; see GraphicsSettings).
+  applyGraphics() {
+    const g = this.gfx = resolveGfx(this.prefs.gfx);
+    this.renderer.setPixelRatio(Math.min(2, (window.devicePixelRatio || 1) * g.renderScale * this.dynScale));
+    this.renderer.shadowMap.enabled = g.shadows;
+    if (this.env) {
+      this.env.gfx = g;
+      this.env.sun.castShadow = g.shadows;
+      const sc = this.env.sun.shadow.camera, sd = g.shadowDist;
+      sc.left = -sd; sc.right = sd; sc.top = sd; sc.bottom = -sd; sc.updateProjectionMatrix();
+      if (this.env.sun.shadow.mapSize.x !== g.shadowRes) { this.env.sun.shadow.mapSize.set(g.shadowRes, g.shadowRes); if (this.env.sun.shadow.map) { this.env.sun.shadow.map.dispose(); this.env.sun.shadow.map = null; } }
+      this.env.sky.uniforms.cloudsOn.value = g.clouds ? 1 : 0;
+    }
+    this.camera.far = g.viewDist + 400; this.camera.updateProjectionMatrix();
+    if (this.fx) this.fx.density = g.particles;
+    if (this.terrain) this.terrain.hiRange = Math.max(200, g.viewDist * 0.3);
+    if (this.decor && (this.decor.gfx.grass !== g.grass || this.decor.gfx.decor !== g.decor)) { this.decor.dispose(); this.decor = new DecorLayer(this, this.veg, g); }
+    if (this.res && this.res.groups) this.res.updateVisibility(this.camera.position);
+    if (this.post) this.post.enabled = g.ao;
+    else if (g.ao && this.running) this.post = new PostFX(this);
   }
   logEvent(text) { if (!this.env) return; this.log.push({ t: this.now, day: this.env.day, clock: this.env.clock(), text }); if (this.log.length > 200) this.log.shift(); }
   actorById(id) { if (this.player && this.player.id === id) return this.player; return this.bots.byId.get(id) || null; }
@@ -103,16 +135,25 @@ class Game {
     this.seen = new Map(data ? data.seen || [] : []);
     this.actors = new Set();
     this.actorHash = new SpatialHash(16);
+    // procedural PBR textures (generated once per page load)
+    const g = this.gfx;
+    this.tex = new TextureLibrary(g.texture, Math.min(g.aniso, this.renderer.capabilities.getMaxAnisotropy()));
+    let ti = 0;
+    await this.tex.generate(ALL_TEXTURES, async () => { ti++; if (ti % 3 === 0) await this.step(`Painting textures (${ti} of ${ALL_TEXTURES.length})…`); });
+    this.mats = new MaterialLibrary(this.tex);
+    setMaterials(this.mats); setAvatarMaterials(this.mats);
     await this.step('Shaping the island…');
     this.world = new World(cfg.seed, cfg.size);
     this.physics = new Physics(this.world);
-    this.env = new Environment(this.scene, this.renderer);
-    this.env.sun.castShadow = this.prefs.shadows;
+    this.env = new Environment(this.scene, this.renderer, g);
     await this.step('Laying terrain, rivers and roads…');
-    buildTerrain(this.world, this.scene);
-    const mons = buildMonuments(this.world, this.scene, this.physics);
+    this.terrain = buildTerrain(this.world, this);
+    this.terrain.hiRange = Math.max(200, g.viewDist * 0.3);
+    const mons = buildMonuments(this.world, this.scene, this.physics, this.mats);
     this.monumentData = mons;
     await this.step('Growing trees and placing ore…');
+    this.veg = new VegetationLibrary(this.mats);
+    this.fx = new Particles(this.scene, g.particles);
     this.res = new ResourceSystem(this); this.res.init(this.world);
     this.loot = new LootSystem(this); this.loot.init(this.world, mons);
     this.build = new BuildingSystem(this);
@@ -159,6 +200,12 @@ class Game {
     this.actors.add(this.player);
     for (const a of this.actors) this.actorHash.insert(a);
     this.camPos = this.camera.position;
+    // detailed terrain around the spawn before the first frame
+    this.camera.position.set(this.player.x, this.player.y + 1.6, this.player.z);
+    updateTerrainLOD(this.terrain, this.camera.position, 99);
+    this.decor = new DecorLayer(this, this.veg, g);
+    if (g.ao) this.post = new PostFX(this);
+    this.applyGraphics();
     this.ui.hideScreens();
     document.getElementById('hud').hidden = false;
     this.running = true;
@@ -254,12 +301,28 @@ class Game {
       this.sim.update(dt);
     }
     if (!P.alive) { this.camera.position.set(P.x, P.y + 0.4, P.z); this.camera.rotation.set(-0.3, P.yaw + Math.PI, 0.6, 'YXZ'); }
-    this.env.update(this.camera.position);
+    const cp = this.camera.position;
+    this.env.update(cp, this);
+    updateTerrainLOD(this.terrain, cp, 1);
+    this.decor.update(cp);
+    this.fx.update(dt, cp, this.env);
+    this.adapt(dt);
     this.ui.updateHUD(dt);
     const cb = document.getElementById('clickBox');
     const wantClick = P.alive && !this.controls.locked && !this.ui.isOpen() && paused === false && document.getElementById('deathScreen').hidden && document.getElementById('pauseScreen').hidden;
     if (cb.hidden === wantClick) cb.hidden = !wantClick;
-    this.renderer.render(this.scene, this.camera);
+    if (this.post && this.post.enabled && this.post.ready) this.post.render(); else this.renderer.render(this.scene, this.camera);
+  }
+  // Adaptive resolution: drop render scale when the frame rate sags, recover when there's headroom.
+  adapt(dt) {
+    if (!this.gfx.adaptive) { if (this.dynScale !== 1) { this.dynScale = 1; this.applyGraphics(); } return; }
+    this.fpsT = (this.fpsT || 0) + dt; this.fpsN = (this.fpsN || 0) + 1;
+    if (this.fpsT < 3) return;
+    const fps = this.fpsN / this.fpsT; this.fpsT = 0; this.fpsN = 0;
+    const before = this.dynScale;
+    if (fps < 38) this.dynScale = Math.max(0.55, this.dynScale - 0.1);
+    else if (fps > 57) this.dynScale = Math.min(1, this.dynScale + 0.05);
+    if (before !== this.dynScale) this.renderer.setPixelRatio(Math.min(2, (window.devicePixelRatio || 1) * this.gfx.renderScale * this.dynScale));
   }
 }
 

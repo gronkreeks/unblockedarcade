@@ -5,49 +5,69 @@ import { DEPLOYABLES, SPAWN_COOLDOWN, FOUND_H, LEVEL_H } from '../data/building.
 import { ITEMS } from '../data/items.js';
 import { RECIPE } from '../data/recipes.js';
 import { Container } from './InventorySystem.js';
-import { GeoBuilder, VCOLOR_MAT } from '../world/geo.js';
+import { GeoBuilder } from '../world/geo.js';
 import { SpatialHash } from '../core/spatial.js';
 import { uid, dist } from '../core/util.js';
 
-function depGeo(type) {
-  const g = new GeoBuilder(), xf = GeoBuilder.xf(0, 0, 0, 0);
+// Builds a deployable into a GeoBuilder using material buckets.
+function depBuild(type, g) {
+  const xf = GeoBuilder.xf(0, 0, 0, 0);
   const D = DEPLOYABLES[type];
   const [hx, hy, hz] = D.size;
+  const W = 0xffffff;
   switch (type) {
     case 'wood_box': case 'large_box':
-      g.box(xf, 0, hy, 0, hx, hy, hz, 0x9a6b3f); g.box(xf, 0, hy * 1.6, 0, hx + 0.02, 0.04, hz + 0.02, 0x5a3d22);
-      g.box(xf, -hx * 0.7, hy, 0, 0.04, hy + 0.01, hz + 0.02, 0x5a3d22); g.box(xf, hx * 0.7, hy, 0, 0.04, hy + 0.01, hz + 0.02, 0x5a3d22); break;
+      g.setMat('wood'); g.box(xf, 0, hy * 0.9, 0, hx, hy * 0.9, hz, W); g.box(xf, 0, hy * 1.88, 0, hx + 0.02, hy * 0.12, hz + 0.02, 0xc8b8a0);
+      g.setMat('metal');
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.box(xf, sx * (hx - 0.02), hy, sz * (hz - 0.02), 0.035, hy + 0.01, 0.035, 0x9a9a9a);
+      if (type === 'large_box') for (const x of [-hx * 0.5, hx * 0.5]) g.box(xf, x, hy, 0, 0.03, hy + 0.012, hz + 0.012, 0x8a8a8a);
+      g.box(xf, 0, hy * 1.7, hz + 0.02, 0.05, 0.06, 0.015, 0x707070);
+      break;
     case 'furnace':
-      g.cyl(xf, 0, 0, 0, 0.55, 1.2, 0x8d8d8d, 8, true, 0.4); g.cyl(xf, 0, 1.2, 0, 0.18, 0.4, 0x6d6d6d, 6); g.box(xf, 0, 0.35, 0.42, 0.2, 0.18, 0.08, 0x2a2a2a); break;
+      g.setMat('rock'); g.cyl(xf, 0, 0, 0, 0.58, 1.15, 0x9a9590, 14, true, 0.42);
+      g.setMat('metal'); g.cyl(xf, 0, 1.12, 0, 0.16, 0.55, 0x6a6a6a, 10, true); g.box(xf, 0, 0.36, 0.47, 0.22, 0.19, 0.04, 0x5a5a5a);
+      g.setMat('dark'); g.box(xf, 0, 0.36, 0.5, 0.16, 0.13, 0.01, 0x111111);
+      break;
     case 'campfire':
-      for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; g.box(xf, Math.cos(a) * 0.45, 0.07, Math.sin(a) * 0.45, 0.1, 0.07, 0.08, 0x7a7a75, -a); }
-      g.box(xf, 0, 0.08, 0, 0.35, 0.05, 0.06, 0x5e4430, 0.5); g.box(xf, 0, 0.12, 0, 0.35, 0.05, 0.06, 0x5e4430, -0.7); break;
+      g.setMat('rock'); for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2; g.box(xf, Math.cos(a) * 0.48, 0.07, Math.sin(a) * 0.48, 0.11, 0.08, 0.09, 0xa09a92, -a); }
+      g.setMat('bark'); for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI; g.stick(xf, Math.cos(a) * 0.35, 0.05, Math.sin(a) * 0.35, -Math.cos(a) * 0.35, 0.18, -Math.sin(a) * 0.35, 0.05, W); }
+      break;
     case 'workbench1': case 'workbench2': case 'workbench3': {
-      const top = type === 'workbench1' ? 0x9a6b3f : type === 'workbench2' ? 0x8f969e : 0x4a6b8a;
-      g.box(xf, 0, 0.9, 0, hx, 0.06, hz, top);
-      for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) g.box(xf, a * (hx - 0.08), 0.42, b * (hz - 0.08), 0.05, 0.42, 0.05, 0x5a3d22);
-      g.box(xf, 0, 0.3, 0, hx - 0.1, 0.03, hz - 0.1, 0x5a3d22);
-      if (type !== 'workbench1') g.box(xf, hx * 0.6, 1.05, 0, 0.12, 0.1, 0.1, 0x3a3a3a);
-      if (type === 'workbench3') g.box(xf, -hx * 0.5, 1.2, -hz * 0.6, 0.4, 0.25, 0.04, 0x5ad88a);
+      const tier = +type.slice(-1);
+      g.setMat(tier === 1 ? 'wood' : 'metal'); g.box(xf, 0, 0.88, 0, hx, 0.05, hz, tier === 1 ? W : 0xb0b0b0);
+      g.setMat(tier === 1 ? 'wood' : 'metal');
+      for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) g.box(xf, a * (hx - 0.08), 0.42, b * (hz - 0.08), 0.05, 0.42, 0.05, tier === 1 ? 0x8a7a68 : 0x707070);
+      g.box(xf, 0, 0.3, 0, hx - 0.1, 0.025, hz - 0.1, tier === 1 ? 0x8a7a68 : 0x808080);
+      g.setMat('metal'); g.box(xf, hx * 0.62, 1.0, hz * 0.3, 0.1, 0.08, 0.12, 0x555555); g.cyl(xf, hx * 0.62, 0.93, hz * 0.55, 0.015, 0.12, 0x888888, 6, false);
+      if (tier >= 2) { g.setMat('paint'); g.box(xf, -hx * 0.5, 1.05, -hz * 0.55, 0.35, 0.15, 0.08, 0xc4682a); }
+      if (tier === 3) { g.setMat('screen'); g.box(xf, -hx * 0.1, 1.2, -hz * 0.62, 0.25, 0.16, 0.02, W); }
       break; }
     case 'research_table':
-      g.box(xf, 0, 0.85, 0, hx, 0.05, hz, 0x3a5a8a);
-      for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) g.box(xf, a * (hx - 0.08), 0.4, b * (hz - 0.08), 0.05, 0.4, 0.05, 0x55606b);
-      g.box(xf, 0.3, 1.0, 0, 0.18, 0.12, 0.14, 0x5b8fd6); break;
+      g.setMat('metal'); for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) g.box(xf, a * (hx - 0.08), 0.4, b * (hz - 0.08), 0.04, 0.4, 0.04, 0x707070);
+      g.setMat('wood'); g.box(xf, 0, 0.84, 0, hx, 0.04, hz, W);
+      g.setMat('paint'); g.box(xf, 0.3, 1.0, 0, 0.2, 0.12, 0.16, 0x3a5a8a);
+      g.setMat('screen'); g.box(xf, 0.3, 1.02, 0.165, 0.14, 0.07, 0.005, W);
+      break;
     case 'sleeping_bag':
-      g.box(xf, 0, 0.06, 0, hx, 0.06, hz, 0x5a7a3a); g.box(xf, 0, 0.1, -hz + 0.25, hx - 0.05, 0.06, 0.2, 0x6b8a4a); break;
+      g.setMat('cloth'); g.box(xf, 0, 0.07, 0.1, hx, 0.07, hz - 0.1, 0x5a7a3a); g.box(xf, 0, 0.11, -hz + 0.22, hx - 0.05, 0.07, 0.18, 0x8a9a6a);
+      break;
     case 'bed':
-      g.box(xf, 0, 0.2, 0, hx, 0.2, hz, 0x6b4a2e); g.box(xf, 0, 0.45, 0.1, hx - 0.05, 0.08, hz - 0.15, 0x3a5a7a); g.box(xf, 0, 0.55, -hz + 0.3, hx - 0.1, 0.07, 0.18, 0xd8d8d0); break;
+      g.setMat('wood'); g.box(xf, 0, 0.18, 0, hx, 0.08, hz, W); for (const z of [-hz + 0.05, hz - 0.05]) g.box(xf, 0, 0.3, z, hx, 0.3, 0.04, W);
+      g.setMat('cloth'); g.box(xf, 0, 0.36, 0.05, hx - 0.06, 0.1, hz - 0.12, 0xd8d0c0); g.box(xf, 0, 0.47, -hz + 0.3, hx - 0.12, 0.06, 0.16, 0xffffff); g.box(xf, 0, 0.47, 0.25, hx - 0.04, 0.03, hz * 0.6, 0x3a5a7a);
+      break;
     case 'claim_cabinet':
-      g.box(xf, 0, hy, 0, hx, hy, hz, 0x7a5130);
-      for (let i = 0; i < 4; i++) g.box(xf, 0, 0.3 + i * 0.42, hz + 0.01, hx - 0.06, 0.16, 0.02, 0x5a3d22);
-      g.box(xf, 0, hy * 2 + 0.05, 0, hx + 0.05, 0.05, hz + 0.05, 0x5a3d22); break;
+      g.setMat('wood'); g.box(xf, 0, hy, 0, hx, hy, hz, W); g.box(xf, 0, hy * 2 + 0.04, 0, hx + 0.04, 0.04, hz + 0.04, 0xa89880);
+      for (let i = 0; i < 4; i++) g.box(xf, 0, 0.3 + i * 0.42, hz + 0.012, hx - 0.06, 0.17, 0.012, 0xb8a890);
+      g.setMat('metal'); for (let i = 0; i < 4; i++) g.box(xf, 0, 0.3 + i * 0.42, hz + 0.035, 0.07, 0.02, 0.015, 0x999999);
+      break;
     case 'recycler':
-      g.box(xf, 0, hy, 0, hx, hy, hz, 0x3d6b4a); g.box(xf, 0, hy * 2 + 0.2, 0, hx * 0.6, 0.2, hz * 0.6, 0x2e5238);
-      g.box(xf, 0, 0.5, hz + 0.02, 0.5, 0.25, 0.03, 0x1a1a1a); g.box(xf, hx * 0.7, hy * 1.6, hz + 0.03, 0.08, 0.08, 0.03, 0xd8c43a); break;
-    default: g.box(xf, 0, hy, 0, hx, hy, hz, D.color || 0x888888);
+      g.setMat('paint'); g.box(xf, 0, hy, 0, hx, hy, hz, 0x3d6b4a); g.box(xf, 0, 0.12, hz + 0.03, hx, 0.12, 0.03, 0xd8c43a);
+      g.setMat('metal'); g.box(xf, 0, hy * 2 + 0.25, 0, hx * 0.6, 0.25, hz * 0.6, 0x8a8a8a); g.box(xf, 0, 0.5, hz + 0.02, 0.5, 0.25, 0.03, 0x404040);
+      g.setMat('screen'); g.box(xf, hx * 0.7, hy * 1.6, hz + 0.03, 0.07, 0.07, 0.02, W);
+      break;
+    default: g.setMat('wood'); g.box(xf, 0, hy, 0, hx, hy, hz, W);
   }
-  return g.geometry();
+  return g;
 }
 
 export class Deployables {
@@ -62,7 +82,17 @@ export class Deployables {
     this.flameGeo = new THREE.ConeGeometry(0.22, 0.55, 6);
     this.flameMat = new THREE.MeshBasicMaterial({ color: 0xffa040 });
   }
-  geo(type) { if (!this.geos[type]) this.geos[type] = depGeo(type); return this.geos[type]; }
+  // Ghost silhouette geometry.
+  geo(type) { if (!this.geos[type]) this.geos[type] = depBuild(type, new GeoBuilder(1)).merged(); return this.geos[type]; }
+  parts(type) {
+    if (!this.partsCache) this.partsCache = {};
+    if (!this.partsCache[type]) {
+      const M = this.game.mats;
+      const mats = { wood: M.get('wood', { vc: true }), metal: M.get('metal', { vc: true }), rock: M.get('rock', { vc: true }), bark: M.get('bark', { vc: true }), cloth: M.get('cloth', { vc: true }), paint: M.get('paint', { vc: true }), dark: M.get('rubber'), screen: M.get('emissive') };
+      this.partsCache[type] = depBuild(type, new GeoBuilder(1.2)).parts(k => mats[k]);
+    }
+    return this.partsCache[type];
+  }
 
   // Find the support (foundation/floor) under a world point.
   supportAt(x, y, z) {
@@ -132,9 +162,9 @@ export class Deployables {
     d.cont = D.slots ? new Container(D.slots, { kind: o.type }) : null;
     if (o.slots && d.cont) d.cont.load(o.slots);
     d.def = D;
-    const m = new THREE.Mesh(this.geo(o.type), VCOLOR_MAT);
+    const m = new THREE.Group();
+    for (const p of this.parts(o.type)) { const x = new THREE.Mesh(p.geo, p.mat); x.castShadow = true; x.receiveShadow = true; x.userData.dep = d; m.add(x); }
     m.position.set(d.x, d.y, d.z); m.rotation.y = d.yaw;
-    m.castShadow = true; m.receiveShadow = true;
     m.userData.dep = d;
     this.group.add(m);
     d.mesh = m;

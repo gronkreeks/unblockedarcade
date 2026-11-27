@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { LOOT_TABLES } from '../data/loot.js';
 import { ITEMS, makeStack, hasCondition } from '../data/items.js';
 import { Container } from './InventorySystem.js';
-import { GeoBuilder, VCOLOR_MAT } from '../world/geo.js';
+import { GeoBuilder } from '../world/geo.js';
 import { SpatialHash } from '../core/spatial.js';
 import { uid, randInt, randRange, weightedPick } from '../core/util.js';
 
@@ -11,19 +11,36 @@ const RESPAWN = { barrel: 360, crate: 480, food_crate: 420, military_crate: 720 
 const HP = { barrel: 35 };
 const SIZE = { barrel: [0.42, 0.55, 0.42], crate: [0.6, 0.4, 0.45], food_crate: [0.45, 0.3, 0.35], military_crate: [0.75, 0.38, 0.45] };
 
-function containerGeo(kind, variant = 0) {
-  const g = new GeoBuilder(), xf = GeoBuilder.xf(0, 0, 0, 0);
+const BARREL_COLS = [0x3a5a8a, 0x9a3a2a, 0x6a7a3a];
+function containerParts(kind, variant, M) {
+  const g = new GeoBuilder(1.2), xf = GeoBuilder.xf(0, 0, 0, 0);
   if (kind === 'barrel') {
-    const col = [0x3a5a8a, 0x9a3a2a, 0x8a4b2a][variant % 3];
-    g.cyl(xf, 0, 0, 0, 0.42, 1.1, col, 10); g.cyl(xf, 0, 0.3, 0, 0.44, 0.06, 0x2a2a2a, 10, false); g.cyl(xf, 0, 0.8, 0, 0.44, 0.06, 0x2a2a2a, 10, false);
+    g.setMat('paint');
+    // bulging drum with rolled ribs
+    const prof = [0, 0.15, 0.3, 0.55, 0.8, 0.95, 1.1];
+    for (let i = 0; i < prof.length - 1; i++) { const r0 = 0.4 + Math.sin(prof[i] / 1.1 * Math.PI) * 0.035, r1 = 0.4 + Math.sin(prof[i + 1] / 1.1 * Math.PI) * 0.035; g.cyl(xf, 0, prof[i], 0, r0, prof[i + 1] - prof[i], BARREL_COLS[variant % 3], 18, false, r1); }
+    g.setMat('rust');
+    for (const y of [0.3, 0.8]) g.cyl(xf, 0, y, 0, 0.445, 0.035, 0xffffff, 18, false, 0.445);
+    g.cyl(xf, 0, 1.09, 0, 0.4, 0.02, 0xffffff, 18, true, 0.4);
+    g.setMat('metal'); g.cyl(xf, 0.18, 1.1, 0.1, 0.05, 0.03, 0x999999, 8, true);
   } else {
     const [hx, hy, hz] = SIZE[kind];
-    const col = kind === 'crate' ? 0x8a6a42 : kind === 'food_crate' ? 0x6b8a4a : 0x3d5a3a;
-    g.box(xf, 0, hy, 0, hx, hy, hz, col);
-    g.box(xf, 0, hy * 2 + 0.02, 0, hx + 0.02, 0.03, hz + 0.02, kind === 'military_crate' ? 0xc9a23a : 0x5a3d22);
-    if (kind === 'military_crate') g.box(xf, 0, hy, hz + 0.01, hx * 0.5, 0.08, 0.01, 0xc9a23a);
+    if (kind === 'crate') {
+      g.setMat('wood'); g.box(xf, 0, hy, 0, hx, hy, hz, 0xffffff);
+      g.setMat('metal'); for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.box(xf, sx * (hx - 0.02), hy, sz * (hz - 0.02), 0.03, hy + 0.01, 0.03, 0x888888);
+      g.setMat('wood'); for (const x of [-hx * 0.55, hx * 0.55]) g.box(xf, x, hy, 0, 0.05, hy + 0.012, hz + 0.012, 0x8a7058);
+    } else if (kind === 'food_crate') {
+      g.setMat('paint'); g.box(xf, 0, hy, 0, hx, hy, hz, 0x5a7a3a); g.box(xf, 0, hy * 2 + 0.02, 0, hx + 0.02, 0.03, hz + 0.02, 0x4a6a2a);
+      g.setMat('dark'); for (const sx of [-1, 1]) g.box(xf, sx * (hx + 0.005), hy * 1.4, 0, 0.005, 0.04, hz * 0.4, 0x111111);
+    } else {
+      g.setMat('paint'); g.box(xf, 0, hy, 0, hx, hy, hz, 0x3d5236); g.box(xf, 0, hy * 2 + 0.03, 0, hx + 0.02, 0.04, hz + 0.02, 0x34482e);
+      g.box(xf, 0, hy, hz + 0.01, hx * 0.5, 0.05, 0.01, 0xc9a23a);
+      g.setMat('metal'); for (const x of [-hx * 0.6, hx * 0.6]) { g.box(xf, x, hy * 1.7, hz + 0.025, 0.05, 0.05, 0.02, 0x909090); g.box(xf, x, hy, -hz - 0.02, 0.06, 0.03, 0.02, 0x707070); }
+      for (const sx of [-1, 1]) g.box(xf, sx * (hx + 0.02), hy * 1.3, 0, 0.02, 0.025, hz * 0.4, 0x707070);
+    }
   }
-  return g.geometry();
+  const mats = { paint: M.get('paint', { vc: true }), rust: M.get('rust', { vc: true }), metal: M.get('metal', { vc: true }), wood: M.get('wood', { vc: true }), dark: M.get('rubber') };
+  return g.parts(k => mats[k]);
 }
 
 export class LootSystem {
@@ -36,11 +53,12 @@ export class LootSystem {
     this.geos = {};
     this.group = new THREE.Group();
     game.scene.add(this.group);
-    this.bagGeo = (() => { const g = new GeoBuilder(); g.cyl(GeoBuilder.xf(0, 0, 0, 0), 0, 0, 0, 0.35, 0.45, 0x6b5a3a, 7, true, 0.18); return g.geometry(); })();
+    this.bagGeo = (() => { const g = new THREE.SphereGeometry(0.34, 12, 9); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i); p.setY(i, y < 0 ? y * 0.4 + 0.12 : y * 0.9 + 0.12 + (y > 0.28 ? 0.06 : 0)); p.setX(i, p.getX(i) * (y > 0.25 ? 0.5 : 1)); p.setZ(i, p.getZ(i) * (y > 0.25 ? 0.5 : 1)); } g.computeVertexNormals(); return g; })();
+    this.bagMat = game.mats.get('cloth', { color: 0x7a6a4a });
     this.dropGeo = new THREE.BoxGeometry(0.28, 0.18, 0.28);
     this.dropMats = {};
   }
-  geo(kind, v) { const k = kind + v; if (!this.geos[k]) this.geos[k] = containerGeo(kind, v); return this.geos[k]; }
+  parts(kind, v) { const k = kind + v; if (!this.geos[k]) this.geos[k] = containerParts(kind, v, this.game.mats); return this.geos[k]; }
 
   init(world, monumentData) {
     let i = 0;
@@ -58,8 +76,9 @@ export class LootSystem {
     c.alive = true; c.hp = HP[c.kind] || 0;
     c.cont.clear();
     for (const s of this.roll(c.kind)) c.cont.addStack(s);
-    const m = new THREE.Mesh(this.geo(c.kind, c.idx % 3), VCOLOR_MAT);
-    m.position.set(c.x, c.y, c.z); m.rotation.y = c.yaw; m.castShadow = true;
+    const m = new THREE.Group();
+    for (const p of this.parts(c.kind, c.idx % 3)) { const x = new THREE.Mesh(p.geo, p.mat); x.castShadow = true; x.receiveShadow = true; m.add(x); }
+    m.position.set(c.x, c.y, c.z); m.rotation.y = c.yaw;
     m.userData.loot = c;
     this.group.add(m); c.mesh = m;
     const [hx, hy, hz] = SIZE[c.kind];
@@ -114,7 +133,7 @@ export class LootSystem {
     for (const s of stacks) bag.cont.addStack(s);
     const gy = this._groundY(x, y, z);
     bag.y = gy;
-    const m = new THREE.Mesh(this.bagGeo, VCOLOR_MAT);
+    const m = new THREE.Mesh(this.bagGeo, this.bagMat);
     m.position.set(x, gy, z); m.castShadow = true; m.userData.bag = bag;
     this.group.add(m); bag.mesh = m;
     bag.col = this.game.physics.add({ type: 'box', x, y: gy + 0.25, z, hx: 0.35, hy: 0.25, hz: 0.35, yaw: 0, ref: bag, tag: 'bag', solid: false });
@@ -143,7 +162,7 @@ export class LootSystem {
     const s = stack || makeStack(id, n);
     const d = { id: uid('it'), stack: s, x, y, z, vy: 1.5, born: this.game.now, rest: false };
     const col = ITEMS[s.id].color || '#888';
-    if (!this.dropMats[col]) this.dropMats[col] = new THREE.MeshLambertMaterial({ color: col });
+    if (!this.dropMats[col]) this.dropMats[col] = this.game.mats.get('paint', { color: col });
     const m = new THREE.Mesh(this.dropGeo, this.dropMats[col]);
     m.position.set(x, y, z); m.userData.drop = d;
     this.group.add(m); d.mesh = m;

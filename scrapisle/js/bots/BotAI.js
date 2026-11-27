@@ -4,6 +4,7 @@ import { ITEMS, weaponScore } from '../data/items.js';
 import { RECIPE } from '../data/recipes.js';
 import { PERSONALITIES } from './BotProfiles.js';
 import { recycleYield } from '../systems/Deployables.js';
+import * as Recoil from '../systems/Recoil.js';
 import { dist, randRange, angleWrap, clamp, pick } from '../core/util.js';
 
 const KEEP_CATS = new Set(['Ammo', 'Medical', 'Food', 'Raid']);
@@ -134,7 +135,7 @@ export class BotAI {
   startCombat(b, t) {
     const ai = b.ai;
     ai.target = t; ai.reactT = ai.S.react * randRange(0.8, 1.3); ai.targetSeen = this.game.now; ai.lastSeen = { x: t.x, z: t.z };
-    ai.aimErrX = randRange(-1, 1); ai.aimErrY = randRange(-1, 1); ai.recoilOff = 0;
+    ai.aimErrX = randRange(-1, 1); ai.aimErrY = randRange(-1, 1); ai.aimFor = null;
     const team = this.game.teams.of(b);
     if (team && t.kind === 'survivor') { if (b.lastHitBy === t) team.alert = { id: t.id, x: b.x, z: b.z, t: this.game.now }; this.game.teams.hostility(team, t.team, 1); }
   }
@@ -453,7 +454,7 @@ export class BotAI {
       b.ai.swing = 1;
       const hits = mode === 'far' ? Math.max(1, Math.round(dt / (d.rate || 1))) : 1;
       for (let h = 0; h < hits && n.alive; h++) G.res.hit(b, n, d, st, b.ai.S.efficiency);
-      if (mode === 'full') G.audio.hitAt(n.type === 'tree' ? 'wood' : 'stone', n);
+      if (mode === 'full') { G.audio.hitAt(n.type === 'tree' ? 'wood' : 'stone', n); G.combat.fxAt(n.type === 'tree' ? 'wood' : n.type === 'corpse' ? 'flesh' : 'stone', { x: n.x + (b.x - n.x) * 0.3, y: n.y + 1, z: n.z + (b.z - n.z) * 0.3 }); }
     }
     if (b.inv.count(t.res) >= t.need) return 'done';
     if (b.inv.main.emptyCount() === 0 && b.inv.belt.emptyCount() === 0) return 'done';
@@ -873,13 +874,18 @@ export class BotAI {
     if (ai.errT <= 0) { ai.errT = 0.4; ai.aimErrX = randRange(-1, 1); ai.aimErrY = randRange(-1, 1); }
     const moving = Math.hypot(t.vx || 0, t.vz || 0) > 1;
     const err = S.aimErr * (1 + d / 70) * (moving ? 1.4 : 1) * (G.env.isNight ? 1.3 : 1);
-    ai.recoilOff = Math.max(0, (ai.recoilOff || 0) - dt * (2 + S.recoilCtrl * 8));
     const wantYaw = Math.atan2(px - e.x, pz - e.z) + ai.aimErrX * err;
-    const wantPitch = Math.atan2(ty + drop - e.y, Math.hypot(px - e.x, pz - e.z)) + ai.aimErrY * err * 0.6 + ai.recoilOff;
+    const wantPitch = Math.atan2(ty + drop - e.y, Math.hypot(px - e.x, pz - e.z)) + ai.aimErrY * err * 0.6;
+    // The bot tracks its intended aim; recoil drift (rs.accP/accY) sits on top of it and is only
+    // pulled back as fast as the bot's recoil control allows - the same kick the player feels.
+    if (ai.aimYaw === undefined || ai.aimFor !== t) { ai.aimYaw = b.yaw; ai.aimPitch = b.pitch; ai.aimFor = t; }
     const turn = 4 + S.recoilCtrl * 10;
-    const dy = angleWrap(wantYaw - b.yaw);
-    b.yaw += clamp(dy, -turn * dt, turn * dt);
-    b.pitch += clamp(wantPitch - b.pitch, -turn * dt, turn * dt);
+    const dy = angleWrap(wantYaw - ai.aimYaw);
+    ai.aimYaw += clamp(dy, -turn * dt, turn * dt);
+    ai.aimPitch += clamp(wantPitch - ai.aimPitch, -turn * dt, turn * dt);
+    const rs = Recoil.update(b, ranged ? def : null, dt, G.now, dt * (1.5 + S.recoilCtrl * 12));
+    b.yaw = ai.aimYaw - rs.accY * Math.PI / 180 - rs.pendY * 0;
+    b.pitch = ai.aimPitch + rs.accP * Math.PI / 180;
     ai.reactT -= dt;
     // line of sight (cached)
     ai.losT = (ai.losT || 0) - dt;
@@ -887,9 +893,12 @@ export class BotAI {
     if (ai.reactT > 0 || Math.abs(dy) > 0.12) return;
     if (ranged) {
       if (!ai.los || d > (def.id === 'bolt_rifle' ? 160 : def.type === 'bow' ? 60 : 110)) return;
-      if (def.type === 'gun' && !def.auto && G.now - (ai.lastShot || 0) < (60 / def.rpm) * (1.6 - S.recoilCtrl * 0.6)) return;
+      // fire discipline: better bots wait for drift to settle; worse bots keep spraying
+      const maxDrift = ({ easy: 10, normal: 5, hard: 3.5, expert: 2.5 })[ai.tier] * (d < 15 ? 2.5 : 1);
+      if (def.type === 'gun' && def.auto) { if (rs.accP > maxDrift) { ai.burstHold = G.now + 0.15 + (1 - S.recoilCtrl) * 0.2; } if (G.now < (ai.burstHold || 0)) return; }
+      else if (def.type === 'gun' && (rs.accP > maxDrift * 0.6 || G.now - (ai.lastShot || 0) < (60 / def.rpm) * (1.6 - S.recoilCtrl * 0.6))) return;
       const r = G.combat.fire(b, st, b.dir(), { aiming: d > 12, moving: Math.hypot(b.vx, b.vz) > 0.5 });
-      if (r && r.recoil) { ai.lastShot = G.now; ai.recoilOff += r.recoil.p * Math.PI / 180 * (1 - S.recoilCtrl); ai.shotFx = 0.06; }
+      if (r && r.recoil) { ai.lastShot = G.now; ai.shotFx = 0.06; ai.shot = 1; }
     } else if (d < (def ? def.range : 1.6) + 0.5 && b.swingT <= 0) {
       ai.swing = 1;
       if (st) G.combat.melee(b, st, { dir: b.dir() });
@@ -908,7 +917,8 @@ export class BotAI {
       for (let i = 0; i < shots; i++) {
         if (def.type === 'gun') { if (st.ammo <= 0) break; st.ammo--; } else { if (b.inv.remove(st.at, 1) < 1) break; }
         if (st.c !== undefined) st.c = Math.max(0, st.c - 1 / def.dur);
-        const p = clamp(0.75 - S.aimErr * 5 - d / 160, 0.05, 0.9);
+        const drift = Recoil.controlDifficulty(def) * (1 - S.recoilCtrl) * Math.min(1, shots / 3) * (d / 40);
+        const p = clamp((0.75 - S.aimErr * 25 - d / 160) / (1 + drift * 0.08), 0.05, 0.9);
         const A = ITEMS[st.at];
         for (let k = 0; k < (A.pellets || 1); k++) {
           if (Math.random() > p * (A.pellets > 1 ? Math.max(0.2, 1 - d / 25) : 1)) continue;

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { ITEMS } from '../data/items.js';
 import { segSphere } from '../physics/Physics.js';
 import { randRange, dist3, uid } from '../core/util.js';
+import * as Recoil from './Recoil.js';
 
 const GRAV = 9.81;
 const tmpV = new THREE.Vector3();
@@ -88,7 +89,10 @@ export class CombatSystem {
     surv.fireT = 60 / def.rpm;
     const A = ITEMS[at];
     const eye = opts.origin || surv.eye();
-    let spread = (opts.aiming ? def.aimSpread : def.spread) * (opts.moving ? 1.7 : 1) * (surv.crouch ? 0.8 : 1) * (opts.spreadMult || 1);
+    let spread = Recoil.spreadFor(surv, def, opts) * (opts.spreadMult || 1);
+    // weapon sway shifts where the barrel points at the moment of the shot
+    const sw = Recoil.sway(surv, def, opts.aiming, Math.hypot(surv.vx || 0, surv.vz || 0));
+    dir = rotateDir(dir, sw.p * Math.PI / 180, -sw.y * Math.PI / 180);
     const pellets = A.pellets || 1;
     const vel = def.vel * (A.velMult || 1);
     const dmg = def.dmg * (A.dmgMult || 1);
@@ -100,7 +104,9 @@ export class CombatSystem {
     if (stack.c !== undefined) stack.c = Math.max(0, stack.c - 1 / def.dur);
     this.game.events.emit('noise', { x: surv.x, z: surv.z, r: def.noise || 150, src: surv, kind: 'shot', weapon: def.id });
     this.game.audio && this.game.audio.shot(def, surv);
-    return { recoil: { p: def.recoil * randRange(0.8, 1.2), y: def.recoilH * randRange(-1, 1) } };
+    const st = Recoil.onShot(surv, def, this.game.now, opts);
+    this.game.events.emit('shot', { surv, def, eye, dir });
+    return { recoil: st };
   }
 
   spawnProjectile(p) {
@@ -175,12 +181,12 @@ export class CombatSystem {
     if (hit.actor) {
       const mult = hit.area === 'head' ? p.headMult : hit.area === 'legs' ? 0.6 : 1;
       this.damageActor(hit.actor, p.dmg * mult, { type: 'proj', area: hit.area, attacker: p.owner, weapon: p.weapon, bleed: p.bleed });
-      this.puff(pt.x, pt.y, pt.z, 0xb02020);
+      this.fxAt('flesh', pt);
       if (p.owner && p.owner.isPlayer) this.game.ui && this.game.ui.hitmarker(hit.area === 'head');
       return;
     }
     if (hit.col) this.damageCollider(hit.col, p.dmg * 0.6, 'bullet', p.owner);
-    this.puff(pt.x, pt.y, pt.z, hit.terrain ? 0x7a6a50 : 0xb0b0b0);
+    this.fxAt(hit.terrain ? this.groundKind(pt) : this.colliderKind(hit.col), pt, hit.normal);
   }
   damageCollider(col, amount, type, attacker) {
     const ref = col.ref;
@@ -206,19 +212,20 @@ export class CombatSystem {
     if (res.actor) {
       this.damageActor(res.actor, dmg, { type: 'melee', area: res.area, attacker: surv, weapon: def.id, bleed: def.bleed || 0.2 });
       if (stack.c !== undefined && def.dur) stack.c = Math.max(0, stack.c - 1 / def.dur);
-      this.puff(res.point.x, res.point.y, res.point.z, 0xb02020);
+      this.fxAt('flesh', res.point);
       // corpses are harvested through the resource system
       return { actor: res.actor };
     }
     if (res.node) {
       const r = this.game.res.hit(surv, res.node, def, stack, opts.efficiency || 1);
-      this.puff(res.point.x, res.point.y, res.point.z, res.node.type === 'tree' ? 0x8a6a48 : res.node.type === 'corpse' ? 0xb02020 : 0x9a9a95);
+      this.fxAt(res.node.type === 'tree' ? 'wood' : res.node.type === 'corpse' ? 'flesh' : 'stone', res.point, { x: -d.x, y: -d.y, z: -d.z });
+      if (res.node.type === 'tree' && Math.random() < 0.5) this.fxAt('leaves', { x: res.node.x, y: res.node.y, z: res.node.z });
       return { node: res.node, gather: r };
     }
     if (res.col) {
       this.damageCollider(res.col, dmg, 'melee', surv);
       if (stack.c !== undefined && def.dur) stack.c = Math.max(0, stack.c - 0.5 / def.dur);
-      this.puff(res.point.x, res.point.y, res.point.z, 0xa0a0a0);
+      this.fxAt(this.colliderKind(res.col), res.point, { x: -d.x, y: -d.y, z: -d.z });
       return { col: res.col };
     }
     return { miss: true };
@@ -317,12 +324,28 @@ export class CombatSystem {
       if (d < R * 1.6) this.damageActor(a, (c.type === 'timed_charge' ? 150 : 60) * (1 - d / (R * 1.6)), { type: 'explosive', attacker: c.owner });
     });
     this.flash(c.x, c.y, c.z);
+    this.fxAt('explosion', c, null, 1);
     this.game.events.emit('noise', { x: c.x, z: c.z, r: 350, src: c.owner, kind: 'explosion' });
     this.game.events.emit('explosion', { x: c.x, y: c.y, z: c.z, owner: c.owner, type: c.type });
     this.game.audio && this.game.audio.explosion(c);
   }
 
   // ---------- fx ----------
+  fxAt(kind, p, n, scale = 1) {
+    const fx = this.game.fx; if (!fx || !this.game.camPos) return;
+    if (Math.abs(p.x - this.game.camPos.x) + Math.abs(p.z - this.game.camPos.z) > 220) return;
+    fx.burst(kind, p.x, p.y, p.z, n ? n.x : 0, n ? n.y : 1, n ? n.z : 0, scale);
+  }
+  groundKind(p) { const b = this.game.world.biomeAt(p.x, p.z); return b === 1 || b === 6 || b === 0 ? 'sand' : b === 5 ? 'snow' : 'dirt'; }
+  colliderKind(c) {
+    if (!c) return 'dirt';
+    if (c.tag === 'piece') return c.ref.grade <= 1 ? 'wood' : c.ref.grade === 2 ? 'stone' : 'metal';
+    if (c.tag === 'door') return c.ref.door && c.ref.door.type === 'wood_door' ? 'wood' : 'metal';
+    if (c.tag === 'loot' || c.tag === 'deploy') return c.ref.kind === 'barrel' || c.ref.type === 'furnace' || c.ref.type === 'recycler' ? 'metal' : 'wood';
+    if (c.ref && c.ref.type === 'tree') return 'wood';
+    if (c.ref && c.ref.type === 'ore') return 'stone';
+    return 'stone';
+  }
   puff(x, y, z, color) {
     if (!this.game.camPos || Math.abs(x - this.game.camPos.x) + Math.abs(z - this.game.camPos.z) > 150) return;
     if (!this.puffMats[color]) this.puffMats[color] = new THREE.MeshBasicMaterial({ color });
@@ -340,6 +363,11 @@ export class CombatSystem {
   }
 }
 
+// Rotate a direction by pitch (up) and yaw (left) offsets in radians.
+function rotateDir(d, dp, dy) {
+  const yaw = Math.atan2(d.x, d.z) + dy, pitch = Math.asin(Math.max(-1, Math.min(1, d.y))) + dp, cp = Math.cos(pitch);
+  return { x: Math.sin(yaw) * cp, y: Math.sin(pitch), z: Math.cos(yaw) * cp };
+}
 function jitter(d, ang) {
   if (ang <= 0) return { x: d.x, y: d.y, z: d.z };
   // random direction within cone

@@ -65,7 +65,8 @@ export class BotManager {
     if (!v.ai) return;
     v.respawnAt = this.game.now + randRange(20, 45);
     v.ai.task = null; v.ai.target = null; v.ai.goal = 'task';
-    if (v.avatar) v.avatar.root.visible = false;
+    v.diedAt = this.game.now;
+    if (v.avatar) { if (v.avatar.root.visible) v.avatar.die(); else v.avatar.root.visible = false; }
     const k = e.killer;
     if (k && k.kind === 'survivor' && k.ai) { const t = this.game.teams.of(k); if (t) t.stats.kills++; }
   }
@@ -86,13 +87,19 @@ export class BotManager {
     if (bags.length) { const d = pick(bags); d.lastUsed = G.now; this.placeAt(b, d.x + randRange(-0.3, 0.3), d.z + randRange(-0.3, 0.3)); b.y = d.y + 0.1; }
     else { const p = pick(G.world.spawns.beaches); this.placeAt(b, p.x, p.z); }
     b.spawnedAt = G.now;
+    if (b.avatar) b.avatar.revive();
   }
 
   update(dt) {
     const G = this.game, P = G.player;
     this.counts = { full: 0, mid: 0, far: 0 };
     for (const b of this.list) {
-      if (!b.alive) { if (G.now >= b.respawnAt) this.respawn(b); continue; }
+      if (!b.alive) {
+        // the body stays down for a few seconds before the bag is all that's left
+        if (b.avatar && b.avatar.root.visible) { if (G.now - (b.diedAt || 0) < 8) b.avatar.animate(dt, 0); else b.avatar.root.visible = false; }
+        if (G.now >= b.respawnAt) this.respawn(b);
+        continue;
+      }
       const d = P ? dist(b.x, b.z, P.x, P.z) : 9999;
       const mode = d < LOD.full ? 'full' : d < LOD.mid ? 'mid' : 'far';
       b.ai.mode = mode;
@@ -147,7 +154,7 @@ export class BotManager {
     b.avatar.root.position.set(b.x, b.y, b.z);
     b.avatar.root.rotation.y = b.yaw;
     if (b.ai.swing) { b.avatar.swing = 1; b.ai.swing = 0; }
-    b.avatar.animate(dt, Math.hypot(b.vx, b.vz), { aim: b.ai.goal === 'fight', crouch: b.crouch });
+    b.avatar.animate(dt, Math.hypot(b.vx, b.vz), { aim: b.ai.goal === 'fight', crouch: b.crouch, onGround: b.ai.mode === 'full' ? b.onGround : true, vy: b.vy, reloading: b.reloadT > 0 });
   }
 
   serialize() {

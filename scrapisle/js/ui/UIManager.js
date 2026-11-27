@@ -8,6 +8,7 @@ import { moveSlot, splitSlot } from '../systems/InventorySystem.js';
 import { recycleYield } from '../systems/Deployables.js';
 import { iconURL } from './Icons.js';
 import { fmtTime } from '../core/util.js';
+import { PRESETS, resolve as resolveGfx } from '../gfx/GraphicsSettings.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -53,7 +54,14 @@ export class UIManager {
     $('stSens').oninput = e => { this.game.prefs.sens = +e.target.value; this.game.applyPrefs(); };
     $('stFov').oninput = e => { this.game.prefs.fov = +e.target.value; this.game.applyPrefs(); };
     $('stVol').oninput = e => { this.game.prefs.vol = +e.target.value; this.game.applyPrefs(); };
-    $('stShadow').onchange = e => { this.game.prefs.shadows = e.target.checked; this.game.applyPrefs(); };
+    // graphics: a preset plus individual overrides
+    const gp = () => this.game.prefs.gfx;
+    $('gfxPreset').onclick = e => { const b = e.target.closest('button'); if (!b) return; gp().preset = b.dataset.v; gp().custom = {}; this.game.applyPrefs(); this.showSettings(); };
+    const bind = (id, key, conv = v => +v, prop = 'value') => { $(id).oninput = $(id).onchange = e => { gp().custom[key] = conv(e.target[prop]); this.game.applyPrefs(); this.markPreset(); }; };
+    bind('gShadows', 'shadows', v => v, 'checked'); bind('gShadowRes', 'shadowRes'); bind('gScale', 'renderScale'); bind('gView', 'viewDist');
+    bind('gGrass', 'grass'); bind('gDecor', 'decor'); bind('gTrees', 'treeDetail'); bind('gFx', 'particles');
+    bind('gAO', 'ao', v => v, 'checked'); bind('gClouds', 'clouds', v => v, 'checked'); bind('gAdaptive', 'adaptive', v => v, 'checked');
+    bind('gTex', 'texture'); bind('gAA', 'antialias', v => v, 'checked');
     // pause
     $('psResume').onclick = () => this.resume();
     $('psSave').onclick = async () => { await this.game.saveGame(false); $('psMsg').textContent = 'Saved'; };
@@ -97,7 +105,16 @@ export class UIManager {
   showSettings() {
     this.showScreen('settingsScreen');
     const p = this.game.prefs;
-    $('stSens').value = p.sens; $('stFov').value = p.fov; $('stVol').value = p.vol; $('stShadow').checked = p.shadows;
+    $('stSens').value = p.sens; $('stFov').value = p.fov; $('stVol').value = p.vol;
+    const g = resolveGfx(p.gfx);
+    $('gShadows').checked = g.shadows; $('gShadowRes').value = String(g.shadowRes); $('gScale').value = g.renderScale; $('gView').value = g.viewDist;
+    $('gGrass').value = g.grass; $('gDecor').value = g.decor; $('gTrees').value = g.treeDetail; $('gFx').value = g.particles;
+    $('gAO').checked = g.ao; $('gClouds').checked = g.clouds; $('gAdaptive').checked = g.adaptive; $('gTex').value = String(g.texture); $('gAA').checked = g.antialias;
+    this.markPreset();
+  }
+  markPreset() {
+    const p = this.game.prefs.gfx, custom = Object.keys(p.custom || {}).length > 0;
+    for (const b of $('gfxPreset').children) b.classList.toggle('on', b.dataset.v === p.preset && !custom);
   }
   showLoading(text) { this.showScreen('loadingScreen'); $('loadingTxt').textContent = text; }
   showPause() {

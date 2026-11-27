@@ -1,7 +1,6 @@
 // Harvestable nodes: trees, ore nodes, hemp, loose pickups and animal corpses.
 import * as THREE from 'three';
 import { SpatialHash } from '../core/spatial.js';
-import { GeoBuilder } from '../world/geo.js';
 import { mulberry32, clamp } from '../core/util.js';
 import { segSphere, rayCyl } from '../physics/Physics.js';
 import { ITEMS } from '../data/items.js';
@@ -17,63 +16,8 @@ const PICKUPS = {
   mushroom: { mushroom: 2 }, berries: { berries: 3 }, hemp: { cloth: 10 },
 };
 const RESPAWN = { tree: 900, ore: 600, pick: 300 };
-const CHUNK = 256;
-
-function treeGeo(kind) {
-  const g = new GeoBuilder(), xf = GeoBuilder.xf(0, 0, 0, 0);
-  if (kind === 'cactus') {
-    g.cyl(xf, 0, 0, 0, 0.35, 3.2, 0x4f7a3a, 8); g.cyl(xf, 0.7, 1.2, 0, 0.22, 1.3, 0x4f7a3a, 6); g.box(xf, 0.35, 1.2, 0, 0.35, 0.18, 0.18, 0x4f7a3a);
-    g.cyl(xf, -0.6, 1.6, 0, 0.2, 1.0, 0x56803e, 6); g.box(xf, -0.3, 1.6, 0, 0.3, 0.16, 0.16, 0x56803e);
-  } else if (kind === 'palm') {
-    g.cyl(xf, 0, 0, 0, 0.28, 7, 0x8a6a48, 7, true, 0.2);
-    for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; g.box(xf, Math.cos(a) * 1.6, 6.8, Math.sin(a) * 1.6, 1.7, 0.08, 0.45, 0x4f8a3a, -a); }
-  } else if (kind === 'oak') {
-    g.cyl(xf, 0, 0, 0, 0.42, 4.5, 0x6b4a2e, 8, true, 0.32);
-    g.cyl(xf, 0, 3.6, 0, 2.8, 2.6, 0x3f6b2e, 9, true, 1.6); g.cyl(xf, 0, 6.2, 0, 1.6, 1.6, 0x467536, 9, true, 0.2);
-  } else {
-    const snow = kind === 'pine_snow';
-    g.cyl(xf, 0, 0, 0, 0.38, 3, 0x5e4430, 7, true, 0.3);
-    for (let i = 0; i < 4; i++) g.cyl(xf, 0, 2 + i * 2, 0, 2.6 - i * 0.5, 3, snow && i % 2 ? 0xdde6ea : 0x2f5a35, 9, true, 0.15);
-  }
-  return g.geometry();
-}
-function rockGeo(kind, seed) {
-  const base = new THREE.IcosahedronGeometry(1.1, 1);
-  const pos = base.attributes.position;
-  const r = mulberry32(seed);
-  const colA = new THREE.Color(kind === 'sulfur' ? 0x9c9360 : kind === 'metal' ? 0x7d756c : 0x8f8f8a);
-  const colB = new THREE.Color(kind === 'sulfur' ? 0xe8d84a : kind === 'metal' ? 0xc98b5a : 0x7a7a75);
-  const g = base.toNonIndexed();
-  const p = g.attributes.position;
-  const cols = new Float32Array(p.count * 3);
-  const disp = new Map();
-  for (let i = 0; i < p.count; i++) {
-    const key = `${p.getX(i).toFixed(3)},${p.getY(i).toFixed(3)},${p.getZ(i).toFixed(3)}`;
-    if (!disp.has(key)) disp.set(key, 0.8 + r() * 0.4);
-    const k = disp.get(key);
-    p.setXYZ(i, p.getX(i) * k * 1.15, Math.max(-0.3, p.getY(i) * k * 0.75), p.getZ(i) * k);
-  }
-  for (let t = 0; t < p.count; t += 3) {
-    const c = r() < 0.3 ? colB : colA;
-    const sh = 0.85 + r() * 0.2;
-    for (let v = 0; v < 3; v++) { cols[(t + v) * 3] = c.r * sh; cols[(t + v) * 3 + 1] = c.g * sh; cols[(t + v) * 3 + 2] = c.b * sh; }
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
-  g.computeVertexNormals();
-  return g;
-}
-function pickGeo(kind) {
-  const g = new GeoBuilder(), xf = GeoBuilder.xf(0, 0, 0, 0);
-  if (kind === 'hemp') { for (let i = 0; i < 5; i++) { const a = i * 1.3; g.box(xf, Math.cos(a) * 0.15, 0, Math.sin(a) * 0.15, 0.03, 0.6, 0.03, 0x5a8a3a); g.box(xf, Math.cos(a) * 0.2, 1.0, Math.sin(a) * 0.2, 0.18, 0.05, 0.06, 0x6fa04a, a); } }
-  else if (kind === 'wood_pile') { for (let i = 0; i < 3; i++) g.cyl(GeoBuilder.xf(0, 0.12 + i * 0.2, 0, 0), 0, 0, -0.5 + i * 0.05, 0.1, 1, 0x8a6a48, 6); g.box(xf, 0, 0.1, 0, 0.5, 0.1, 0.3, 0x7a5a38); }
-  else if (kind === 'mushroom') { g.cyl(xf, 0, 0, 0, 0.04, 0.15, 0xe8dcc0, 5); g.cyl(xf, 0, 0.15, 0, 0.14, 0.07, 0xb9926a, 7, true, 0.02); }
-  else if (kind === 'berries') { g.cyl(xf, 0, 0, 0, 0.5, 0.6, 0x3f6b2e, 7, true, 0.25); for (let i = 0; i < 6; i++) g.box(xf, Math.cos(i) * 0.4, 0.3 + (i % 3) * 0.1, Math.sin(i) * 0.4, 0.05, 0.05, 0.05, 0x7b3fa0); }
-  else {
-    const col = kind === 'metal_pile' ? 0x9a7a5a : kind === 'sulfur_pile' ? 0xcfc050 : 0x9a9a95;
-    g.box(xf, 0, 0.12, 0, 0.25, 0.12, 0.2, col, 0.4); g.box(xf, 0.2, 0.08, 0.15, 0.15, 0.08, 0.12, col, 1.2);
-  }
-  return g.geometry();
-}
+const CHUNK = 128;
+const VARIANTS = { pine: 4, pine_snow: 3, oak: 4, palm: 3, cactus: 3 };
 
 export class ResourceSystem {
   constructor(game) {
@@ -82,15 +26,7 @@ export class ResourceSystem {
     this.hash = new SpatialHash(16);
     this.groups = new Map();   // key -> {mesh, nodes:[]}
     this.dynamic = [];         // corpses
-    this.mat = new THREE.MeshLambertMaterial({ vertexColors: true });
-    this.geos = {};
   }
-  geoFor(type, kind) {
-    const key = type + ':' + kind;
-    if (!this.geos[key]) this.geos[key] = type === 'tree' ? treeGeo(kind) : type === 'ore' ? rockGeo(kind, kind.length * 99) : pickGeo(kind);
-    return this.geos[key];
-  }
-
   init(world) {
     const W = world;
     const add = (type, kind, x, z, rot, s) => {
@@ -105,24 +41,32 @@ export class ResourceSystem {
     for (const o of W.spawns.nodes) add('ore', o.kind, o.x, o.z, o.r, 1);
     for (const h of W.spawns.hemp) add('pick', 'hemp', h.x, h.z, 0, 1);
     for (const p of W.spawns.pickups) add('pick', p.kind, p.x, p.z, (p.x * 13) % 6, 1);
-    // instanced meshes per kind per chunk
+    // instanced meshes per kind + variant per chunk, with a detailed and a coarse version
+    const V = this.game.veg;
     for (const n of this.nodes) {
       const cx = Math.floor((n.x + W.half) / CHUNK), cz = Math.floor((n.z + W.half) / CHUNK);
-      const key = `${n.type}:${n.kind}:${cx}:${cz}`;
+      n.variant = n.type === 'tree' ? n.idx % (VARIANTS[n.kind] || 3) : n.type === 'ore' ? n.idx % 3 : 0;
+      const key = `${n.type}:${n.kind}:${n.variant}:${cx}:${cz}`;
       let g = this.groups.get(key);
-      if (!g) { g = { key, type: n.type, kind: n.kind, nodes: [], cx: (cx + 0.5) * CHUNK - W.half, cz: (cz + 0.5) * CHUNK - W.half }; this.groups.set(key, g); }
+      if (!g) { g = { key, type: n.type, kind: n.kind, variant: n.variant, nodes: [], cx: (cx + 0.5) * CHUNK - W.half, cz: (cz + 0.5) * CHUNK - W.half }; this.groups.set(key, g); }
       n.group = g; n.inst = g.nodes.length; g.nodes.push(n);
     }
-    const m4 = new THREE.Matrix4();
+    const m4 = new THREE.Matrix4(), col = new THREE.Color();
     for (const g of this.groups.values()) {
-      const mesh = new THREE.InstancedMesh(this.geoFor(g.type, g.kind), this.mat, g.nodes.length);
-      mesh.castShadow = g.type === 'tree';
-      mesh.receiveShadow = g.type !== 'tree';
-      g.mesh = mesh;
+      let hi, lo;
+      if (g.type === 'tree') { const t = V.tree(g.kind, g.variant); hi = t.hi; lo = t.lo; }
+      else if (g.type === 'ore') { hi = V.rock(g.kind, g.variant, false); lo = V.rock(g.kind, g.variant, true); }
+      else { hi = V.pickup(g.kind); lo = null; }
+      const mk = (parts, shadows) => parts.map(p => {
+        const m = new THREE.InstancedMesh(p.geo, p.mat, g.nodes.length);
+        m.castShadow = shadows && !!p.shadow; m.receiveShadow = true;
+        if (p.tint) { for (let i = 0; i < g.nodes.length; i++) { const v = 0.82 + ((g.nodes[i].idx * 37) % 100) / 100 * 0.32; col.setRGB(v, v * (0.96 + ((g.nodes[i].idx * 13) % 10) / 100), v * 0.9); m.setColorAt(i, col); } }
+        this.game.scene.add(m); return m;
+      });
+      g.hi = mk(hi, true); g.lo = lo ? mk(lo, false) : [];
+      g.meshes = [...g.hi, ...g.lo];
       for (const n of g.nodes) this._writeMatrix(n, m4);
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.computeBoundingSphere();
-      this.game.scene.add(mesh);
+      for (const m of g.meshes) { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); }
     }
     for (const n of this.nodes) if (n.alive) this._addCollider(n);
   }
@@ -137,11 +81,13 @@ export class ResourceSystem {
   _writeMatrix(n, m4 = new THREE.Matrix4()) {
     const s = n.alive ? n.s : 0.0001;
     const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), n.rot);
-    const sink = n.type === 'tree' ? -0.3 : n.type === 'ore' ? -0.15 : 0;
+    const sink = n.type === 'tree' ? -0.1 : n.type === 'ore' ? -0.15 : 0;
     const scl = n.type === 'ore' ? Math.max(0.45, n.hp / n.hpMax) * s : s;
+    // trees lean slightly with the slope they grow on
+    if (n.type === 'tree' && n.alive && n.tilt === undefined) { const nr = this.game.world.normalAt(n.x, n.z); n.tilt = [nr.x * 0.25, nr.z * 0.25]; }
+    if (n.type === 'tree' && n.tilt) q.premultiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(n.tilt[1], 0, -n.tilt[0])));
     m4.compose(new THREE.Vector3(n.x, n.y + sink, n.z), q, new THREE.Vector3(scl, scl, scl));
-    n.group.mesh.setMatrixAt(n.inst, m4);
-    n.group.mesh.instanceMatrix.needsUpdate = true;
+    for (const m of n.group.meshes) { m.setMatrixAt(n.inst, m4); m.instanceMatrix.needsUpdate = true; }
   }
   _addCollider(n) {
     const P = this.game.physics;
@@ -242,13 +188,17 @@ export class ResourceSystem {
     for (let i = this.dynamic.length - 1; i >= 0; i--) { const c = this.dynamic[i]; if (now - c.born > 360) this.removeCorpse(c); }
   }
   updateVisibility(cam) {
+    const gfx = this.game.gfx || {};
+    const detail = gfx.treeDetail || 180, view = (gfx.viewDist || 1000) + 100;
     for (const g of this.groups.values()) {
-      const dx = g.cx - cam.x, dz = g.cz - cam.z;
-      const lim = g.type === 'pick' ? 260 : g.type === 'ore' ? 600 : 900;
-      g.mesh.visible = dx * dx + dz * dz < (lim + 180) * (lim + 180);
+      const d = Math.hypot(g.cx - cam.x, g.cz - cam.z) - CHUNK * 0.7;
+      const lim = g.type === 'pick' ? 160 + detail * 0.3 : view;
+      const near = g.type === 'tree' ? d < detail : g.type === 'ore' ? d < detail * 0.8 : true;
+      const show = d < lim;
+      for (const m of g.hi) m.visible = show && (near || !g.lo.length);
+      for (const m of g.lo) m.visible = show && !near;
     }
   }
-
   // Ray pick of a node within reach. Returns {node, t} or null.
   rayNode(o, d, maxT) {
     let best = null, bt = maxT;

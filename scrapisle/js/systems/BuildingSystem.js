@@ -38,18 +38,17 @@ export class BuildingSystem {
     this.structures = new Map();
     this.pieceHash = new SpatialHash(12);
     this.geos = {};
-    this.mats = GRADES.map(g => new THREE.MeshLambertMaterial({ vertexColors: true, color: g.color }));
-    this.mats[0].transparent = true; this.mats[0].opacity = 0.92;
+    const M = game.mats;
+    this.gradeMat = [M.get('twig', { vc: true }), M.get('wood', { vc: true }), M.get('stone', { vc: true }), M.get('corrugated', { vc: true }), M.get('armored', { vc: true })];
+    this.trimMat = { wood: M.get('wood', { vc: true }), metal: M.get('metal', { vc: true }) };
     this.ghostOk = new THREE.MeshBasicMaterial({ color: 0x4ad86a, transparent: true, opacity: 0.35, depthWrite: false });
     this.ghostBad = new THREE.MeshBasicMaterial({ color: 0xd84a4a, transparent: true, opacity: 0.35, depthWrite: false });
-    this.doorMats = {};
-    for (const k in DOORS) this.doorMats[k] = new THREE.MeshLambertMaterial({ vertexColors: true, color: DOORS[k].color });
-    this.lockMat = new THREE.MeshBasicMaterial({ color: 0x5ad88a });
-    this.lockMatRed = new THREE.MeshBasicMaterial({ color: 0xd84a4a });
+    this.visuals = {};
     this.group = new THREE.Group();
     game.scene.add(this.group);
   }
 
+  // Solid silhouette geometry (used for placement ghosts).
   geo(type) {
     if (!this.geos[type]) {
       const g = new GeoBuilder(), xf = GeoBuilder.xf(0, 0, 0, 0);
@@ -61,6 +60,80 @@ export class BuildingSystem {
       this.geos[type] = g.geometry();
     }
     return this.geos[type];
+  }
+  // Detailed visual parts for a piece at a grade: twig is a lashed stick lattice; higher grades are
+  // solid textured panels with frames/trim. Cached per type+grade.
+  visual(type, grade) {
+    const key = type + ':' + grade;
+    if (this.visuals[key]) return this.visuals[key];
+    const g = new GeoBuilder(0.66), xf = GeoBuilder.xf(0, 0, 0, 0);
+    const boxes = pieceBoxes(type);
+    if (grade === 0) {
+      g.setMat('g');
+      const t = 0.045;
+      for (const b of boxes) {
+        const x0 = b.x - b.hx, x1 = b.x + b.hx, y0 = b.y - b.hy, y1 = b.y + b.hy, z0 = b.z - b.hz, z1 = b.z + b.hz;
+        const E = (a, c) => g.stick(xf, a[0], a[1], a[2], c[0], c[1], c[2], t, 0xffffff);
+        const C = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
+        for (const [a, c] of [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]) E(C[a], C[c]);
+        // diagonals across the largest faces
+        if (b.hz <= b.hx && b.hz <= b.hy) { E(C[0], C[2]); E(C[5], C[7]); if (b.hy > 1) { E([x0, b.y, b.z], [x1, b.y, b.z]); } }
+        else if (b.hx <= b.hz && b.hx <= b.hy) { E(C[0], C[7]); E(C[1], C[6]); }
+        else { E(C[3], C[6]); E(C[2], C[7]); }
+      }
+      if (type === 'roof') g.cyl(GeoBuilder.xf(0, 0, 0, Math.PI / 4), 0, 0, 0, 2.12, 1.4, 0xd0d0d0, 4, true, 0.05);
+    } else {
+      g.setMat('g');
+      const tint = grade === 2 ? 0xffffff : 0xffffff;
+      for (const b of boxes) g.box(xf, b.x, b.y, b.z, b.hx, b.hy, b.hz, tint);
+      if (type === 'roof') g.cyl(GeoBuilder.xf(0, 0, 0, Math.PI / 4), 0, 0, 0, 2.12, 1.4, 0xd8d8d8, 4, true, 0.05);
+      // frames on wall-type pieces
+      if ((type === 'wall' || type === 'doorway' || type === 'window' || type === 'half_wall') && (grade === 1 || grade === 3)) {
+        g.setMat(grade === 1 ? 'tw' : 'tm');
+        const col = grade === 1 ? 0x6b5038 : 0xcfcfcf, H = type === 'half_wall' ? 1.5 : 3;
+        for (const x of [-1.44, 1.44]) g.box(xf, x, H / 2, 0, 0.07, H / 2, 0.13, col);
+        g.box(xf, 0, H - 0.06, 0, 1.5, 0.06, 0.13, col); g.box(xf, 0, 0.06, 0, 1.5, 0.06, 0.13, col);
+        if (type === 'doorway') for (const x of [-0.62, 0.62]) g.box(xf, x, 1.1, 0, 0.05, 1.1, 0.13, col);
+      }
+      if ((type === 'foundation' || type === 'floor') && grade === 1) { g.setMat('tw'); for (const x of [-1.35, 0, 1.35]) g.box(xf, x, type === 'floor' ? -0.22 : -0.08, 0, 0.08, 0.08, 1.5, 0x6b5038); }
+    }
+    const mats = { g: this.gradeMat[grade], tw: this.trimMat.wood, tm: this.trimMat.metal };
+    return (this.visuals[key] = g.parts(k => mats[k]));
+  }
+  doorVisual(type) {
+    const key = 'door:' + type;
+    if (this.visuals[key]) return this.visuals[key];
+    const g = new GeoBuilder(0.66), xf = GeoBuilder.xf(0, 0, 0, 0), M = this.game.mats;
+    const B = DOOR_BOX;
+    if (type === 'wood_door') {
+      g.setMat('wood'); g.box(xf, B.x, B.y, B.z, B.hx, B.hy, B.hz, 0xffffff);
+      g.setMat('trim'); for (const y of [0.4, 1.8]) g.box(xf, 0, y, 0.07, 0.58, 0.07, 0.025, 0x6b5038);
+      g.stick(xf, -0.5, 0.45, 0.075, 0.5, 1.75, 0.075, 0.035, 0x6b5038);
+    } else if (type === 'metal_door') {
+      g.setMat('sheet'); g.box(xf, B.x, B.y, B.z, B.hx, B.hy, B.hz, 0xffffff);
+      g.setMat('metal'); for (const x of [-0.56, 0.56]) g.box(xf, x, 1.1, 0, 0.04, 1.1, 0.07, 0xbbbbbb); for (const y of [0.04, 2.16]) g.box(xf, 0, y, 0, 0.6, 0.04, 0.07, 0xbbbbbb);
+      g.setMat('dark'); g.box(xf, 0, 1.65, 0, 0.22, 0.04, 0.07, 0x111111);
+    } else {
+      g.setMat('arm'); g.box(xf, B.x, B.y, B.z, B.hx, B.hy, B.hz + 0.02, 0xffffff);
+      g.setMat('metal'); for (const y of [0.35, 0.95, 1.55, 2.0]) g.box(xf, 0, y, 0, 0.6, 0.05, 0.09, 0x9a9a9a);
+    }
+    g.setMat('metal'); g.box(xf, 0.45, 1.05, 0.08, 0.02, 0.06, 0.03, 0xaaaaaa); g.box(xf, 0.45, 1.05, -0.08, 0.02, 0.06, 0.03, 0xaaaaaa);
+    const mats = { wood: M.get('wood', { vc: true }), trim: M.get('wood', { vc: true }), sheet: M.get('corrugated', { vc: true }), metal: M.get('metal', { vc: true }), arm: M.get('armored', { vc: true }), dark: M.get('rubber') };
+    return (this.visuals[key] = g.parts(k => mats[k]));
+  }
+  lockVisual(type) {
+    const key = 'lock:' + type;
+    if (this.visuals[key]) return this.visuals[key];
+    const g = new GeoBuilder(1), xf = GeoBuilder.xf(0, 0, 0, 0), M = this.game.mats;
+    if (type === 'code') { g.setMat('p'); g.box(xf, 0, 0, 0, 0.06, 0.09, 0.03, 0xffffff); g.setMat('l'); g.box(xf, 0, 0.065, 0.032, 0.02, 0.008, 0.004, 0xffffff); }
+    else { g.setMat('m'); g.box(xf, 0, -0.02, 0, 0.04, 0.035, 0.015, 0xffffff); g.cyl(xf, 0, 0.015, 0, 0.025, 0.04, 0xffffff, 8, false); }
+    const mats = { p: M.get('polymer'), l: M.get('emissive'), m: M.get('paint', { vc: true, color: 0xc7a34b }) };
+    return (this.visuals[key] = g.parts(k => mats[k]));
+  }
+  _parts(parts, tag) {
+    const grp = new THREE.Group();
+    for (const p of parts) { const m = new THREE.Mesh(p.geo, p.mat); m.castShadow = true; m.receiveShadow = true; m.userData[tag[0]] = tag[1]; grp.add(m); }
+    return grp;
   }
 
   // ---------- coordinates ----------
@@ -252,9 +325,8 @@ export class BuildingSystem {
   _buildPieceVisual(st, p) {
     if (p.mesh) this.group.remove(p.mesh);
     for (const c of p.cols || []) this.game.physics.remove(c);
-    const m = new THREE.Mesh(this.geo(p.type), this.mats[p.grade]);
+    const m = this._parts(this.visual(p.type, p.grade), ['piece', p]);
     m.position.set(p.wx, p.wy, p.wz); m.rotation.y = p.wyaw;
-    m.castShadow = true; m.receiveShadow = true;
     m.userData.piece = p;
     this.group.add(m);
     p.mesh = m;
@@ -276,13 +348,11 @@ export class BuildingSystem {
     const hx = -0.6;
     hinge.position.set(p.wx + hx * c, p.wy, p.wz - hx * s);
     hinge.rotation.y = p.wyaw + (d.open ? (d.flip ? -1 : 1) * Math.PI / 2 : 0);
-    const m = new THREE.Mesh(this.geo('door'), this.doorMats[d.type]);
+    const m = this._parts(this.doorVisual(d.type), ['door', p]);
     m.position.set(0.6, 0, 0);
     hinge.add(m);
     if (d.lock) {
-      const lk = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 0.14), d.lock.type === 'code' ? this.lockMat : new THREE.MeshBasicMaterial({ color: 0xc7a34b }));
-      lk.position.set(1.0, 1.05, 0.08); hinge.add(lk);
-      d.lockMesh = lk;
+      for (const side of [1, -1]) { const lk = this._parts(this.lockVisual(d.lock.type), ['door', p]); lk.position.set(1.05, 1.15, 0.09 * side); lk.rotation.y = side > 0 ? 0 : Math.PI; hinge.add(lk); }
     }
     m.userData.door = p;
     this.group.add(hinge);
@@ -371,7 +441,7 @@ export class BuildingSystem {
     if (!surv.inv.pay(cost)) return { ok: false, err: 'Not enough resources' };
     const frac = p.hp / p.maxHp;
     p.grade = grade; p.maxHp = pieceMaxHp(p.type, grade); p.hp = Math.max(1, p.maxHp * Math.max(frac, 0.5));
-    p.mesh.material = this.mats[grade];
+    this._buildPieceVisual(st, p);
     st.version++;
     this.game.events.emit('upgraded', { surv, st, piece: p });
     return { ok: true };

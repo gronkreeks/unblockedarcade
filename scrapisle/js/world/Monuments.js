@@ -1,6 +1,6 @@
 // Monument layouts: geometry, colliders, loot spawn points, recyclers, militia posts and radiation zones.
 import * as THREE from 'three';
-import { GeoBuilder, VCOLOR_MAT } from './geo.js';
+import { GeoBuilder } from './geo.js';
 import { mulberry32 } from '../core/util.js';
 
 const C = {
@@ -9,10 +9,24 @@ const C = {
 };
 const CONTAINER_COLS = [0x9a3a2a, 0x3a5a8a, 0x3d6b4a, 0xc4682a, 0x7d868f, 0x8a4b2a, 0xc9a23a];
 
+// Which textured material each palette colour uses, and the tint it keeps.
+const PAINTED = new Set([C.yellow, C.red, C.white, C.green, C.blue, C.orange, ...CONTAINER_COLS]);
+function matFor(color) {
+  if (color === C.concrete || color === C.dark) return ['concrete', color === C.dark ? 0xa8a8a8 : 0xffffff];
+  if (color === C.asphalt) return ['asphalt', 0xffffff];
+  if (color === C.rust) return ['rust', 0xffffff];
+  if (color === C.metal) return ['corrugated', 0xffffff];
+  if (color === C.wood) return ['wood', 0xffffff];
+  if (color === C.glass) return ['glass', 0xffffff];
+  if (color === C.black) return ['rubber', 0xffffff];
+  if (PAINTED.has(color)) return ['paint', color];
+  return ['rock', color];
+}
+
 class MonBuilder {
-  constructor(m, physics) {
-    this.m = m; this.phys = physics;
-    this.g = new GeoBuilder();
+  constructor(m, physics, mats) {
+    this.m = m; this.phys = physics; this.mats = mats;
+    this.g = new GeoBuilder(0.5);
     this.xf = GeoBuilder.xf(m.x, m.y, m.z, m.rot);
     this.loot = []; this.recyclers = []; this.npcs = []; this.rads = []; this.colliders = [];
     this.rng = mulberry32((Math.abs(Math.round(m.x * 7 + m.z * 13)) + 1) >>> 0);
@@ -21,15 +35,17 @@ class MonBuilder {
   // y = bottom of the box (local, above pad)
   box(x, y, z, hx, hy, hz, color, opt = {}) {
     const yaw = opt.yaw || 0;
-    this.g.box(this.xf, x, y + hy, z, hx, hy, hz, color, yaw);
+    const [mk, tint] = matFor(color); this.g.setMat(mk);
+    this.g.box(this.xf, x, y + hy, z, hx, hy, hz, tint, yaw);
     if (opt.solid !== false) {
       const p = this.xf(x, y + hy, z);
       this.colliders.push(this.phys.add({ type: 'box', x: p[0], y: p[1], z: p[2], hx, hy, hz, yaw: this.m.rot + yaw, ref: this.m }));
     }
   }
-  slab(x, z, hx, hz, color, y = 0.02) { this.g.box(this.xf, x, y, z, hx, 0.04, hz, color, 0, false); }
+  slab(x, z, hx, hz, color, y = 0.02) { const [mk, tint] = matFor(color); this.g.setMat(mk); this.g.box(this.xf, x, y, z, hx, 0.04, hz, tint, 0, false); }
   cyl(x, y, z, r, h, color, solid = true, seg = 12) {
-    this.g.cyl(this.xf, x, y, z, r, h, color, seg);
+    const [mk, tint] = matFor(color); this.g.setMat(mk);
+    this.g.cyl(this.xf, x, y, z, r, h, tint, Math.max(seg, 16));
     if (solid) { const p = this.xf(x, 0, z); this.colliders.push(this.phys.add({ type: 'cyl', x: p[0], z: p[2], y0: this.m.y + y, y1: this.m.y + y + h, r, ref: this.m })); }
   }
   // Rectangular room with walls; doors: [{side:'+z'|'-z'|'+x'|'-x', at, w, h}]. Returns door waypoints.
@@ -60,7 +76,23 @@ class MonBuilder {
       segs.push([cur, S.len / 2]);
       for (const [a, b] of segs) if (b - a > 0.05) this._wallSeg(S, a, b, 0, h, t, color);
     }
-    if (!opt.noRoof) this.box(cx, h, cz, hw + 0.2, 0.2, hd + 0.2, roofColor);
+    if (!opt.noRoof) {
+      this.box(cx, h, cz, hw + 0.2, 0.2, hd + 0.2, roofColor);
+      // parapet, roof clutter and wall trims for detail
+      for (const [x, z, a, b] of [[cx, cz + hd + 0.12, hw + 0.3, 0.1], [cx, cz - hd - 0.12, hw + 0.3, 0.1], [cx + hw + 0.12, cz, 0.1, hd + 0.3], [cx - hw - 0.12, cz, 0.1, hd + 0.3]]) this.box(x, h + 0.4, z, a, 0.22, b, C.dark, { solid: false });
+      if (w > 7) { this.box(cx + hw * 0.4, h + 0.4, cz - hd * 0.3, 0.9, 0.45, 0.7, C.metal, { solid: false }); this.cyl(cx - hw * 0.5, h + 0.4, cz + hd * 0.4, 0.25, 1.2, C.metal, false, 10); }
+      this.box(cx, 0, cz + hd + 0.16, hw + 0.15, 0.25, 0.06, C.dark, { solid: false });
+      this.box(cx, 0, cz - hd - 0.16, hw + 0.15, 0.25, 0.06, C.dark, { solid: false });
+    }
+    // door frames
+    for (const dr of doors) {
+      const S = sides.find(q => q.s === dr.side);
+      const off = S.s[0] === '+' ? 0.17 : -0.17;
+      for (const e of [-1, 1]) {
+        if (S.ax === 'x') this.box(S.fx + dr.at + e * (dr.w / 2 + 0.06), 0, S.fz + off, 0.06, dr.h / 2, 0.04, C.metal, { solid: false });
+        else this.box(S.fx + off, 0, S.fz + dr.at + e * (dr.w / 2 + 0.06), 0.04, dr.h / 2, 0.06, C.metal, { solid: false });
+      }
+    }
     this.slab(cx, cz, hw, hd, opt.floor || C.dark, 0.03);
     return ways;
   }
@@ -97,10 +129,9 @@ class MonBuilder {
     this.box(x, 1.2, z - 0.2 * Math.cos(yaw), 0.85, 0.35, 1.1, C.glass, { yaw, solid: false });
   }
   finish(scene) {
-    const mesh = new THREE.Mesh(this.g.geometry(), VCOLOR_MAT);
-    mesh.castShadow = true; mesh.receiveShadow = true;
-    scene.add(mesh);
-    return { m: this.m, mesh, loot: this.loot, recyclers: this.recyclers, npcs: this.npcs, rads: this.rads, colliders: this.colliders };
+    const meshes = this.g.meshes(k => this.mats.get(k, { vc: true }));
+    for (const mesh of meshes) scene.add(mesh);
+    return { m: this.m, mesh: meshes[0], meshes, loot: this.loot, recyclers: this.recyclers, npcs: this.npcs, rads: this.rads, colliders: this.colliders };
   }
 }
 
@@ -279,10 +310,10 @@ const LAYOUTS = {
   },
 };
 
-export function buildMonuments(world, scene, physics) {
+export function buildMonuments(world, scene, physics, mats) {
   const out = [];
   for (const m of world.monuments) {
-    const b = new MonBuilder(m, physics);
+    const b = new MonBuilder(m, physics, mats);
     LAYOUTS[m.type](b);
     out.push(b.finish(scene));
   }
