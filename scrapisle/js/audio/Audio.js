@@ -1,4 +1,6 @@
 // Synthesised sound effects (WebAudio). Distance-attenuated for world sounds.
+const SHOT_RANGE = 200;   // gunshots fade out at about 200 m (30 s of running)
+const BOOM_RANGE = 320;   // explosions carry a bit further
 export class Audio {
   constructor(game) {
     this.game = game;
@@ -73,7 +75,8 @@ export class Audio {
     o.connect(g); g.connect(dest || this.master); o.start(t); o.stop(t + dur + 0.05);
   }
   shot(def, src) {
-    const v = this._gainFor(src, 700) * (src && src.isPlayer ? 1 : 0.95);
+    // a fight you can just hear is about 30 s of running away (~200 m)
+    const v = this._gainFor(src, SHOT_RANGE) * (src && src.isPlayer ? 0.85 : 0.8);
     if (v < 0.01 || this._throttle('shot' + (src && src.id), 30)) return;
     const out = this._dest(src);
     if (def.type === 'bow') { this.noise(0.12, 900, 2, 0.25 * v, 'bandpass', 0, out); return; }
@@ -81,15 +84,15 @@ export class Audio {
     const body = { assault_rifle: [0.32, 650, 95], semi_rifle: [0.3, 750, 110], bolt_rifle: [0.5, 520, 70], pump_shotgun: [0.42, 420, 70], double_barrel: [0.45, 400, 65], drum_smg: [0.22, 950, 140], scrap_smg: [0.2, 1100, 150], revolver: [0.3, 800, 105], semi_pistol: [0.22, 1200, 150], pipe_pistol: [0.4, 380, 60], crossbow: [0.12, 1300, 300] }[def.id] || [heavy ? 0.35 : 0.22, heavy ? 700 : 1100, heavy ? 90 : 140];
     // far shots arrive a moment later (sound travels ~340 m/s)
     const P = this.game.player, d = src && P && !src.isPlayer ? Math.hypot(src.x - P.x, src.z - P.z) : 0, late = Math.min(1.5, d / 340);
-    this.noise(0.035, 3200, 0.6, 0.9 * v, 'highpass', late, out);            // the crack
-    this.noise(body[0], body[1], 0.7, 1.25 * v, 'bandpass', late, out);      // the body of the shot
+    this.noise(0.035, 3200, 0.6, 0.75 * v, 'highpass', late, out);           // the crack
+    this.noise(body[0], body[1], 0.7, 1.05 * v, 'bandpass', late, out);      // the body of the shot
     this.tone(body[2], 0.22, 0.7 * v, 'triangle', 0.4, late, out);           // low punch
     this.noise(body[0] * 1.8, 260, 0.6, 0.45 * v, 'lowpass', late + 0.01, out); // room / tail
     // distant shots lose their high end and arrive as a low boom
     if (src && !src.isPlayer && v < 0.35) this.noise(0.7, 220, 0.5, 0.65 * Math.sqrt(v), 'lowpass', late + 0.03, out);
   }
   explosion(c) {
-    const v = this._gainFor(c, 900), out = this._dest(c);
+    const v = this._gainFor(c, BOOM_RANGE) * 0.85, out = this._dest(c);
     const P = this.game.player, late = P ? Math.min(2.5, Math.hypot(c.x - P.x, c.z - P.z) / 340) : 0;
     this.noise(0.08, 2200, 0.5, 0.8 * v, 'highpass', late, out);   // the blast crack
     this.noise(1.6, 180, 0.6, 1.1 * v, 'lowpass', late, out);      // the boom

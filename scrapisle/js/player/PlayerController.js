@@ -122,7 +122,12 @@ export class PlayerController {
     const rn = G.res.rayNode(e, d, 3.2, n => n.type === 'pick');
     if (rn && rn.t < bt) { bt = rn.t; best = { node: rn.node }; }
     const tt = G.physics.rayTerrain(e.x, e.y, e.z, d.x, d.y, d.z, 3.2);
-    if (tt !== null && tt < bt) best = null;
+    if (tt !== null && tt < bt) { best = null; bt = tt; }
+    // open doors have no collision: looking anywhere into the doorway, or at the swung-open door
+    // itself, still targets it so you can close it
+    const od = this.openDoorRay(e, d, Math.min(bt, 3.2));
+    // the doorway only wins when nothing you could use sits just past it (a box inside stays usable)
+    if (od && (od.leaf || !best || bt - od.t < 0.8)) return { door: od.p };
     if (!best) {
       // water to drink?
       const p = { x: e.x + d.x * 2, z: e.z + d.z * 2 };
@@ -140,6 +145,30 @@ export class PlayerController {
       if (c.tag === 'deploy') return { dep: c.ref };
     }
     return best;
+  }
+  openDoorRay(e, d, maxT) {
+    let hit = null, ht = maxT;
+    const plane = (cx, cy, cz, a, half, y0, y1, p, leaf) => {
+      const nx = Math.sin(a), nz = Math.cos(a);              // plane normal
+      const den = d.x * nx + d.z * nz; if (Math.abs(den) < 1e-4) return;
+      const t = ((cx - e.x) * nx + (cz - e.z) * nz) / den;
+      if (t <= 0 || t >= ht) return;
+      const px = e.x + d.x * t, py = e.y + d.y * t, pz = e.z + d.z * t;
+      const lat = (px - cx) * Math.cos(a) - (pz - cz) * Math.sin(a);
+      if (Math.abs(lat) > half || py < y0 || py > y1) return;
+      ht = t; hit = { p, t, leaf };
+    };
+    this.game.build.pieceHash.query(e.x, e.z, 4, p => {
+      if (p.type !== 'doorway' || !p.door || !p.door.open) return;
+      // the opening
+      plane(p.wx, p.wy, p.wz, p.wyaw, 0.7, p.wy, p.wy + 2.3, p, false);
+      // the door leaf, swung 90 degrees on its hinge at the left edge
+      const c = Math.cos(p.wyaw), sn = Math.sin(p.wyaw);
+      const hx = p.wx - 0.6 * c, hz = p.wz + 0.6 * sn;
+      const a = p.wyaw + (p.door.flip ? -1 : 1) * Math.PI / 2;
+      plane(hx + 0.6 * Math.cos(a), p.wy, hz - 0.6 * Math.sin(a), a, 0.65, p.wy, p.wy + 2.3, p, true);
+    });
+    return hit;
   }
   promptFor(t) {
     if (!t) return null;
