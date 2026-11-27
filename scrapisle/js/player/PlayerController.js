@@ -1,4 +1,5 @@
 // First-person controls for the player's survivor: movement, interaction, using held items, building previews.
+import { MOVE_KEYS } from '../ui/UIManager.js';
 import * as THREE from 'three';
 import { ITEMS } from '../data/items.js';
 import { PIECES, PIECE_ORDER, DEPLOYABLES, pieceCost } from '../data/building.js';
@@ -25,7 +26,15 @@ export class PlayerController {
 
   _bind() {
     const c = this.canvas;
-    document.addEventListener('pointerlockchange', () => { this.locked = document.pointerLockElement === c; if (!this.locked) { this.keys.clear(); this.mouse.l = this.mouse.r = false; this.game.onUnlock(); } });
+    document.addEventListener('pointerlockchange', () => {
+      this.locked = document.pointerLockElement === c;
+      if (!this.locked) {
+        // opening the inventory keeps you moving; anything else stops you
+        if (this.game.ui.open === 'inv') { for (const k of [...this.keys]) if (!MOVE_KEYS.has(k)) this.keys.delete(k); } else this.keys.clear();
+        this.mouse.l = this.mouse.r = false; this.game.onUnlock();
+      }
+    });
+    addEventListener('blur', () => this.keys.clear());
     document.addEventListener('mousemove', e => {
       if (!this.locked || !this.s || !this.s.alive) return;
       const zoom = this.mouse.r && this.isGun() ? 1 / (ITEMS[this.s.activeStack().id].zoom || 1.3) : 1;
@@ -47,7 +56,7 @@ export class PlayerController {
     document.addEventListener('keydown', e => {
       if (this.game.ui.captureKeys(e)) return;
       if (e.code === 'Tab') e.preventDefault();
-      if (!this.locked) return;
+      if (!this.locked) { if (this.game.ui.open === 'inv' && MOVE_KEYS.has(e.code)) this.keys.add(e.code); return; }
       this.keys.add(e.code);
       const s = this.s; if (!s || !s.alive) return;
       if (e.code.startsWith('Digit')) { const n = +e.code.slice(5); if (n >= 1 && n <= 6) this.selectSlot(n - 1); }
@@ -109,8 +118,9 @@ export class PlayerController {
     let best = null, bt = 3.2;
     const hc = G.physics.rayColliders(e.x, e.y, e.z, d.x, d.y, d.z, 3.2, c => ['loot', 'bag', 'drop', 'deploy', 'door', 'piece'].includes(c.tag));
     if (hc) { bt = hc.t; best = { col: hc.c, t: hc.t }; }
-    const rn = G.res.rayNode(e, d, 3.2);
-    if (rn && rn.t < bt && rn.node.type === 'pick') { bt = rn.t; best = { node: rn.node }; }
+    // pickups only: a big rock or tree next to a pile must not hide it
+    const rn = G.res.rayNode(e, d, 3.2, n => n.type === 'pick');
+    if (rn && rn.t < bt) { bt = rn.t; best = { node: rn.node }; }
     const tt = G.physics.rayTerrain(e.x, e.y, e.z, d.x, d.y, d.z, 3.2);
     if (tt !== null && tt < bt) best = null;
     if (!best) {
@@ -246,16 +256,17 @@ export class PlayerController {
     const s = this.s, G = this.game;
     if (!s || !s.alive) { this.vm.update(dt, 0, { hidden: true }); this.clearGhost(); return; }
     const uiOpen = G.ui.isOpen();
+    const still = uiOpen && G.ui.open !== 'inv';   // menus other than the inventory stop you
     const k = this.keys;
     // movement
     const W = G.world;
     const water = W.waterSurface(s.x, s.z);
     const depth = water ? water.y - s.y : 0;
     const swimming = depth > 1.25;
-    s.crouch = !uiOpen && (k.has('ControlLeft') || k.has('KeyC')) && !swimming;
-    const sprint = !uiOpen && k.has('ShiftLeft') && !s.crouch && !this.mouse.r && k.has('KeyW');
+    s.crouch = !still && (k.has('ControlLeft') || k.has('KeyC')) && !swimming;
+    const sprint = !still && (k.has('ShiftLeft') || k.has('ShiftRight')) && !s.crouch && !this.mouse.r && k.has('KeyW');
     let fx = 0, fz = 0;
-    if (!uiOpen) {
+    if (!still) {
       if (k.has('KeyW')) fz += 1; if (k.has('KeyS')) fz -= 1;
       if (k.has('KeyA')) fx += 1; if (k.has('KeyD')) fx -= 1;
     }
@@ -272,7 +283,7 @@ export class PlayerController {
       if (k.has('Space')) s.vy = 1.5;
     } else {
       s.vy -= 9.81 * 1.35 * dt;
-      if (k.has('Space') && s.onGround && !uiOpen) { s.vy = JUMP; s.onGround = false; }
+      if (k.has('Space') && s.onGround && !still) { s.vy = JUMP; s.onGround = false; }
     }
     s.landSpeed = 0;
     G.physics.move(s, dt);

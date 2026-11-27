@@ -96,9 +96,12 @@ export class Environment {
     this.ambient.intensity = lerp(0.12, 0.05, dayT);
     this.renderer.toneMappingExposure = lerp(1.05, 0.85, dayT);
     // sky reflections for PBR metals/water, refreshed every few seconds
+    // Rebuilding it allocates GPU targets, so it only happens when the sky has visibly changed
+    // (the sun moved a few degrees, or the weather turned), never more than every 10 s.
     this.envT -= 1 / 60;
-    if (this.envT <= 0 && this.gfx.envMap !== false) {
-      this.envT = 6;
+    const sk = `${Math.round(Math.atan2(L.y, Math.hypot(L.x, L.z)) * 180 / Math.PI / 3)}|${Math.round(Math.atan2(L.x, L.z) * 180 / Math.PI / 6)}|${Math.round(this.cloud * 5)}|${Math.round(this.rain * 4)}|${useMoon ? 1 : 0}`;
+    if (this.envT <= 0 && this.gfx.envMap !== false && (sk !== this.envKey || !this.envRT)) {
+      this.envT = 10; this.envKey = sk;
       if (this.envRT) this.envRT.dispose();
       this.envSky.position.set(0, 0, 0);
       const clouds = U.cloudsOn.value; U.cloudsOn.value = 0;

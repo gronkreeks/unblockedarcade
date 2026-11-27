@@ -945,18 +945,21 @@ export class BotAI {
     } else { b.vx = b.vz = 0; b.vy -= 9.8 * dt; G.physics.move(b, dt); }
     // aim
     const head = Math.random() < S.headChance * 0.05 ? true : (ai.aimHead ?? false);
-    if (Math.random() < 0.02) ai.aimHead = Math.random() < S.headChance;
+    if (Math.random() < 0.02) ai.aimHead = Math.random() < S.headChance * (def && def.type === 'bow' ? 0.5 : 1);
     const ty = t.y + (t.kind === 'animal' ? (t.size || 0.6) * 0.9 : head ? (t.crouch ? 1.15 : 1.62) : (t.crouch ? 0.85 : 1.2));
     const e = b.eye();
     const vel = def && ranged ? def.vel : 300;
     const travel = d / vel;
-    const lead = 0.3 + S.recoilCtrl * 0.7;
+    // leading a moving target is guesswork, more so with slow arrows
+    if (ai.leadFor !== t || G.now > (ai.leadT || 0)) { ai.leadFor = t; ai.leadT = G.now + 1.2; ai.leadErr = randRange(-0.45, 0.45) * (def && def.type === 'bow' ? 1.6 : 1); }
+    const lead = (0.3 + S.recoilCtrl * 0.7) * (1 + ai.leadErr);
     const px = tx + (t.vx || 0) * travel * lead, pz = tz + (t.vz || 0) * travel * lead;
     const drop = ranged ? 0.5 * 9.81 * (def.type === 'bow' || def.id === 'crossbow' ? 0.5 : 0.35) * travel * travel * (0.3 + S.recoilCtrl * 0.7) : 0;
     ai.errT = (ai.errT || 0) - dt;
     if (ai.errT <= 0) { ai.errT = 0.4; ai.aimErrX = randRange(-1, 1); ai.aimErrY = randRange(-1, 1); }
     const moving = Math.hypot(t.vx || 0, t.vz || 0) > 1;
-    const err = S.aimErr * (1 + d / 70) * (moving ? 1.4 : 1) * (G.env.isNight ? 1.3 : 1);
+    const bow = def && def.type === 'bow';
+    const err = S.aimErr * (1 + d / 70) * (moving ? 1.5 : 1) * (G.env.isNight ? 1.3 : 1) * (bow ? 1.5 : 1) * (Math.hypot(b.vx, b.vz) > 1 ? 1.3 : 1);
     const wantYaw = Math.atan2(px - e.x, pz - e.z) + ai.aimErrX * err;
     const wantPitch = Math.atan2(ty + drop - e.y, Math.hypot(px - e.x, pz - e.z)) + ai.aimErrY * err * 0.6;
     // The bot tracks its intended aim; recoil drift (rs.accP/accY) sits on top of it and is only
@@ -980,6 +983,13 @@ export class BotAI {
       const maxDrift = ({ easy: 10, normal: 5, hard: 3.5, expert: 2.5 })[ai.tier] * (d < 15 ? 2.5 : 1);
       if (def.type === 'gun' && def.auto) { if (rs.accP > maxDrift) { ai.burstHold = G.now + 0.15 + (1 - S.recoilCtrl) * 0.2; } if (G.now < (ai.burstHold || 0)) return; }
       else if (def.type === 'gun' && (rs.accP > maxDrift * 0.6 || G.now - (ai.lastShot || 0) < (60 / def.rpm) * (1.6 - S.recoilCtrl * 0.6))) return;
+      if (def.type === 'bow') {
+        // nock, draw and hold like a player: about 1.6-2.4 s between arrows
+        if (G.now - (ai.lastShot || 0) < 0.7 + (1 - S.recoilCtrl) * 0.5) { ai.drawT = 0; return; }
+        ai.drawT = (ai.drawT || 0) + dt;
+        if (ai.drawT < 0.9 + Math.random() * 0.4) return;
+        ai.drawT = 0;
+      }
       const r = G.combat.fire(b, st, b.dir(), { aiming: d > 12, moving: Math.hypot(b.vx, b.vz) > 0.5 });
       if (r && r.recoil) { ai.lastShot = G.now; ai.shotFx = 0.06; ai.shot = 1; }
     } else if (d < (def ? def.range : 1.6) + 0.5 && b.swingT <= 0) {
@@ -1001,7 +1011,7 @@ export class BotAI {
         if (def.type === 'gun') { if (st.ammo <= 0) break; st.ammo--; } else { if (b.inv.remove(st.at, 1) < 1) break; }
         if (st.c !== undefined) st.c = Math.max(0, st.c - 1 / def.dur);
         const drift = Recoil.controlDifficulty(def) * (1 - S.recoilCtrl) * Math.min(1, shots / 3) * (d / 40);
-        const p = clamp((0.75 - S.aimErr * 25 - d / 160) / (1 + drift * 0.08), 0.05, 0.9);
+        const p = clamp((0.75 - S.aimErr * 25 - d / 160) / (1 + drift * 0.08), 0.05, 0.9) * (def.type === 'bow' ? 0.7 : 1);
         const A = ITEMS[st.at];
         for (let k = 0; k < (A.pellets || 1); k++) {
           if (Math.random() > p * (A.pellets > 1 ? Math.max(0.2, 1 - d / 25) : 1)) continue;

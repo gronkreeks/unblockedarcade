@@ -212,7 +212,8 @@ export function buildTerrain(world, game) {
         const x = p.x - dz * w * t, z = p.z + dx * w * t;
         pos.push(x, y, z); dep.push(Math.max(0, y - world.heightAt(x, z)));
       }
-      if (i > 0) for (let a = 0; a < across - 1; a++) { const b0 = (i - 1) * across + a, b1 = i * across + a; idx.push(b0, b1, b0 + 1, b0 + 1, b1, b1 + 1); }
+      // wound so the surface faces up (it used to face down and could only be seen from under water)
+      if (i > 0) for (let a = 0; a < across - 1; a++) { const b0 = (i - 1) * across + a, b1 = i * across + a; idx.push(b0, b0 + 1, b1, b0 + 1, b1 + 1, b1); }
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));

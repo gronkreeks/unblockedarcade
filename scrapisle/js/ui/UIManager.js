@@ -11,6 +11,7 @@ import { fmtTime } from '../core/util.js';
 import { PRESETS, resolve as resolveGfx } from '../gfx/GraphicsSettings.js';
 
 const $ = (id) => document.getElementById(id);
+export const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft', 'ShiftRight', 'Space', 'ControlLeft', 'KeyC']);
 const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const WEAR_LABEL = { head: 'Head', face: 'Face', shirt: 'Shirt', chest: 'Chest armour', pants: 'Trousers', kilt: 'Leg armour', feet: 'Feet', hands: 'Hands' };
 const costText = (cost, inv) => Object.entries(cost).map(([k, v]) => { const ok = !inv || inv.count(k) >= v; return `<span class="${ok ? '' : 'bad'}">${v} ${esc(ITEMS[k].name)}</span>`; }).join(', ');
@@ -48,7 +49,7 @@ export class UIManager {
     $('nwSeed').value = Math.floor(Math.random() * 1e6);
     $('nwStart').onclick = () => {
       const val = (id) => $(id).querySelector('.on').dataset.v;
-      this.game.startNew({ name: $('nwName').value.trim() || 'My island', seed: parseInt($('nwSeed').value, 10) || Math.floor(Math.random() * 1e6), difficulty: val('nwDiff'), mult: +val('nwMult'), bots: +val('nwBots'), size: +val('nwSize'), layout: 2 });
+      this.game.startNew({ name: $('nwName').value.trim() || 'My island', seed: parseInt($('nwSeed').value, 10) || Math.floor(Math.random() * 1e6), difficulty: val('nwDiff'), mult: +val('nwMult'), bots: +val('nwBots'), size: +val('nwSize'), layout: 3 });
     };
     // settings
     $('stSens').oninput = e => { this.game.prefs.sens = +e.target.value; this.game.applyPrefs(); };
@@ -131,6 +132,8 @@ export class UIManager {
     if (this.open === 'modal' && this.modalKey && this.modalKey(e)) { e.preventDefault(); return true; }
     if (this.open) {
       if (e.code === 'Escape') { this.close(); e.preventDefault(); return true; }
+      // like Rust: with the inventory or crafting open you can still walk, run, crouch and jump
+      if (this.open === 'inv' && MOVE_KEYS.has(e.code) && !(e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName))) { if (e.code === 'Space') e.preventDefault(); return false; }
       if ((e.code === 'Tab' || e.code === 'KeyI') && this.open === 'inv') { e.preventDefault(); this.close(true); return true; }
       if (e.code === 'KeyQ' && this.open === 'inv') { if (this.tab === 'craft') this.close(true); else { this.tab = 'craft'; this.render(true); } return true; }
       if (e.code === 'KeyM' && this.open === 'map') { this.close(true); return true; }
@@ -174,7 +177,7 @@ export class UIManager {
     const v = `${P.inv.version}|${lv}|${this.tab}|${this.craftCat}|${this.craftSel}|${this.craftN}|${P.craftQueue.length}|${this.sel ? this.sel.c + this.sel.i : ''}|${G.crafting.benchTier(P)}|${L && L.on}|${L && L.auth ? L.auth.size : ''}`;
     if (!force && v === this.renderV) {
       // live numbers without rebuilding the DOM (rebuilding would eat clicks)
-      const rp = $('recProg'); if (rp && L) rp.style.width = (L.on ? Math.round(L.procT / 5 * 100) : 0) + '%';
+      const rp = $('recProg'); if (rp && L) rp.style.width = (L.on ? Math.round(Math.min(1, L.procT / G.deploy.recyclePeriod()) * 100) : 0) + '%';
       const q = document.querySelector('#pRight .qrow .qt');
       if (q && P.craftQueue[0]) q.textContent = fmtTime(P.craftQueue[0].left);
       return;
@@ -256,7 +259,7 @@ export class UIManager {
     else status = `Next: ${ITEMS[next.id].name} becomes ${Object.entries(yields).map(([k, v]) => `${v} ${ITEMS[k].name}`).join(', ')}.`;
     return `<h3>Recycler</h3>
       <h4>Input</h4><div class="grid6 recIn">${inp}</div>
-      <div class="recBar"><i id="recProg" style="width:${d.on ? Math.round(d.procT / 5 * 100) : 0}%"></i></div>
+      <div class="recBar"><i id="recProg" style="width:${d.on ? Math.round(Math.min(1, d.procT / this.game.deploy.recyclePeriod()) * 100) : 0}%"></i></div>
       <p class="muted">${esc(status)}</p>
       <div class="row"><button class="btn ${d.on ? 'danger' : 'go'}" data-act="toggle">${d.on ? 'Stop' : 'Start'}</button>
         <button class="btn small" data-act="recall" ${comps ? '' : 'disabled'}>Add all my components (${comps})</button></div>
@@ -640,6 +643,7 @@ export class UIManager {
 
   // ================= HUD =================
   toast(msg) {
+    if (msg === undefined || msg === null || /\bundefined\b/.test(String(msg))) { if (msg) console.warn('toast with missing text:', msg); msg = msg ? String(msg).replace(/\s*\bundefined\b/g, '') : ''; if (!msg.trim()) return; }
     const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg;
     $('toasts').appendChild(el);
     setTimeout(() => el.remove(), 2600);
@@ -709,6 +713,11 @@ export class UIManager {
     this.fpsAcc = (this.fpsAcc || 0) + dt; this.fpsN = (this.fpsN || 0) + 1;
     if (this.fpsAcc > 1) { $('perf').textContent = `${Math.round(this.fpsN / this.fpsAcc)} fps, sim ${G.sim.stats.ms.toFixed(1)} ms`; this.fpsAcc = 0; this.fpsN = 0; }
     if (this.open === 'inv') this.render(false);
+    // walked away from what you were looting (you can move with the inventory open)
+    if (this.open === 'inv' && this.loot && this.loot.ref && this.loot.ref.x !== undefined && this.P && Math.hypot(this.P.x - this.loot.ref.x, this.P.z - this.loot.ref.z) > 4.5) {
+      if (this.loot.kind === 'loot') this.game.loot.touched(this.loot.ref);
+      this.loot = null; this.tab = 'craft'; this.render(true);
+    }
     if (this.open === 'map') { this.mapT = (this.mapT || 0) + dt; if (this.mapT > 0.5) { this.mapT = 0; this.drawMap(); } }
     if (this.open === 'inv' && this.loot) {
       // walked away from the container?

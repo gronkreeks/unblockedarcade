@@ -19,8 +19,16 @@ export const MONUMENT_TYPES = {
   fuel_stop: { name: 'Roadside Fuel Stop', r: 28, flat: true, inland: true, rad: 0, tier: 1 },
 };
 
+// Paved areas of each monument (local [x, z, halfX, halfZ], matching the slabs in Monuments.js).
+// New worlds level the ground under all of them so the concrete sits flush.
+export const MONUMENT_PADS = {
+  supermarket: [[0, 8, 24, 16]], gas_station: [[2, 4, 22, 14]], fuel_stop: [[0, 2, 22, 16]], mining_outpost: [[0, 0, 18, 18]],
+  train_yard: [[0, 0, 75, 50]], launch_site: [[0, 0, 100, 90]], airfield: [[0, 48, 115, 12], [0, 0, 100, 60]],
+};
+
 export class World {
-  // layout 1 = worlds saved before monuments were spread evenly (kept so old saves load unchanged)
+  // layout 1 = worlds saved before monuments were spread evenly, 2 = before paved areas were levelled
+  // (kept so old saves load unchanged)
   constructor(seed, size = 2048, layout = 1) {
     this.seed = seed >>> 0;
     this.layout = layout;
@@ -32,6 +40,7 @@ export class World {
     this.biome = new Uint8Array(this.N * this.N);
     this.water = new Float32Array(this.N * this.N).fill(-999); // river water surface height (fresh water)
     this.roadMask = new Uint8Array(this.N * this.N);
+    this.riverMask = new Uint8Array(this.N * this.N); // river channels (roads must not fill them back in)
     this.rivers = [];
     this.roads = [];
     this.monuments = [];
@@ -162,6 +171,8 @@ export class World {
     this._makeRivers(rng);
     // 4. Roads between monuments
     this._makeRoads(rng);
+    // paved monument areas stay level even where a road or river was cut next to them
+    if (this.layout >= 3) for (const m of this.monuments) this._flattenPads(m, 0);
     // 5. Biomes
     this._assignBiomes();
     // 6. Spawns
@@ -251,12 +262,31 @@ export class World {
       }
       this.monuments.push(m);
       this._flatten(m.x, m.z, T.coastal ? T.r * 0.75 : T.r, pad, T.coastal ? 10 : 30);
+      if (this.layout >= 3) this._flattenPads(m, 14);
     }
   }
   _padHeight(x, z, r) {
     let s = 0, c = 0;
     this._forArea(x, z, r, (i, j, px, pz, k) => { if (dist(px, pz, x, z) <= r) { s += this.heights[k]; c++; } });
     return Math.max(4, s / Math.max(1, c));
+  }
+  // Level the ground under a monument's paved rectangles (plus a soft blend around them).
+  _flattenPads(m, blend) {
+    const pads = MONUMENT_PADS[m.type]; if (!pads) return;
+    const c = Math.cos(m.rot), s = Math.sin(m.rot);
+    for (const [px, pz, hx, hz] of pads) {
+      const R = Math.hypot(hx, hz) + blend + 4;
+      const cx = m.x + px * c + pz * s, cz = m.z - px * s + pz * c;
+      this._forArea(cx, cz, R, (i, j, wx, wz, k) => {
+        // world -> monument local
+        const dx = wx - m.x, dz = wz - m.z;
+        const lx = dx * c - dz * s - px, lz = dx * s + dz * c - pz;
+        const ox = Math.max(0, Math.abs(lx) - hx - 2), oz = Math.max(0, Math.abs(lz) - hz - 2);
+        const d = Math.hypot(ox, oz);
+        const t = blend > 0 ? 1 - smoothstep(0, blend, d) : (d <= 0 ? 1 : 0);
+        if (t > 0 && !(this.riverMask[k] && this.heights[k] < m.y)) this.heights[k] = lerp(this.heights[k], m.y, t);
+      });
+    }
   }
   _flatten(x, z, r, h, blend) {
     this._forArea(x, z, r + blend, (i, j, px, pz, k) => {
@@ -295,7 +325,7 @@ export class World {
         let ndz = dirz * 0.6 + (oz / ol) * 0.35 - gz * 0.08 + (rng() - 0.5) * 0.35;
         const nl = Math.hypot(ndx, ndz) || 1; dirx = ndx / nl; dirz = ndz / nl;
         // avoid monuments by steering
-        const m = this.monumentAt(x + dirx * 30, z + dirz * 30, 15);
+        const m = this.monumentAt(x + dirx * 30, z + dirz * 30, this.layout >= 3 ? 35 : 15);   // paved areas reach past the circle
         if (m) { const ax = x - m.x, az = z - m.z, al = Math.hypot(ax, az) || 1; dirx = dirx * 0.3 + (-az / al) * 0.7; dirz = dirz * 0.3 + (ax / al) * 0.7; const ll = Math.hypot(dirx, dirz); dirx /= ll; dirz /= ll; }
         x += dirx * 10; z += dirz * 10;
         if (!this.inBounds(x, z, 10)) break;
@@ -313,6 +343,7 @@ export class World {
           const target = d < w * 0.5 ? bed : Math.min(this.heights[k], bank);
           if (target < this.heights[k]) this.heights[k] = target;
           if (d < w * 0.55 && P.s > SEA_LEVEL - 0.5) this.water[k] = Math.max(this.water[k], P.s);
+          if (d < w + 2) this.riverMask[k] = 1;
         });
       }
       this.rivers.push({ pts });
@@ -356,6 +387,8 @@ export class World {
           this._forArea(x, z, 12, (ii, jj, px, pz, k) => {
             const d = dist(px, pz, x, z);
             if (this.monumentAt(px, pz, -5)) return;
+            // crossing a river: the road fords it instead of damming the channel
+            if (this.riverMask[k] && this.heights[k] < y) return;
             const f = 1 - smoothstep(4.5, 12, d);
             if (f > 0) this.heights[k] = lerp(this.heights[k], y, f);
             if (d < 4.5) this.roadMask[k] = 1;
@@ -490,6 +523,16 @@ export class World {
         const h = this.heightAt(x, z);
         if (h > 0.6) { if (h < 4 && !this.monumentAt(x, z, 20) && this.slopeAt(x, z) < 0.2) S.beaches.push({ x, z }); break; }
       }
+    }
+    // Extra hemp (more cloth). Its own random stream and list, so every older spawn stays where it was
+    // and saved resource nodes still line up.
+    S.hemp2 = [];
+    const r2 = mulberry32((this.seed ^ 0x4e3d1) >>> 0);
+    for (let t = 0; t < 3000 * area; t++) {
+      const x = (r2() * 2 - 1) * half, z = (r2() * 2 - 1) * half;
+      if (!this._okSpawn(x, z, 2)) continue;
+      const b = this.biomeAt(x, z);
+      if ((b === BIOME.GRASS && r2() < 0.45) || (b === BIOME.FOREST && r2() < 0.35) || (b === BIOME.BEACH && r2() < 0.08)) S.hemp2.push({ x, z });
     }
   }
 }

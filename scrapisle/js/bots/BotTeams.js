@@ -23,6 +23,8 @@ export class Team {
     this.known = new Map(o.known || []); // stId -> { x, z, team, value, lastSeen, size, grade }
     this.threats = new Map();        // team id -> hostility score
     this.raid = o.raid || null;
+    // the breach route holds live building pieces, so it isn't saved: plan it again from the rally point
+    if (this.raid && !this.raid.path && (this.raid.state === 'breach' || this.raid.state === 'enter')) { this.raid.state = 'rally'; this.raid.stateT = -999; }
     this.raidDrive = o.raidDrive || 0;
     this.lastRaid = o.lastRaid || -9999;
     this.underAttack = 0;            // time left of an active base defence
@@ -33,7 +35,7 @@ export class Team {
     this.ms = o.ms || {};            // progression milestones: name -> game time reached
   }
   get size() { return this.members.length; }
-  serialize() { return { id: this.id, name: this.name, tier: this.tier, members: this.members, color: this.color, base: this.base, known: [...this.known], raid: this.raid ? { ...this.raid, members: undefined } : null, raidDrive: this.raidDrive, lastRaid: this.lastRaid, stats: this.stats, style: this.style, ms: this.ms }; }
+  serialize() { return { id: this.id, name: this.name, tier: this.tier, members: this.members, color: this.color, base: this.base, known: [...this.known], raid: this.raid ? { ...this.raid, members: undefined, path: undefined, goal: undefined } : null, raidDrive: this.raidDrive, lastRaid: this.lastRaid, stats: this.stats, style: this.style, ms: this.ms }; }
 }
 
 export class BotTeams {

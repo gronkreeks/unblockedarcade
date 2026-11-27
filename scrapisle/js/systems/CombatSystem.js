@@ -110,7 +110,7 @@ export class CombatSystem {
   }
 
   spawnProjectile(p) {
-    p.life = 3; p.id = uid('pr');
+    p.life = 3; p.id = uid('pr'); p.sx = p.x; p.sy = p.y; p.sz = p.z;
     const near = this.game.camPos && Math.abs(p.x - this.game.camPos.x) + Math.abs(p.z - this.game.camPos.z) < 300;
     if (near) {
       const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]);
@@ -132,9 +132,12 @@ export class CombatSystem {
       if (hit) { this.applyProjectileHit(p, hit); this._killProj(i); continue; }
       p.x = nx; p.y = ny; p.z = nz;
       if (p.line) {
-        const L = Math.hypot(p.vx, p.vy, p.vz) * (p.arrow ? 0.02 : 0.012);
+        // a short streak behind the round (an arrow shaft for arrows), never reaching back past the muzzle
+        const sp = Math.hypot(p.vx, p.vy, p.vz) || 1;
+        const flown = Math.hypot(nx - p.sx, ny - p.sy, nz - p.sz);
+        const L = Math.min(p.arrow ? 0.85 : Math.min(2.2, sp * 0.006), flown);
         const pos = p.line.geometry.attributes.position;
-        pos.setXYZ(0, nx, ny, nz); pos.setXYZ(1, nx - p.vx / Math.hypot(p.vx, p.vy, p.vz) * L * 40, ny - p.vy / Math.hypot(p.vx, p.vy, p.vz) * L * 40, nz - p.vz / Math.hypot(p.vx, p.vy, p.vz) * L * 40);
+        pos.setXYZ(0, nx, ny, nz); pos.setXYZ(1, nx - p.vx / sp * L, ny - p.vy / sp * L, nz - p.vz / sp * L);
         pos.needsUpdate = true; p.line.geometry.computeBoundingSphere();
       }
       if (p.life <= 0 || ny < -20) this._killProj(i);

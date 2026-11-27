@@ -24,7 +24,7 @@ import { UIManager } from './ui/UIManager.js';
 import { PlayerController } from './player/PlayerController.js';
 import { Audio } from './audio/Audio.js';
 import { Survivor } from './entities/Survivor.js';
-import { ITEMS, makeStack } from './data/items.js';
+import { ITEMS, makeStack, applyStackMult } from './data/items.js';
 import { TextureLibrary, ALL_TEXTURES } from './gfx/Textures.js';
 import { MaterialLibrary } from './gfx/Materials.js';
 import { PRESETS, detectPreset, resolve as resolveGfx } from './gfx/GraphicsSettings.js';
@@ -129,6 +129,7 @@ class Game {
 
   async setup(cfg, data) {
     this.settings = { mult: cfg.mult, difficulty: cfg.difficulty, bots: cfg.bots, size: cfg.size, fov: this.prefs.fov, autosave: 120 };
+    applyStackMult(cfg.mult);
     this.now = data ? data.now : 0;
     this.log = data ? data.log || [] : [];
     this.raidHistory = data ? data.raidHistory || [] : [];
@@ -281,7 +282,14 @@ class Game {
   async saveGame(auto) {
     if (!this.running) return false;
     try {
-      const data = this.serialize();
+      // plain data only: a stray 3D object or function anywhere would make the whole save fail
+      const seen = new WeakSet();
+      const data = JSON.parse(JSON.stringify(this.serialize(), function (k, v) {
+        const o = this[k];   // the value before any toJSON() (3D objects have one)
+        if (typeof o === 'function' || (o && (o.isObject3D || o.isMaterial || o.isBufferGeometry || o.isTexture))) return undefined;
+        if (v && typeof v === 'object') { if (seen.has(v)) return undefined; seen.add(v); }
+        return v;
+      }));
       const meta = { id: this.worldId, name: this.cfg.name, seed: this.cfg.seed, size: this.cfg.size, difficulty: this.cfg.difficulty, mult: this.cfg.mult, bots: this.cfg.bots, day: this.env.day, updated: Date.now() };
       const ok = await this.save.save(meta, data);
       if (ok && !auto) this.ui.toast('World saved');
@@ -319,9 +327,15 @@ class Game {
     this.fpsT = (this.fpsT || 0) + dt; this.fpsN = (this.fpsN || 0) + 1;
     if (this.fpsT < 3) return;
     const fps = this.fpsN / this.fpsT; this.fpsT = 0; this.fpsN = 0;
+    // Resizing the frame buffers causes a hitch of its own, so only react to sustained changes
+    // (two slow windows in a row to drop, five fast ones to recover) and never more than every 12 s.
+    this.slowN = fps < 38 ? (this.slowN || 0) + 1 : 0;
+    this.fastN = fps > 58 ? (this.fastN || 0) + 1 : 0;
     const before = this.dynScale;
-    if (fps < 38) this.dynScale = Math.max(0.55, this.dynScale - 0.1);
-    else if (fps > 57) this.dynScale = Math.min(1, this.dynScale + 0.05);
+    if (this.now - (this.scaleT || -99) < 12) return;
+    if (this.slowN >= 2) { this.dynScale = Math.max(0.55, this.dynScale - 0.15); this.slowN = 0; }
+    else if (this.fastN >= 5) { this.dynScale = Math.min(1, this.dynScale + 0.1); this.fastN = 0; }
+    if (before !== this.dynScale) this.scaleT = this.now;
     if (before !== this.dynScale) this.renderer.setPixelRatio(Math.min(2, (window.devicePixelRatio || 1) * this.gfx.renderScale * this.dynScale));
   }
 }

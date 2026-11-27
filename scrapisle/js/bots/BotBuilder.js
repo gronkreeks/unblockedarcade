@@ -136,7 +136,20 @@ export class BotBuilder {
   nextStep(team, prog) { return this.nextSteps(team, prog)[0] || null; }
   // Open construction steps on parallel tracks so team members can work on different things at once.
   // Each step: { kind:'foundation'|'piece'|'door'|'deploy'|'upgrade'|'lock'|'swapdoor'|'repair', cost, ... }
+  // Planning is cached per team for a couple of seconds (it checks many placement spots), and
+  // refreshed at once when the base or its items change.
   nextSteps(team, prog) {
+    const base = team.base;
+    if (!base) return [];
+    const st = base.st ? this.game.build.structures.get(base.st) : null;
+    const key = `${base.st}|${base.template}|${st ? st.version : 0}|${this.game.deploy.list.length}|${prog.bench}|${prog.boxSpace}|${prog.knows('large_box')}`;
+    const c = team._steps;
+    if (c && c.key === key && this.game.now - c.t < 2.5) return c.steps;
+    const steps = this._nextSteps(team, prog);
+    team._steps = { key, t: this.game.now, steps };
+    return steps;
+  }
+  _nextSteps(team, prog) {
     const G = this.game, base = team.base;
     if (!base) return [];
     const T = tpl(layoutOf(base));
@@ -150,7 +163,7 @@ export class BotBuilder {
       if (this.wantedStage(team, prog) > cur) {
         base.template = STAGES[cur + 1]; base.cramped = false;
         G.logEvent(`${team.name} is expanding their base`);
-        return this.nextSteps(team, prog);
+        return this._nextSteps(team, prog);
       }
     }
     // shell: foundations, walls, ceiling

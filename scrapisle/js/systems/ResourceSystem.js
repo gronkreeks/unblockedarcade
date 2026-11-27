@@ -13,7 +13,7 @@ const ORE_TOTAL = {
 };
 const PICKUPS = {
   stone_pile: { stones: 50 }, wood_pile: { wood: 50 }, metal_pile: { metal_ore: 50 }, sulfur_pile: { sulfur_ore: 50 },
-  mushroom: { mushroom: 2 }, berries: { berries: 3 }, hemp: { cloth: 10 },
+  mushroom: { mushroom: 2 }, berries: { berries: 3 }, hemp: { cloth: 12 },
 };
 const RESPAWN = { tree: 900, ore: 600, pick: 300 };
 const CHUNK = 128;
@@ -41,6 +41,7 @@ export class ResourceSystem {
     for (const o of W.spawns.nodes) add('ore', o.kind, o.x, o.z, o.r, 1);
     for (const h of W.spawns.hemp) add('pick', 'hemp', h.x, h.z, 0, 1);
     for (const p of W.spawns.pickups) add('pick', p.kind, p.x, p.z, (p.x * 13) % 6, 1);
+    for (const h of W.spawns.hemp2 || []) add('pick', 'hemp', h.x, h.z, 0, 1);
     // instanced meshes per kind + variant per chunk, with a detailed and a coarse version
     const V = this.game.veg;
     for (const n of this.nodes) {
@@ -202,10 +203,10 @@ export class ResourceSystem {
     }
   }
   // Ray pick of a node within reach. Returns {node, t} or null.
-  rayNode(o, d, maxT) {
+  rayNode(o, d, maxT, filter) {
     let best = null, bt = maxT;
     this.hash.query(o.x + d.x * maxT * 0.5, o.z + d.z * maxT * 0.5, maxT, n => {
-      if (!n.alive) return;
+      if (!n.alive || (filter && !filter(n))) return;
       let t = null;
       if (n.type === 'tree') {
         const h = rayCyl(o.x, o.y, o.z, d.x, d.y, d.z, { x: n.x, z: n.z, r: 0.55 * n.s + 0.15, y0: n.y - 1, y1: n.y + 8 });

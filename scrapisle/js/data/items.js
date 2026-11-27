@@ -149,6 +149,11 @@ dep('key_lock', 'Key Lock', { cat: 'Construction', deploy: 'key_lock', lock: tru
 dep('code_lock', 'Code Lock', { cat: 'Construction', deploy: 'code_lock', lock: true, icon: 'codelock', color: '#5ad88a', value: 12, stack: 10 });
 
 export const ITEMS = I;
+// Higher loot multipliers also mean bigger stacks (x5 loot = x5 stack sizes).
+export function applyStackMult(mult) {
+  const f = Math.max(1, Math.round(mult || 1));
+  for (const d of Object.values(I)) { if (d.baseStack === undefined) d.baseStack = d.stack; if (d.baseStack > 1) d.stack = d.baseStack * f; }
+}
 export const item = (id) => I[id];
 export const ITEM_IDS = Object.keys(I);
 

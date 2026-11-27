@@ -24,8 +24,8 @@ function matFor(color) {
 }
 
 class MonBuilder {
-  constructor(m, physics, mats) {
-    this.m = m; this.phys = physics; this.mats = mats;
+  constructor(m, physics, mats, world) {
+    this.m = m; this.phys = physics; this.mats = mats; this.world = world;
     this.g = new GeoBuilder(0.5);
     this.xf = GeoBuilder.xf(m.x, m.y, m.z, m.rot);
     this.loot = []; this.recyclers = []; this.npcs = []; this.rads = []; this.colliders = [];
@@ -42,7 +42,26 @@ class MonBuilder {
       this.colliders.push(this.phys.add({ type: 'box', x: p[0], y: p[1], z: p[2], hx, hy, hz, yaw: this.m.rot + yaw, ref: this.m }));
     }
   }
-  slab(x, z, hx, hz, color, y = 0.02) { const [mk, tint] = matFor(color); this.g.setMat(mk); this.g.box(this.xf, x, y, z, hx, 0.04, hz, tint, 0, false); }
+  // A paved plate. Where the ground falls away under it, it becomes a solid concrete block down to
+  // the ground (with collision) instead of a thin sheet hanging in the air.
+  slab(x, z, hx, hz, color, y = 0.02) {
+    const [mk, tint] = matFor(color); this.g.setMat(mk);
+    const top = y + 0.04;
+    let low = Infinity;
+    if (this.world) {
+      const sx = Math.max(1, Math.ceil(hx / 2.5)), sz = Math.max(1, Math.ceil(hz / 2.5));
+      for (let a = 0; a <= sx; a++) for (let b = 0; b <= sz; b++) {
+        const p = this.xf(x - hx + (2 * hx * a) / sx, 0, z - hz + (2 * hz * b) / sz);
+        low = Math.min(low, this.world.heightAt(p[0], p[2]) - this.m.y);
+      }
+    }
+    if (low < top - 0.1) {
+      const bot = Math.max(low - 0.5, -14), hy = (top - bot) / 2;
+      this.g.box(this.xf, x, bot + hy, z, hx, hy, hz, tint, 0, false);
+      const p = this.xf(x, bot + hy, z);
+      this.colliders.push(this.phys.add({ type: 'box', x: p[0], y: p[1], z: p[2], hx, hy, hz, yaw: this.m.rot, ref: this.m }));
+    } else this.g.box(this.xf, x, y, z, hx, 0.04, hz, tint, 0, false);
+  }
   cyl(x, y, z, r, h, color, solid = true, seg = 12) {
     const [mk, tint] = matFor(color); this.g.setMat(mk);
     this.g.cyl(this.xf, x, y, z, r, h, tint, Math.max(seg, 16));
@@ -313,7 +332,7 @@ const LAYOUTS = {
 export function buildMonuments(world, scene, physics, mats) {
   const out = [];
   for (const m of world.monuments) {
-    const b = new MonBuilder(m, physics, mats);
+    const b = new MonBuilder(m, physics, mats, world);
     LAYOUTS[m.type](b);
     out.push(b.finish(scene));
   }

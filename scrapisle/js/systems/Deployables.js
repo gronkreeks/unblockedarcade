@@ -337,12 +337,15 @@ export class Deployables {
       d.cont.touch();
     }
   }
-  // Recycler: slots 0-5 input, 6-11 output. One item every 5 seconds.
+  // Recycler: slots 0-5 input, 6-11 output. One item every 5 seconds at x1 loot.
+  // Seconds per item: 5 s, divided by the loot multiplier (x5 loot recycles five times as fast).
+  recyclePeriod() { return 5 / Math.max(1, this.game.settings.mult || 1); }
   _recycler(d, dt) {
     if (!d.on) return;
     d.procT += dt;
-    if (d.procT < 5) return;
-    d.procT -= 5;
+    const period = this.recyclePeriod();
+    if (d.procT < period) return;
+    d.procT -= period;
     const out = recycleYield(d.cont.slots.slice(0, 6).find(Boolean)?.id);
     const idx = d.cont.slots.slice(0, 6).findIndex(Boolean);
     if (idx < 0 || !out) { d.on = false; return; }
