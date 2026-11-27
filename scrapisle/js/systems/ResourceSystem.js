@@ -15,7 +15,8 @@ const PICKUPS = {
   stone_pile: { stones: 50 }, wood_pile: { wood: 50 }, metal_pile: { metal_ore: 50 }, sulfur_pile: { sulfur_ore: 50 },
   mushroom: { mushroom: 2 }, berries: { berries: 3 }, hemp: { cloth: 12 },
 };
-const RESPAWN = { tree: 900, ore: 600, pick: 300 };
+const RESPAWN = { tree: 900, ore: 600, pick: 240 };
+const GATHER_SPEED = 1.2;   // every hit gathers a little more (nodes deplete sooner too)
 const CHUNK = 128;
 const VARIANTS = { pine: 4, pine_snow: 3, oak: 4, palm: 3, cactus: 3 };
 
@@ -105,7 +106,7 @@ export class ResourceSystem {
   hit(surv, n, toolDef, stack, efficiency = 1) {
     if (!n.alive || n.type === 'pick') return null;
     const cls = this.gatherClass(n);
-    const base = ((toolDef && toolDef.gather && toolDef.gather[cls]) || 1) * efficiency;
+    const base = ((toolDef && toolDef.gather && toolDef.gather[cls]) || 1) * efficiency * GATHER_SPEED;
     const work = Math.min(base, n.hp);
     const mult = this.game.settings.mult;
     const gave = {};

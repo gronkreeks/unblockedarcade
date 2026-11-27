@@ -59,8 +59,39 @@ export class BotAI {
     ai.redecide = false;
     this.chooseEconomy(b, team);
   }
+  // ---------- team task split ----------
+  // What a task works toward, so teammates can see it's covered and pick something else.
+  taskKey(t) {
+    if (!t) return null;
+    switch (t.type) {
+      case 'harvest': return 'g:' + (t.res || (t.node && t.node.kind));
+      case 'pick': return 'p:' + (t.chain || (t.node && t.node.kind));
+      case 'hunt': return 'hunt';
+      case 'smelt': return 's:' + t.out;
+      case 'craft': return 'c:' + t.id;
+      case 'unlock': return 'u:' + t.id;
+      case 'build': return 'b:' + t.step.kind + ':' + (t.step.item || (t.step.spec && t.step.spec.type + t.step.spec.i + t.step.spec.j) || (t.step.piece && t.step.piece.key) || '');
+      case 'loot': return t.cont && t.cont.id ? 'l:' + t.cont.id : null;
+      case 'stocktc': return 'tc';
+      case 'research': return 'r';
+    }
+    return null;
+  }
+  actKey(a) {
+    if (!a) return null;
+    switch (a.a) { case 'gather': return 'g:' + a.res; case 'smelt': return 's:' + a.out; case 'hunt': return 'hunt'; case 'hemp': return 'p:hemp'; case 'craft': return 'c:' + a.id; case 'unlock': return 'u:' + a.id; }
+    return null;
+  }
+  // How many teammates are already on it.
+  claimCount(team, key, b) {
+    if (!key || !team) return 0;
+    let n = 0;
+    for (const m of this.game.teams.alive(team)) if (m !== b && m.ai.claim === key && m.ai.task && this.game.now < m.ai.task.until) n++;
+    return n;
+  }
   setTask(b, t) {
     const ai = b.ai;
+    ai.claim = this.taskKey(t);
     if (!t.until) {
       // allow for the walk there: tasks far away get more time
       const tgt = t.node || t.cont || t.bench || t.table || t.rec || t.bag || t.dep || t.animal || (t.step && (t.step.piece || (t.step.newSt ? { x: t.step.newSt.ox, z: t.step.newSt.oz } : t.step))) || (t.x !== undefined ? t : null);
@@ -265,7 +296,14 @@ export class BotAI {
     const Y = styleOf(team);
     const heavy = rawLoad(b) > 1200 && !!(team && team.base);
     const AWAY = new Set(['loot', 'monument', 'roam', 'hunt', 'recycle']);
-    const add = (score, task) => { if (task) { if (heavy) score *= AWAY.has(task.type) ? 0.2 : task.type === 'build' ? 1.6 : 1; options.push({ score: score * (1 + randRange(-S.noise, S.noise)), task }); } };
+    const add = (score, task) => {
+      if (!task) return;
+      if (heavy) score *= AWAY.has(task.type) ? 0.2 : task.type === 'build' ? 1.6 : 1;
+      // split the work: something a teammate is already doing is worth less to a second bot
+      const taken = this.claimCount(team, this.taskKey(task), b);
+      if (taken) score *= task.type === 'build' || task.type === 'craft' || task.type === 'hunt' ? 0.3 : taken >= 2 ? 0.3 : 0.55;
+      options.push({ score: score * (1 + randRange(-S.noise, S.noise)), task });
+    };
     const wishes = this.mgr.prog.wishes(b, team, prog);
     const first = wishes[0];
     // base steps (several tracks: shell, doors, deployables, upgrades)
@@ -280,6 +318,19 @@ export class BotAI {
       add((urgent ? 2.2 : 1.3) * P.build * sw * (toolsFirst ? 0.6 : 1) * (ready ? 1.4 : 1) * (1 - i * 0.08), this.stepTask(b, team, prog, step));
     });
     const step = steps[0];
+    // pool materials: if I carry what the next furnace / bench / box needs and I'm not the one
+    // crafting it, put it in the box so whoever builds it has everything in one place
+    if (prog.st && boxRoom && !holding && team && G.teams.alive(team).length > 1 && dist(b.x, b.z, prog.st.ox, prog.st.oz) < 220) {
+      const mine = ai.claim || '';
+      // what a deposit keeps back (materials for the planned walls and upgrades) doesn't count
+      const kept = {}; for (const st of steps) for (const k in st.cost) kept[k] = (kept[k] || 0) + st.cost[k] * 3;
+      const spare = (k) => b.inv.count(k) - (kept[k] || 0);
+      for (const st of steps.slice(0, 2)) {
+        if (st.kind !== 'deploy' || !RECIPE[st.item] || mine.endsWith(st.item)) continue;
+        const rc = RECIPE[st.item];
+        if (Object.keys(rc.cost).some(k => spare(k) >= Math.min(rc.cost[k], 25) && spare(k) * 4 >= rc.cost[k] && prog.stash(k) < rc.cost[k])) { add(2.3, { type: 'deposit' }); break; }
+      }
+    }
     // upkeep
     if (prog.st && prog.tc && prog.upkeepH < (6 + S.ambition * 8) * Y.upkeepH) add(2.4, this.upkeepTask(b, team, prog));
     // personal wishes (first two)

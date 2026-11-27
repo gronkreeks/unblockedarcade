@@ -313,7 +313,7 @@ export class Deployables {
         const def = ITEMS[s.id];
         const out = def.smelt || def.cooks;
         if (!out) continue;
-        s.prog = (s.prog || 0) + Math.max(1, this.game.settings.mult || 1) / (def.smeltTime || 4);   // x5 loot smelts 5x as fast
+        s.prog = (s.prog || 0) + 1.3 * Math.max(1, this.game.settings.mult || 1) / (def.smeltTime || 4);   // x5 loot smelts 5x as fast
         while (s.prog >= 1 && s.n > 0) {
           if (d.cont.room(out) < 1) break;
           s.prog -= 1; s.n -= 1; d.cont.add(out, 1);

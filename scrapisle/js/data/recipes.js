@@ -3,8 +3,9 @@
 // workbench of that tier (unlock cost) or researched at a research table (item + scrap).
 
 const R = [];
+const CRAFT_SPEED = 0.75;   // all crafting a bit quicker than the listed times
 function r(out, n, cost, time, tier, opts = {}) {
-  R.push(Object.assign({ id: out, out, n, cost, time, tier, known: tier === 0 }, opts));
+  R.push(Object.assign({ id: out, out, n, cost, time: Math.max(1, Math.round(time * CRAFT_SPEED * 10) / 10), tier, known: tier === 0 }, opts));
 }
 
 // Tools

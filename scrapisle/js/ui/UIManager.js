@@ -273,20 +273,20 @@ export class UIManager {
     const list = RECIPES.filter(r => ITEMS[r.out].cat === this.craftCat).map(r => {
       const known = P.bp.has(r.id);
       const can = known && r.tier <= tier && P.inv.has(r.cost);
-      return `<div class="rec ${r.id === this.craftSel ? 'on' : ''} ${known ? '' : 'locked'}" data-rec="${r.id}"><img src="${iconURL(r.out)}" alt=""><span>${esc(ITEMS[r.out].name)}</span>${can ? '<em class="ok">Ready</em>' : known ? '' : '<em>Locked</em>'}</div>`;
+      return `<div class="rec ${r.id === this.craftSel ? 'on' : ''} ${known ? '' : 'locked'}" data-rec="${r.id}"><img src="${iconURL(r.out, true)}" alt=""><span>${esc(ITEMS[r.out].name)}</span>${can ? '<em class="ok">Ready</em>' : known ? '' : '<em>Locked</em>'}</div>`;
     }).join('');
     const r = RECIPE[this.craftSel];
     let det = '';
     if (r) {
       const known = P.bp.has(r.id);
       const blk = G.crafting.blocker(P, r.id, this.craftN, tier);
-      det = `<div class="det"><img src="${iconURL(r.out)}" alt=""><div><h3>${esc(ITEMS[r.out].name)}${r.n > 1 ? ` x${r.n}` : ''}</h3>
+      det = `<div class="det"><img src="${iconURL(r.out, true)}" alt=""><div><h3>${esc(ITEMS[r.out].name)}${r.n > 1 ? ` x${r.n}` : ''}</h3>
         <p>Needs ${costText(Object.fromEntries(Object.entries(r.cost).map(([k, v]) => [k, v * this.craftN])), P.inv)}</p>
         <p class="muted">${r.time * this.craftN} seconds${r.tier ? `, Workbench Level ${r.tier} nearby` : ''}${!known ? `. Unlock it at a Workbench Level ${r.tier} for ${r.unlock} scrap, or research one at a research table` : ''}</p></div></div>
         <div class="row"><button class="btn small" data-n="1">1</button><button class="btn small" data-n="5">5</button><button class="btn small" data-n="10">10</button>
         <button class="btn go" data-act="craft" ${blk ? 'disabled' : ''}>Craft ${this.craftN}</button></div>${blk ? `<p class="bad">${esc(blk)}</p>` : ''}`;
     }
-    const q = P.craftQueue.map((q, i) => `<div class="qrow"><img src="${iconURL(q.id)}" alt=""><span>${esc(ITEMS[q.id].name)}${q.n > 1 ? ` x${q.n}` : ''}</span><span class="muted${i === 0 ? ' qt' : ''}">${i === 0 ? fmtTime(q.left) : 'Queued'}</span><button class="btn tiny" data-cancel="${i}">Cancel</button></div>`).join('');
+    const q = P.craftQueue.map((q, i) => `<div class="qrow"><img src="${iconURL(q.id, true)}" alt=""><span>${esc(ITEMS[q.id].name)}${q.n > 1 ? ` x${q.n}` : ''}</span><span class="muted${i === 0 ? ' qt' : ''}">${i === 0 ? fmtTime(q.left) : 'Queued'}</span><button class="btn tiny" data-cancel="${i}">Cancel</button></div>`).join('');
     return `<div class="cats">${cats}</div><div class="recs">${list}</div>${det}${q ? `<h4>Crafting queue</h4>${q}` : ''}<p class="muted">Workbench level here: ${tier || 'none'}</p>`;
   }
   wirePanel() {
@@ -517,10 +517,10 @@ export class UIManager {
         const state = known ? 'known' : avail ? 'avail' : 'locked';
         const afford = avail && P.inv.count('scrap') >= r.unlock;
         return `<button class="ttNode ${state}${afford ? ' afford' : ''}${this.ttSel === id ? ' sel' : ''}" data-tt="${id}" style="left:${x - NODE / 2}px;top:${y - NODE / 2}px;width:${NODE}px;height:${NODE}px">
-          <img src="${iconURL(r.out)}" alt=""><span>${esc(ITEMS[r.out].name)}</span><em>${known ? 'Known' : r.unlock + ' scrap'}</em></button>`;
+          <img src="${iconURL(r.out, true)}" alt=""><span>${esc(ITEMS[r.out].name)}</span><em>${known ? 'Known' : r.unlock + ' scrap'}</em></button>`;
       };
       const [rx, ry] = xy(L.pos._root);
-      const root = `<div class="ttNode root" style="left:${rx - NODE / 2}px;top:${ry - NODE / 2}px;width:${NODE}px;height:${NODE}px"><img src="${iconURL('workbench' + t)}" alt=""><span>Workbench Level ${t}</span></div>`;
+      const root = `<div class="ttNode root" style="left:${rx - NODE / 2}px;top:${ry - NODE / 2}px;width:${NODE}px;height:${NODE}px"><img src="${iconURL('workbench' + t, true)}" alt=""><span>Workbench Level ${t}</span></div>`;
       const tabs = [1, 2, 3].map(k => `<button class="btn small ${k === t ? 'go' : ''}" data-tttab="${k}">Level ${k}</button>`).join('');
       // details of the selected item
       let det = `<p class="muted">Select an item. Each one needs the item above it unlocked first.</p>`;
@@ -532,7 +532,7 @@ export class UIManager {
         else if (!open) act = `<span class="muted">Needs a Workbench Level ${t}</span>`;
         else if (!G.crafting.prereqMet(P, sel.id)) act = `<span class="muted">Unlock ${esc(ITEMS[par].name)} first</span>`;
         else act = `<button class="btn go" data-unlock="${sel.id}" ${P.inv.count('scrap') >= sel.unlock ? '' : 'disabled'}>Unlock for ${sel.unlock} scrap</button>`;
-        det = `<div class="ttDet"><img src="${iconURL(sel.out)}" alt=""><div><h3>${esc(ITEMS[sel.out].name)}</h3><p class="muted">Crafts from ${costText(sel.cost)}${sel.n > 1 ? `, makes ${sel.n}` : ''}</p></div><div class="ttAct">${act}</div></div>`;
+        det = `<div class="ttDet"><img src="${iconURL(sel.out, true)}" alt=""><div><h3>${esc(ITEMS[sel.out].name)}</h3><p class="muted">Crafts from ${costText(sel.cost)}${sel.n > 1 ? `, makes ${sel.n}` : ''}</p></div><div class="ttAct">${act}</div></div>`;
       }
       return `<h2>${esc(bench.def.name)}</h2><p class="muted">You have ${P.inv.count('scrap')} scrap. This bench crafts and unlocks up to level ${tier}.</p>
         <div class="row ttTabs">${tabs}</div>
@@ -729,7 +729,7 @@ export class UIManager {
     const ex = [...box.children].find(c => c.dataset.id === id && Date.now() - c.dataset.t < 2500);
     if (ex) { ex.dataset.n = +ex.dataset.n + n; ex.dataset.t = Date.now(); ex.querySelector('span').textContent = `+${ex.dataset.n} ${ITEMS[id].name}`; return; }
     const el = document.createElement('div'); el.className = 'note'; el.dataset.id = id; el.dataset.n = n; el.dataset.t = Date.now();
-    el.innerHTML = `<img src="${iconURL(id)}" alt=""><span>+${n} ${esc(ITEMS[id].name)}</span>`;
+    el.innerHTML = `<img src="${iconURL(id, true)}" alt=""><span>+${n} ${esc(ITEMS[id].name)}</span>`;
     box.appendChild(el);
     setTimeout(() => el.remove(), 3000);
     while (box.children.length > 6) box.firstChild.remove();
@@ -779,7 +779,7 @@ export class UIManager {
     if ($('held').textContent !== info) $('held').textContent = info;
     // crafting queue
     const qv = P.craftQueue.map(q => q.id + Math.ceil(q.left)).join(',');
-    if (qv !== this.qV) { this.qV = qv; $('queue').innerHTML = P.craftQueue.slice(0, 5).map((q, i) => `<div class="qrow"><img src="${iconURL(q.id)}" alt=""><span>${i === 0 ? fmtTime(q.left) : ''}</span></div>`).join(''); }
+    if (qv !== this.qV) { this.qV = qv; $('queue').innerHTML = P.craftQueue.slice(0, 5).map((q, i) => `<div class="qrow"><img src="${iconURL(q.id, true)}" alt=""><span>${i === 0 ? fmtTime(q.left) : ''}</span></div>`).join(''); }
     // clock + compass + debug
     const yawDeg = ((-P.yaw * 180 / Math.PI) % 360 + 360 + 180) % 360;
     const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];

@@ -25,7 +25,15 @@ const DRAW = {
   can(x, c) { x.fillStyle = c; x.fillRect(20, 16, 24, 34); x.fillStyle = shade(c, 1.3); x.beginPath(); x.ellipse(32, 16, 12, 4, 0, 0, 7); x.fill(); x.fillStyle = '#eee'; x.fillRect(20, 28, 24, 8); },
   scrap(x, c) { x.fillStyle = c; x.beginPath(); x.moveTo(14, 40); x.lineTo(22, 20); x.lineTo(36, 26); x.lineTo(50, 16); x.lineTo(52, 40); x.lineTo(34, 48); x.closePath(); x.fill(); x.fillStyle = shade(c, 0.65); x.fillRect(26, 32, 14, 4); x.fillRect(38, 24, 4, 12); },
   rope(x, c) { x.strokeStyle = c; x.lineWidth = 5; for (let i = 0; i < 3; i++) { x.beginPath(); x.ellipse(32, 32, 18 - i * 5, 12 - i * 3, 0, 0, 7); x.stroke(); } },
-  kit(x, c) { x.fillStyle = c; x.fillRect(12, 20, 40, 28); x.fillStyle = '#eee'; x.fillRect(28, 24, 8, 20); x.fillRect(22, 30, 20, 8); },
+  kit(x, c) {
+    // sewing kit: a wooden spool of red thread with a needle across it
+    x.fillStyle = '#8a6440'; x.fillRect(14, 14, 28, 6); x.fillRect(14, 44, 28, 6);
+    x.fillStyle = '#c0392b'; x.fillRect(17, 20, 22, 24);
+    x.strokeStyle = '#8e2a20'; x.lineWidth = 1.5; for (let yy = 23; yy < 44; yy += 4) { x.beginPath(); x.moveTo(17, yy); x.lineTo(39, yy + 2); x.stroke(); }
+    x.strokeStyle = '#d8dde2'; x.lineWidth = 2.5; x.beginPath(); x.moveTo(36, 54); x.lineTo(56, 14); x.stroke();
+    x.strokeStyle = '#555'; x.lineWidth = 1; x.beginPath(); x.arc(54.5, 17, 1.6, 0, 7); x.stroke();
+    x.strokeStyle = '#c0392b'; x.lineWidth = 1.2; x.beginPath(); x.moveTo(54, 18); x.quadraticCurveTo(46, 30, 40, 26); x.stroke();
+  },
   gear(x, c) { x.fillStyle = c; x.beginPath(); for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2, r = i % 2 ? 14 : 20; x.lineTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r); } x.closePath(); x.fill(); x.fillStyle = '#1a1a1a'; x.beginPath(); x.arc(32, 32, 6, 0, 7); x.fill(); },
   pipe(x, c) { x.fillStyle = c; x.fillRect(10, 26, 44, 12); x.fillStyle = shade(c, 1.3); x.fillRect(10, 26, 44, 3); x.fillStyle = shade(c, 0.6); x.beginPath(); x.ellipse(54, 32, 3, 6, 0, 0, 7); x.fill(); },
   spring(x, c) { x.strokeStyle = c; x.lineWidth = 4; x.beginPath(); for (let i = 0; i <= 40; i++) { const t = i / 40; x.lineTo(12 + t * 40, 32 + Math.sin(t * Math.PI * 10) * 10); } x.stroke(); },
@@ -81,14 +89,52 @@ const DRAW = {
   codelock(x, c) { x.fillStyle = '#333'; x.fillRect(18, 10, 28, 44); x.fillStyle = c; for (let i = 0; i < 9; i++) x.fillRect(22 + (i % 3) * 8, 16 + Math.floor(i / 3) * 8, 5, 5); x.fillStyle = '#5ad88a'; x.fillRect(22, 44, 20, 4); },
 };
 
-export function iconURL(id) {
-  if (cache.has(id)) return cache.get(id);
+// Short names for the icon corner, so you can tell items apart without opening them.
+const SHORT = {
+  metal_frag: 'Metal Frag', hqm_ore: 'HQ Ore', hqm: 'HQ Metal', explosives: 'Explosive', animal_fat: 'Fat', bone_frag: 'Bone Frag',
+  low_grade: 'Low Grade', sewing_kit: 'Sew Kit', metal_pipe: 'Pipe', metal_spring: 'Spring', metal_blade: 'Blade', sheet_metal: 'Sheet Mtl',
+  semi_body: 'Semi Body', tech_trash: 'Tech Trash', propane_tank: 'Propane', electric_fuse: 'Fuse', stone_hatchet: 'St Hatchet',
+  stone_pickaxe: 'St Pickaxe', salvaged_axe: 'Salv Axe', salvaged_icepick: 'Icepick', building_plan: 'Plan', wooden_spear: 'Wd Spear',
+  stone_spear: 'St Spear', salvaged_sword: 'Sword', wooden_arrow: 'Arrow', hv_arrow: 'HV Arrow', handmade_shell: 'HM Shell',
+  buckshot: 'Buckshot', slug: 'Slug', pistol_ammo: 'Pistol Am', rifle_ammo: '5.56 Ammo', hunting_bow: 'Bow', pipe_pistol: 'Pipe Pist',
+  semi_pistol: 'Semi Pist', double_barrel: 'DB Shotgun', pump_shotgun: 'Pump', semi_rifle: 'Semi Rifle', assault_rifle: 'AK',
+  rocket_launcher: 'Launcher', bolt_rifle: 'Bolt', satchel_charge: 'Satchel', timed_charge: 'C4', cloth_hood: 'Hood', cloth_shirt: 'Shirt',
+  cloth_pants: 'Pants', hide_boots: 'Boots', leather_gloves: 'Gloves', wood_chest: 'Wood Armor', bone_helmet: 'Bone Helm',
+  roadsign_vest: 'Sign Vest', roadsign_kilt: 'Sign Kilt', coffee_can_helmet: 'Can Helm', metal_facemask: 'Facemask', metal_chest: 'Metal Vest',
+  hazmat_suit: 'Hazmat', cooked_meat: 'Cooked', berries: 'Berries', canned_beans: 'Beans', canned_tuna: 'Tuna', chocolate: 'Choc Bar',
+  granola: 'Granola', water_bottle: 'Water', med_syringe: 'Syringe', large_medkit: 'Medkit', anti_rad: 'Anti-Rad', wood_box: 'Box',
+  large_box: 'Large Box', workbench1: 'Bench 1', workbench2: 'Bench 2', workbench3: 'Bench 3', research_table: 'Research',
+  sleeping_bag: 'Sleep Bag', claim_cabinet: 'Claim Cab', wood_door: 'Wood Door', metal_door: 'Metal Door', armored_door: 'Armor Door',
+};
+// Anything not listed: the name if it's short, otherwise abbreviated.
+export function shortName(id) {
+  const d = ITEMS[id]; if (!d) return '';
+  if (SHORT[id]) return SHORT[id];
+  const n = d.name;
+  if (n.length <= 10) return n;
+  const w = n.split(/[\s-]+/);
+  const two = w[0] + ' ' + w[w.length - 1];
+  if (two.length <= 10) return two;
+  return w.length > 1 ? (w[0].slice(0, 4) + ' ' + w[w.length - 1].slice(0, 5)) : n.slice(0, 9) + '.';
+}
+function label(x, text) {
+  let size = 12;
+  x.textAlign = 'right'; x.textBaseline = 'top';
+  do { x.font = `800 ${size}px Nunito, system-ui, sans-serif`; size -= 0.5; } while (x.measureText(text).width > 60 && size > 7);
+  x.lineJoin = 'round'; x.lineWidth = 3; x.strokeStyle = 'rgba(0,0,0,0.85)'; x.strokeText(text, 62, 2);
+  x.fillStyle = '#ffffff'; x.fillText(text, 62, 2);
+}
+
+export function iconURL(id, plain = false) {
+  const key = plain ? id + ':plain' : id;
+  if (cache.has(key)) return cache.get(key);
   const d = ITEMS[id];
   const cv = document.createElement('canvas'); cv.width = cv.height = S;
   const x = cv.getContext('2d');
   const fn = DRAW[d?.icon] || DRAW.box;
   try { fn(x, d?.color || '#888888', d || {}); } catch (e) { DRAW.box(x, '#888888'); }
+  if (d && !plain) label(x, shortName(id));
   const url = cv.toDataURL();
-  cache.set(id, url);
+  cache.set(key, url);
   return url;
 }

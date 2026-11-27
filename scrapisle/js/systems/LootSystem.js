@@ -1,5 +1,6 @@
 // Loot containers (barrels, crates, food crates, military crates), dropped items and loot bags.
 import * as THREE from 'three';
+import { buildItemModel } from '../entities/WeaponModels.js';
 import { LOOT_TABLES } from '../data/loot.js';
 import { ITEMS, makeStack, hasCondition } from '../data/items.js';
 import { Container } from './InventorySystem.js';
@@ -176,9 +177,11 @@ export class LootSystem {
     if (n <= 0 && !stack) return null;
     const s = stack || makeStack(id, n);
     const d = { id: uid('it'), stack: s, x, y, z, vy: 1.5, born: this.game.now, rest: false };
-    const col = ITEMS[s.id].color || '#888';
-    if (!this.dropMats[col]) this.dropMats[col] = this.game.mats.get('paint', { color: col });
-    const m = new THREE.Mesh(this.dropGeo, this.dropMats[col]);
+    // the item's own model lying on the ground, a little larger so it's easy to spot
+    const m = new THREE.Group();
+    const model = buildItemModel(s.id);
+    model.scale.setScalar(1.6); model.position.y = 0.07; model.rotation.y = Math.random() * Math.PI * 2;
+    m.add(model);
     m.position.set(x, y, z); m.userData.drop = d;
     this.group.add(m); d.mesh = m;
     d.col = this.game.physics.add({ type: 'box', x, y, z, hx: 0.25, hy: 0.2, hz: 0.25, yaw: 0, ref: d, tag: 'drop', solid: false });

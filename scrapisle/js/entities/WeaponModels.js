@@ -109,14 +109,15 @@ const GUNS = {
     return { sight: 0.104 };
   },
   rocket_launcher(g) {
-    const tube = mat('gunmetal', 0x4f5a3c), dark = mat('gunmetal');
-    g.add(part(cyl(0.045, 0.045, 0.9, 16), tube, 0, 0.06, -0.25, Math.PI / 2, 0, 0));
-    g.add(part(cyl(0.055, 0.05, 0.08, 16), dark, 0, 0.06, -0.72, Math.PI / 2, 0, 0));
-    g.add(part(cyl(0.06, 0.055, 0.07, 16), dark, 0, 0.06, 0.2, Math.PI / 2, 0, 0));
+    const tube = mat('flat', 0x4f5a3c), dark = mat('gunmetal');
+    g.add(part(cyl(0.045, 0.045, 0.9, 16), tube, 0, 0.06, -0.25));
+    g.add(part(cyl(0.055, 0.05, 0.08, 16), dark, 0, 0.06, -0.72));
+    g.add(part(cyl(0.06, 0.055, 0.07, 16), dark, 0, 0.06, 0.2));
     g.add(part(bbox(0.02, 0.09, 0.04), dark, 0, -0.03, -0.05));
     g.add(part(bbox(0.02, 0.08, 0.035), dark, 0, -0.02, -0.3));
     g.add(part(bbox(0.012, 0.03, 0.05), dark, -0.05, 0.12, -0.15));
-    const tip = part(cyl(0.005, 0.03, 0.08, 10), mat('paint', 0xb03a2e), 0, 0.06, -0.74, -Math.PI / 2, 0, 0); tip.name = 'mag'; g.add(tip);
+    const tip = part(new THREE.ConeGeometry(0.03, 0.08, 12).rotateX(-Math.PI / 2), mat('flat', 0xb03a2e), 0, 0.06, -0.74); tip.name = 'mag'; g.add(tip);
+    g.add(marker('muzzle', 0, 0.06, -0.72));
     return { sight: 0.12 };
   },
   bolt_rifle(g) {
@@ -266,9 +267,17 @@ const TOOLS = {
   bone_knife(g) { g.add(part(cyl(0.015, 0.015, 0.1, 8), mat('leather', 0x6b4a2e), 0, 0, 0.0)); g.add(part(extrudeProfile([[0, -0.012], [0.16, -0.004], [0.18, 0.0], [0, 0.012]], 0.008, 0.001), mat('flat', 0xece6d6), 0, 0, -0.06, 0, Math.PI / 2, 0)); },
   machete(g) { g.add(part(cyl(0.016, 0.016, 0.12, 8), mat('polymer'), 0, 0, 0.0)); g.add(part(extrudeProfile([[0, -0.02], [0.36, -0.01], [0.4, 0.02], [0.0, 0.02]], 0.004, 0.001), mat('metal'), 0, 0, -0.06, 0, Math.PI / 2, 0)); },
   salvaged_sword(g) { g.add(part(cyl(0.016, 0.016, 0.14, 8), mat('cloth', 0x3a3a3a), 0, 0, 0.0)); g.add(part(bbox(0.12, 0.02, 0.02), mat('metal'), 0, 0, -0.08)); g.add(part(extrudeProfile([[0, -0.03], [0.5, -0.025], [0.56, 0.0], [0.0, 0.03]], 0.006, 0.001), mat('paint', 0xb0a080), 0, 0, -0.09, 0, Math.PI / 2, 0)); },
-  building_plan(g) { g.add(part(bbox(0.2, 0.004, 0.26, 0.001), mat('flat', 0xd8e4f0), 0, 0, -0.12, 0.9)); },
+  building_plan(g) {
+    // a rolled-open blueprint: blue sheet with white lines
+    const sh = new THREE.Group(); sh.position.set(0, 0, -0.12); sh.rotation.x = 0.9; g.add(sh);
+    sh.add(part(bbox(0.2, 0.004, 0.26, 0.001), mat('flat', 0x2f5f9a)));
+    const ln = mat('flat', 0xe8f0f8);
+    for (const z of [-0.08, 0, 0.08]) sh.add(part(bbox(0.16, 0.001, 0.004, 0.0005), ln, 0, 0.003, z));
+    for (const x of [-0.06, 0.04]) sh.add(part(bbox(0.004, 0.001, 0.2, 0.0005), ln, x, 0.003, 0));
+    for (const z of [0.13, -0.13]) sh.add(part(cyl(0.008, 0.008, 0.21, 10), mat('flat', 0x2f5f9a), 0, 0.004, z, 0, Math.PI / 2, 0));
+  },
   satchel_charge(g) { g.add(part(bbox(0.16, 0.12, 0.1, 0.02), mat('cloth', 0x8a6a3a), 0, 0, -0.1)); g.add(part(cyl(0.004, 0.004, 0.12, 6), mat('flat', 0xdddddd), 0.05, 0.08, -0.1, 0.8)); },
-  timed_charge(g) { g.add(part(bbox(0.16, 0.08, 0.1, 0.006), mat('paint', 0xb03a2e), 0, 0, -0.1)); g.add(part(bbox(0.06, 0.03, 0.04, 0.003), mat('polymer'), 0, 0.055, -0.1)); },
+  timed_charge(g) { g.add(part(bbox(0.16, 0.08, 0.1, 0.006), mat('flat', 0xb03a2e), 0, 0, -0.1)); g.add(part(bbox(0.06, 0.03, 0.04, 0.003), mat('polymer'), 0, 0.055, -0.1)); },
 };
 let _rockGeo = null;
 function rockGeo() {
@@ -280,6 +289,79 @@ function rockGeo() {
   return (_rockGeo = g);
 }
 
+// ---------- everything else: one model per icon type, tinted by the item's colour ----------
+const hex = (d, fb = '#888888') => new THREE.Color(d.color || fb).getHex();
+const sph = (r, ws = 12, hs = 8) => new THREE.SphereGeometry(r, ws, hs);
+const ITEM_MODELS = {
+  log(g) { g.add(part(cyl(0.045, 0.045, 0.32, 12), mat('bark'), 0, 0, -0.1)); for (const z of [0.06, -0.26]) g.add(part(cyl(0.042, 0.042, 0.006, 12), mat('wood'), 0, 0, z)); },
+  rock(g) { for (const [x, y, z, s] of [[0, 0, -0.08, 0.75], [0.05, 0.02, -0.03, 0.5], [-0.045, 0.015, -0.12, 0.45]]) { const r = new THREE.Mesh(rockGeo(), mat('rock')); r.scale.setScalar(s); r.position.set(x, y, z); g.add(r); } },
+  ore(g, d) { ITEM_MODELS.rock(g); const sp = mat('flat', new THREE.Color(d.spot || d.color || '#cccccc').getHex()); for (const [x, y, z] of [[0.03, 0.05, -0.08], [-0.03, 0.04, -0.05], [0.0, 0.06, -0.11], [0.05, 0.04, -0.02]]) g.add(part(new THREE.IcosahedronGeometry(0.014, 0), sp, x, y, z)); },
+  frags(g, d) { const m = mat('metal', hex(d, '#9aa3ab')); [[0, 0, -0.06, 0.3], [0.04, 0.01, -0.1, 1.2], [-0.04, 0.0, -0.08, 2.1], [0.02, 0.02, -0.02, 0.8], [-0.02, 0.015, -0.13, 2.6]].forEach(([x, y, z, r]) => g.add(part(bbox(0.04, 0.01, 0.03, 0.002), m, x, y, z, r * 0.3, r, r * 0.2))); },
+  powder(g, d) { const c = mat('cloth', d.id === 'charcoal' ? 0x5a5a5a : d.id === 'gunpowder' ? 0x6b6b74 : 0xc8b04a); const sack = part(sph(0.06, 14, 10), c, 0, 0.02, -0.08); sack.scale.set(1, 1.15, 1); g.add(sack); g.add(part(cyl(0.022, 0.016, 0.04, 10), c, 0, 0.09, -0.08, Math.PI / 2)); g.add(part(cyl(0.024, 0.024, 0.01, 10), mat('cloth', 0x6b4a2e), 0, 0.075, -0.08, Math.PI / 2)); const pile = part(sph(0.03, 10, 6), mat('flat', hex(d)), 0, 0.075, -0.08); pile.scale.set(0.8, 0.35, 0.8); g.add(pile); },
+  ingot(g, d) { const m = mat('metal', hex(d, '#b8c4cc')); const geo = extrudeProfile([[-0.06, -0.018], [0.06, -0.018], [0.045, 0.018], [-0.045, 0.018]], 0.05, 0.003); g.add(part(geo, m, 0, 0, -0.08)); g.add(part(geo, m, 0, 0.04, -0.08, 0, Math.PI / 2, 0)); },
+  tnt(g, d) { const r = mat('flat', hex(d, '#b03a2e')); for (const x of [-0.03, 0, 0.03]) g.add(part(cyl(0.015, 0.015, 0.16, 10), r, x, 0, -0.08, 0, 0, 0)); g.add(part(bbox(0.1, 0.035, 0.02, 0.002), mat('rubber'), 0, 0, -0.08)); g.add(part(cyl(0.002, 0.002, 0.06, 4), mat('flat', 0xdddddd), 0, 0.02, -0.18, 0.5)); },
+  cloth(g, d) { const m = mat(d.id === 'leather' ? 'leather' : 'cloth', hex(d)); for (let i = 0; i < 3; i++) g.add(part(bbox(0.16, 0.014, 0.12, 0.005), m, i * 0.006, i * 0.015, -0.08 - i * 0.004, 0, i * 0.12, 0)); },
+  blob(g, d) { const b = part(sph(0.055, 14, 10), mat('flat', hex(d, '#e8d8a0')), 0, 0, -0.08); b.scale.set(1.2, 0.6, 1); g.add(b); },
+  bone(g, d) { const m = mat('flat', hex(d, '#ece6d6')); for (const [x, ry] of [[0, 0.3], [0.03, -0.5]]) { const b = new THREE.Group(); b.position.set(x, 0, -0.08); b.rotation.y = ry; b.add(part(cyl(0.008, 0.008, 0.14, 6), m)); for (const z of [0.07, -0.07]) for (const xx of [-0.008, 0.008]) b.add(part(sph(0.012, 8, 6), m, xx, 0, z)); g.add(b); } },
+  can(g, d) {
+    if (d.id === 'low_grade') { const m = mat('flat', 0xb0302a); g.add(part(bbox(0.12, 0.16, 0.05, 0.01), m, 0, 0.04, -0.08)); g.add(part(cyl(0.012, 0.012, 0.03, 8), mat('metal'), 0.04, 0.135, -0.08, Math.PI / 2)); g.add(part(bbox(0.05, 0.012, 0.03, 0.004), m, -0.02, 0.13, -0.08)); return; }
+    g.add(part(cyl(0.035, 0.035, 0.1, 16), mat('flat', hex(d)), 0, 0, -0.08, Math.PI / 2)); for (const y of [0.05, -0.05]) g.add(part(cyl(0.036, 0.036, 0.006, 16), mat('metal'), 0, y, -0.08, Math.PI / 2));
+  },
+  scrap(g) { const m = mat('rust'); [[0, 0, -0.08, 0.3, 0.4], [0.03, 0.02, -0.05, -0.6, 1.2], [-0.03, 0.01, -0.11, 0.9, -0.7]].forEach(([x, y, z, a, b]) => g.add(part(bbox(0.07, 0.006, 0.05, 0.002), m, x, y, z, a, b, 0.4))); g.add(part(bbox(0.02, 0.02, 0.04, 0.003), mat('metal'), 0.01, 0.03, -0.08, 0.5, 0.5, 0)); },
+  rope(g, d) { const m = mat('cloth', hex(d, '#b8a27a')); for (let i = 0; i < 3; i++) g.add(part(new THREE.TorusGeometry(0.055 - i * 0.004, 0.01, 6, 20), m, 0, i * 0.018, -0.08, Math.PI / 2)); },
+  kit(g) {
+    // sewing kit: a small tin with a spool of thread and a needle
+    g.add(part(bbox(0.13, 0.03, 0.09, 0.008), mat('flat', 0x5a6b8a), 0, 0, -0.08));
+    g.add(part(cyl(0.022, 0.022, 0.05, 12), mat('cloth', 0xc0392b), -0.025, 0.035, -0.08, Math.PI / 2));
+    for (const y of [0.012, 0.058]) g.add(part(cyl(0.028, 0.028, 0.006, 12), mat('gunwood'), -0.025, y, -0.08, Math.PI / 2));
+    g.add(part(cyl(0.002, 0.001, 0.09, 4), mat('metal'), 0.035, 0.022, -0.08, 0, 0.6, 0));
+  },
+  gear(g, d) { const m = mat('metal', hex(d, '#9aa3ab')); const gr = new THREE.Group(); gr.position.set(0, 0, -0.08); gr.rotation.x = Math.PI / 2; gr.add(part(cyl(0.05, 0.05, 0.016, 20), m)); for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; gr.add(part(bbox(0.016, 0.014, 0.016, 0.002), m, Math.cos(a) * 0.056, Math.sin(a) * 0.056, 0, 0, 0, a)); } gr.add(part(cyl(0.015, 0.015, 0.02, 10), mat('rubber'))); g.add(gr); },
+  pipe(g) { const m = mat('metal'); g.add(part(cyl(0.02, 0.02, 0.3, 14), m, 0, 0, -0.1)); for (const z of [0.05, -0.25]) g.add(part(cyl(0.024, 0.024, 0.02, 14), m, 0, 0, z)); g.add(part(cyl(0.013, 0.013, 0.302, 10), mat('rubber'), 0, 0, -0.1)); },
+  spring(g) { const pts = []; for (let i = 0; i <= 80; i++) { const t = i / 80, a = t * Math.PI * 2 * 7; pts.push(new THREE.Vector3(Math.cos(a) * 0.025, Math.sin(a) * 0.025, -t * 0.16)); } g.add(part(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 160, 0.004, 6), mat('metal'), 0, 0, 0)); },
+  blade(g) { g.add(part(extrudeProfile([[0, -0.025], [0.2, -0.018], [0.24, 0.0], [0, 0.025]], 0.004, 0.001), mat('metal'), 0, 0, -0.02, 0, Math.PI / 2, 0)); },
+  plate(g) { g.add(part(bbox(0.22, 0.006, 0.16, 0.003), mat('metal'), 0, 0, -0.08)); for (const [x, z] of [[-0.09, -0.15], [0.09, -0.15], [-0.09, -0.01], [0.09, -0.01]]) g.add(part(cyl(0.006, 0.006, 0.004, 8), mat('gunmetal'), x, 0.005, z, Math.PI / 2)); },
+  sign(g, d) { const sg = part(new THREE.CylinderGeometry(0.11, 0.11, 0.006, 8), mat('paint', hex(d, '#d8b040')), 0, 0, -0.1, Math.PI / 2, 0, Math.PI / 8); g.add(sg); g.add(part(cyl(0.008, 0.008, 0.012, 8), mat('metal'), 0, 0, -0.096)); },
+  body(g, d) {
+    const m = mat('gunmetal'); g.add(part(bbox(0.045, 0.05, d.id === 'rifle_body' ? 0.24 : d.id === 'smg_body' ? 0.18 : 0.12, 0.005), m, 0, 0.03, -0.08));
+    g.add(part(bbox(0.006, 0.006, 0.05, 0.002), m, 0, 0.0, -0.06)); g.add(part(bbox(0.035, 0.008, 0.012, 0.002), mat('polymer'), 0, 0.062, -0.04));
+    g.add(part(cyl(0.008, 0.008, 0.03, 8), m, 0, 0.035, d.id === 'rifle_body' ? -0.215 : -0.16));
+  },
+  chip(g, d) { g.add(part(bbox(0.14, 0.005, 0.1, 0.002), mat('paint', d.id === 'electric_fuse' ? 0x3a3a3a : 0x2e6b3a), 0, 0, -0.08)); if (d.id === 'electric_fuse') { g.add(part(cyl(0.012, 0.012, 0.09, 10), mat('glass'), 0, 0.015, -0.08)); for (const z of [-0.035, -0.125]) g.add(part(cyl(0.014, 0.014, 0.015, 10), mat('metal'), 0, 0.015, z)); return; } for (const [x, z] of [[-0.035, -0.06], [0.03, -0.1], [-0.02, -0.11], [0.04, -0.055]]) g.add(part(bbox(0.03, 0.008, 0.025, 0.002), mat('rubber'), x, 0.006, z)); g.add(part(bbox(0.12, 0.002, 0.006, 0.001), mat('paint', 0xd8b040), 0, 0.004, -0.035)); },
+  tank(g, d) { const m = mat('flat', hex(d, '#c9ced4')); g.add(part(cyl(0.055, 0.055, 0.16, 16), m, 0, 0.04, -0.08, Math.PI / 2)); for (const y of [0.12, -0.04]) g.add(part(sph(0.055, 14, 8), m, 0, y, -0.08)); g.add(part(cyl(0.012, 0.012, 0.04, 8), mat('metal'), 0, 0.18, -0.08, Math.PI / 2)); g.add(part(new THREE.TorusGeometry(0.03, 0.006, 6, 14), mat('metal'), 0, 0.18, -0.08, Math.PI / 2)); },
+  arrow(g, d) { g.add(part(cyl(0.004, 0.004, 0.6, 6), mat('wood'), 0, 0, -0.2)); g.add(part(new THREE.ConeGeometry(0.009, 0.04, 8).rotateX(-Math.PI / 2), mat(d.id === 'hv_arrow' ? 'metal' : 'rock'), 0, 0, -0.52)); for (let i = 0; i < 3; i++) g.add(part(bbox(0.001, 0.016, 0.06, 0.0005), mat('flat', 0xd8d0c0), 0, 0, 0.06, 0, 0, i * Math.PI * 2 / 3)); },
+  shell(g, d) { const m = mat('flat', hex(d, '#b03a2e')); [[-0.022, 0], [0.0, 0.006], [0.022, 0]].forEach(([x, y], i) => { g.add(part(cyl(0.01, 0.01, 0.055, 12), m, x, y, -0.08, Math.PI / 2 * 0, 0, 0)); g.add(part(cyl(0.011, 0.011, 0.014, 12), mat('flat', 0xc9a23a), x, y, -0.045)); }); },
+  bullet(g, d) { g.add(part(bbox(0.1, 0.05, 0.07, 0.003), mat('flat', hex(d, '#9c7a32')), 0, 0, -0.08)); const brass = mat('flat', 0xc9a23a), tip = mat('metal', 0xb87333); for (let i = 0; i < 5; i++) { const x = -0.04 + i * 0.02; g.add(part(cyl(0.006, 0.006, 0.035, 8), brass, x, 0.04, -0.08, Math.PI / 2)); g.add(part(new THREE.ConeGeometry(0.006, 0.014, 8), tip, x, 0.064, -0.08)); } },
+  rocket(g, d) { g.add(part(cyl(0.035, 0.035, 0.42, 14), mat('flat', hex(d, '#6b7a4a')), 0, 0, -0.15)); g.add(part(new THREE.ConeGeometry(0.035, 0.1, 14).rotateX(-Math.PI / 2), mat('flat', 0xb03a2e), 0, 0, -0.41)); for (let i = 0; i < 4; i++) g.add(part(bbox(0.002, 0.03, 0.06, 0.001), mat('gunmetal'), Math.cos(i * Math.PI / 2) * 0.045, Math.sin(i * Math.PI / 2) * 0.045, 0.04, 0, 0, i * Math.PI / 2)); },
+  hat(g, d) { const m = d.id === 'coffee_can_helmet' ? mat('paint', hex(d)) : d.id === 'bone_helmet' ? mat('flat', 0xece6d6) : mat('cloth', hex(d)); g.add(part(new THREE.SphereGeometry(0.1, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), m, 0, 0, -0.08)); if (d.id === 'coffee_can_helmet') g.add(part(cyl(0.102, 0.102, 0.06, 18), m, 0, 0.02, -0.08, Math.PI / 2)); },
+  shirt(g, d) { const m = mat('cloth', hex(d)); g.add(part(bbox(0.2, 0.025, 0.16, 0.01), m, 0, 0, -0.08)); g.add(part(new THREE.TorusGeometry(0.03, 0.008, 6, 14, Math.PI), m, 0, 0.015, -0.15, Math.PI / 2)); for (const x of [-0.09, 0.09]) g.add(part(bbox(0.05, 0.02, 0.06, 0.008), m, x, 0.005, -0.13, 0, x > 0 ? 0.4 : -0.4)); },
+  pants(g, d) { const m = d.id === 'roadsign_kilt' ? mat('paint', hex(d)) : mat('cloth', hex(d)); g.add(part(bbox(0.16, 0.025, 0.08, 0.01), m, 0, 0, -0.05)); for (const x of [-0.045, 0.045]) g.add(part(bbox(0.065, 0.024, 0.14, 0.01), m, x, 0, -0.15)); g.add(part(bbox(0.16, 0.028, 0.012, 0.004), mat('leather', 0x4a3424), 0, 0.002, -0.012)); },
+  boots(g, d) { const m = mat('leather', hex(d)); for (const x of [-0.035, 0.035]) { g.add(part(bbox(0.05, 0.1, 0.05, 0.012), m, x, 0.03, -0.06)); g.add(part(bbox(0.05, 0.035, 0.11, 0.012), m, x, -0.02, -0.09)); } },
+  gloves(g, d) { const m = mat('leather', hex(d)); for (const x of [-0.04, 0.04]) { const h = part(sph(0.045, 12, 8), m, x, 0, -0.08); h.scale.set(0.75, 0.4, 1.2); g.add(h); g.add(part(cyl(0.025, 0.025, 0.04, 10), m, x, 0, -0.01)); } },
+  vest(g, d) { const m = d.id === 'wood_chest' ? mat('wood') : d.id === 'metal_chest' ? mat('metal') : mat('paint', hex(d)); g.add(part(bbox(0.2, 0.03, 0.22, 0.01), m, 0, 0, -0.1)); for (const x of [-0.06, 0.06]) g.add(part(bbox(0.03, 0.012, 0.08, 0.004), mat('leather', 0x4a3424), x, 0.02, -0.02)); },
+  mask(g, d) { const m = mat('flat', 0x9aa1a8).clone(); m.side = THREE.DoubleSide; g.add(part(new THREE.CylinderGeometry(0.09, 0.09, 0.16, 16, 1, true, -Math.PI / 2.6, Math.PI / 1.3), m, 0, 0.0, -0.06)); for (const x of [-0.03, 0.03]) g.add(part(bbox(0.035, 0.008, 0.008, 0.002), mat('rubber'), x, 0.03, -0.148)); },
+  hazmat(g, d) { ITEM_MODELS.shirt(g, d); g.add(part(cyl(0.04, 0.04, 0.02, 14), mat('rubber'), 0, 0.03, -0.08, Math.PI / 2)); g.add(part(cyl(0.03, 0.03, 0.022, 14), mat('glass'), 0, 0.04, -0.08, Math.PI / 2)); },
+  food(g, d) { const m = mat('flat', hex(d, d.id === 'raw_meat' ? '#b0453a' : '#8a5a32')); const b = part(sph(0.06, 14, 10), m, 0, 0, -0.08); b.scale.set(1.25, 0.55, 1); g.add(b); g.add(part(cyl(0.008, 0.008, 0.08, 6), mat('flat', 0xece6d6), 0.06, 0.005, -0.03, 0, 0.8, 0)); },
+  mushroom(g, d) { g.add(part(cyl(0.012, 0.015, 0.05, 8), mat('flat', 0xe8dcc0), 0, 0.02, -0.08, Math.PI / 2)); g.add(part(new THREE.SphereGeometry(0.035, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat('flat', hex(d, '#a8784a')), 0, 0.04, -0.08)); },
+  berry(g, d) { const m = mat('flat', hex(d, '#6b2f90')); for (let i = 0; i < 9; i++) { const a = i * 2.4, r = 0.012 + (i % 3) * 0.01; g.add(part(sph(0.012, 8, 6), m, Math.cos(a) * r, (i % 2) * 0.012, -0.08 + Math.sin(a) * r)); } g.add(part(bbox(0.04, 0.002, 0.02, 0.001), mat('leaves', 0x5f8a45), 0.01, 0.025, -0.1)); },
+  bar(g, d) { g.add(part(bbox(0.12, 0.018, 0.045, 0.004), mat('flat', hex(d)), 0, 0, -0.08)); for (const x of [-0.068, 0.068]) g.add(part(bbox(0.016, 0.012, 0.04, 0.002), mat('metal', 0xd0d0d0), x, 0, -0.08)); },
+  bottle(g, d) { g.add(part(lathe([[0, 0], [0.032, 0], [0.034, 0.01], [0.034, 0.13], [0.014, 0.16], [0.012, 0.18], [0, 0.18]], 16), mat('glass'), 0, -0.05, -0.08)); g.add(part(cyl(0.013, 0.013, 0.02, 10), mat('flat', hex(d, '#3a7ab8')), 0, 0.135, -0.08, Math.PI / 2)); g.add(part(cyl(0.035, 0.035, 0.05, 16), mat('flat', hex(d, '#3a7ab8')), 0, 0.02, -0.08, Math.PI / 2)); },
+  bandage(g, d) { const m = mat('cloth', 0xeeeae0); g.add(part(cyl(0.035, 0.035, 0.07, 16), m, 0, 0, -0.08, 0, Math.PI / 2, 0)); g.add(part(cyl(0.012, 0.012, 0.072, 10), mat('cloth', 0xc9b78a), 0, 0, -0.08, 0, Math.PI / 2, 0)); g.add(part(bbox(0.06, 0.002, 0.08, 0.001), m, 0, -0.034, -0.03, 0.15)); },
+  syringe(g, d) { const r = new THREE.Group(); r.position.set(0, 0, -0.06); r.rotation.y = 0.2; r.add(part(cyl(0.012, 0.012, 0.1, 12), mat('glass'))); r.add(part(cyl(0.009, 0.009, 0.07, 10), mat('flat', hex(d, '#5ab8d8')), 0, 0, -0.01)); r.add(part(cyl(0.004, 0.004, 0.06, 6), mat('metal'), 0, 0, 0.07)); r.add(part(cyl(0.016, 0.016, 0.006, 10), mat('polymer'), 0, 0, 0.1)); r.add(part(cyl(0.001, 0.001, 0.04, 4), mat('metal'), 0, 0, -0.07)); r.add(part(bbox(0.04, 0.004, 0.008, 0.001), mat('polymer'), 0, 0, 0.045)); g.add(r); },
+  med(g) { g.add(part(bbox(0.16, 0.08, 0.11, 0.012), mat('flat', 0xeeeeee), 0, 0, -0.08)); const red = mat('flat', 0xc0392b); g.add(part(bbox(0.05, 0.004, 0.016, 0.001), red, 0, 0.042, -0.08)); g.add(part(bbox(0.016, 0.004, 0.05, 0.001), red, 0, 0.042, -0.08)); g.add(part(bbox(0.05, 0.012, 0.012, 0.003), mat('polymer'), 0, 0.045, -0.04)); },
+  pills(g, d) { g.add(part(cyl(0.025, 0.025, 0.07, 14), mat('flat', hex(d, '#d07a2a')), 0, 0, -0.08, Math.PI / 2)); g.add(part(cyl(0.027, 0.027, 0.02, 14), mat('flat', 0xf0f0f0), 0, 0.045, -0.08, Math.PI / 2)); g.add(part(cyl(0.0255, 0.0255, 0.03, 14), mat('flat', 0xf4f0e6), 0, 0.0, -0.08, Math.PI / 2)); },
+  box(g, d) { const big = d.id === 'large_box'; const w = big ? 0.26 : 0.18; g.add(part(bbox(w, 0.12, 0.12, 0.006), mat('wood'), 0, 0.02, -0.1)); for (const x of [-w / 2 + 0.008, w / 2 - 0.008]) g.add(part(bbox(0.014, 0.124, 0.124, 0.003), mat('gunwood'), x, 0.02, -0.1)); g.add(part(bbox(0.03, 0.025, 0.006, 0.003), mat('metal'), 0, 0.06, -0.162)); },
+  furnace(g) { g.add(part(lathe([[0, 0], [0.09, 0], [0.085, 0.06], [0.06, 0.16], [0.03, 0.2], [0, 0.2]], 14), mat('stone'), 0, -0.06, -0.1)); g.add(part(bbox(0.05, 0.04, 0.02, 0.004), mat('rubber'), 0, -0.02, -0.18)); g.add(part(bbox(0.035, 0.02, 0.012, 0.003), mat('emissive'), 0, -0.025, -0.186)); },
+  fire(g) { const s = mat('stone'); for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2; const r = new THREE.Mesh(rockGeo(), s); r.scale.setScalar(0.28); r.position.set(Math.cos(a) * 0.07, -0.02, -0.1 + Math.sin(a) * 0.07); g.add(r); } for (const a of [0.4, -0.5, 1.6]) g.add(part(cyl(0.012, 0.012, 0.13, 8), mat('bark'), 0, 0.0, -0.1, 0, a, 0)); },
+  bench(g, d) { const top = d.id === 'research_table' ? mat('flat', 0x5b8fd6) : d.id === 'workbench3' ? mat('flat', 0x4a6b8a) : d.id === 'workbench2' ? mat('metal') : mat('wood'); g.add(part(bbox(0.22, 0.02, 0.1, 0.004), top, 0, 0.04, -0.1)); for (const [x, z] of [[-0.09, -0.06], [0.09, -0.06], [-0.09, -0.14], [0.09, -0.14]]) g.add(part(bbox(0.014, 0.08, 0.014, 0.003), mat('gunwood'), x, 0.0, z)); g.add(part(bbox(0.04, 0.03, 0.03, 0.004), mat('gunmetal'), 0.07, 0.065, -0.08)); },
+  bag(g, d) { const m = mat('cloth', hex(d)); g.add(part(cyl(0.05, 0.05, 0.2, 14), m, 0, 0, -0.1, 0, Math.PI / 2, 0)); for (const x of [-0.06, 0.06]) g.add(part(new THREE.TorusGeometry(0.052, 0.006, 6, 16), mat('leather', 0x4a3424), x, 0, -0.1, 0, Math.PI / 2, 0)); },
+  cabinet(g, d) { g.add(part(bbox(0.12, 0.2, 0.08, 0.006), mat('wood', hex(d, '#7a5130')), 0, 0.06, -0.1)); for (let i = 0; i < 3; i++) g.add(part(bbox(0.1, 0.05, 0.004, 0.002), mat('gunwood'), 0, 0.0 + i * 0.06, -0.142)); g.add(part(cyl(0.006, 0.006, 0.006, 8), mat('metal'), 0, 0.12, -0.145, Math.PI / 2)); },
+  door(g, d) { const m = d.id === 'wood_door' ? mat('wood') : d.id === 'armored_door' ? mat('armored') : mat('metal'); g.add(part(bbox(0.13, 0.24, 0.015, 0.003), m, 0, 0.06, -0.1)); g.add(part(cyl(0.006, 0.006, 0.02, 8), mat('metal', 0xc7a34b), 0.045, 0.06, -0.115, Math.PI / 2)); },
+  lock(g) { g.add(part(bbox(0.06, 0.05, 0.022, 0.006), mat('flat', 0xc7a34b), 0, 0, -0.08)); g.add(part(new THREE.TorusGeometry(0.02, 0.005, 6, 14, Math.PI), mat('metal'), 0, 0.025, -0.08)); g.add(part(cyl(0.005, 0.005, 0.004, 8), mat('rubber'), 0, 0, -0.0685, Math.PI / 2)); },
+  codelock(g) { g.add(part(bbox(0.06, 0.1, 0.025, 0.006), mat('gunmetal'), 0, 0.02, -0.08)); for (let i = 0; i < 9; i++) g.add(part(bbox(0.012, 0.012, 0.004, 0.002), mat('flat', 0xd8d8d0), -0.016 + (i % 3) * 0.016, 0.045 - Math.floor(i / 3) * 0.016, -0.094)); g.add(part(bbox(0.04, 0.008, 0.004, 0.002), mat('emissive'), 0, -0.012, -0.094)); },
+};
+export const HAS_ITEM_MODEL = (id) => !!(ITEMS[id] && (GUNS[id] || TOOLS[id] || ITEM_MODELS[ITEMS[id].icon]));
+
 // Build a model for any item id. Returns a Group with userData.weapon = { id, parts, sight, ... }.
 export function buildItemModel(id) {
   const d = ITEMS[id];
@@ -288,11 +370,10 @@ export function buildItemModel(id) {
   if (!d) return finish(g, info);
   if (GUNS[id]) Object.assign(info, GUNS[id](g) || {});
   else if (TOOLS[id]) TOOLS[id](g);
+  else if (ITEM_MODELS[d.icon]) ITEM_MODELS[d.icon](g, d, id);
   else {
-    // consumables / deployables held in hand: a small box tinted by the item colour
-    const col = new THREE.Color(d.color || '#888').getHex();
-    const k = d.type === 'food' || d.type === 'med' ? 'paint' : d.type === 'deploy' ? 'wood' : 'paint';
-    g.add(part(bbox(0.08, 0.08, 0.1, 0.01), mat(k, col), 0, 0, -0.06));
+    // last resort (an item with no model yet): a small box tinted by the item colour
+    g.add(part(bbox(0.08, 0.08, 0.1, 0.01), mat('paint', new THREE.Color(d.color || '#888').getHex()), 0, 0, -0.06));
   }
   info.isGun = !!GUNS[id];
   return finish(g, info);

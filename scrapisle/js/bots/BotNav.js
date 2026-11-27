@@ -23,7 +23,7 @@ export class BotNav {
     let speed = (run && !((b.slowUntil || 0) > this.game.now) ? 5.4 : 3.0) * (b.crouch ? 0.55 : 1);
     if (mode === 'far') {
       // abstract: terrain-following travel without collision, still walking around guarded monuments
-      const step = Math.min(d, 5 * (0.85 + 0.15 * ai.S.efficiency) * dt);
+      const step = Math.min(d, 5.6 * (0.85 + 0.15 * ai.S.efficiency) * dt);
       const a = this.avoidMonuments(b, tx, tz, Math.atan2(tx - b.x, tz - b.z));
       b.x += Math.sin(a) * step; b.z += Math.cos(a) * step;
       const ws = W.waterSurface(b.x, b.z);

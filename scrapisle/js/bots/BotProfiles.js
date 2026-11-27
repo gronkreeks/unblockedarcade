@@ -44,9 +44,9 @@ export function rollPersonality(tier, r = Math.random) { return weightedPick(PER
 // Team playstyles. rush: races up the tech tree with loot runs and a small base.
 // turtle: slow and steady, gathers, stocks boxes, upgrades walls early, rarely raids.
 export const STYLES = {
-  rush: { name: 'Rushers', craft: 1.8, avoid: 0.35, gather: 1.5, loot: 1.8, build: 0.8, upgrade: -1, bench: 0.55, idle: 0.03, raid: 1.35, stage: 1, boxes: 2, upkeepH: 0.6, research: 1.4 },
-  balanced: { name: 'Balanced', craft: 1.15, avoid: 1, gather: 1.1, loot: 1, build: 1, upgrade: 0, bench: 1, idle: 0.03, raid: 1, stage: 3, boxes: 3, upkeepH: 1, research: 1 },
-  turtle: { name: 'Turtles', craft: 1, avoid: 0.7, gather: 1.15, loot: 0.5, build: 1.55, upgrade: 1, bench: 1.6, idle: 0.03, raid: 0.35, stage: 3, boxes: 5, upkeepH: 1.8, research: 0.7 },
+  rush: { name: 'Rushers', craft: 2.2, avoid: 0.35, gather: 1.7, loot: 1.8, build: 0.8, upgrade: -1, bench: 0.55, idle: 0.03, raid: 1.35, stage: 1, boxes: 2, upkeepH: 0.6, research: 1.4 },
+  balanced: { name: 'Balanced', craft: 1.5, avoid: 1, gather: 1.3, loot: 1, build: 1, upgrade: 0, bench: 1, idle: 0.03, raid: 1, stage: 3, boxes: 3, upkeepH: 1, research: 1 },
+  turtle: { name: 'Turtles', craft: 1.35, avoid: 0.7, gather: 1.35, loot: 0.5, build: 1.55, upgrade: 1, bench: 1.6, idle: 0.03, raid: 0.35, stage: 3, boxes: 5, upkeepH: 1.8, research: 0.7 },
 };
 const STYLE_WEIGHTS = {
   easy: [['turtle', 4], ['balanced', 4.5], ['rush', 1.5]],

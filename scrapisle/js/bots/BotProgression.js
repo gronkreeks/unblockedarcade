@@ -176,9 +176,13 @@ export class BotProgression {
         }
       }
       const times = Math.ceil(need / rc.n);
-      for (const k in rc.cost) {
-        const sub = this.resolve(b, prog, k, rc.cost[k] * times, depth + 1);
-        if (sub) return sub;
+      // every missing ingredient is a job; take one no teammate is already on (stash first)
+      const subs = [];
+      for (const k in rc.cost) { const sub = this.resolve(b, prog, k, rc.cost[k] * times, depth + 1); if (sub) subs.push(sub); }
+      if (subs.length) {
+        const w = subs.find(a => a.a === 'withdraw'); if (w) return w;
+        const ai = this.game.bots.ai, team = this.game.teams.of(b);
+        return subs.find(a => !ai.claimCount(team, ai.actKey(a), b)) || subs[0];
       }
       return { a: 'craft', id, times, tier: rc.tier };
     }
