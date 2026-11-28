@@ -36,6 +36,7 @@ import { LightPool } from './gfx/LightPool.js';
 import { setMaterials } from './entities/WeaponModels.js';
 import { setAvatarMaterials, setAvatarBatch } from './entities/Avatars.js';
 import { Batcher } from './gfx/Batcher.js';
+import { Admin } from './ui/Admin.js';
 
 const PENDING = 'scrapisle.pending';
 
@@ -79,6 +80,8 @@ class Game {
     this.events = new EventBus();
     this.running = false; this.paused = false;
     this.ui = new UIManager(this);
+    this.admin = null;   // admin-space switches (god mode); the panel itself is this.adminUI
+    this.adminUI = new Admin(this);
     this.applyPrefs();
     document.addEventListener('pointerdown', () => this.audio.unlock());
     document.getElementById('clickBox').onclick = () => { this.audio.unlock(); this.controls && this.controls.lock(); };
@@ -347,7 +350,7 @@ class Game {
     requestAnimationFrame(tt => this.loop(tt));
     const dt = Math.min(0.05, (t - this.last) / 1000); this.last = t;
     if (!this.running) { updateVisible(this.scene, false); this.renderer.render(this.scene, this.camera); return; }
-    const paused = !document.getElementById('pauseScreen').hidden || !document.getElementById('settingsScreen').hidden;
+    const paused = !document.getElementById('pauseScreen').hidden || !document.getElementById('settingsScreen').hidden || !this.adminUI.el.hidden;
     const P = this.player;
     if (!paused) {
       this.controls.update(dt);

@@ -39,6 +39,12 @@ p { line-height: 1.45; margin: 0.25rem 0; }
 label { display: block; margin: 0.6rem 0; font-weight: 700; }
 label input[type=text] { display: block; width: 100%; margin-top: 0.3rem; font-family: inherit; font-size: 1rem; font-weight: 700; color: var(--text); background: #2a2d30; border: 1px solid #44484c; border-radius: 6px; padding: 0.5rem 0.7rem; outline: none; }
 label input[type=text]:focus { border-color: var(--rust); }
+label input[type=password] { display: block; width: 100%; margin-top: 0.3rem; font-family: inherit; font-size: 1rem; font-weight: 700; color: var(--text); background: #2a2d30; border: 1px solid #44484c; border-radius: 6px; padding: 0.5rem 0.7rem; outline: none; }
+label input[type=password]:focus { border-color: var(--rust); }
+.wrap.admin { max-width: 600px; }
+.wrap.admin h4 { margin-top: 1.4rem; }
+.wrap.admin .row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.6rem 0; }
+.wrap.admin label select { width: 100%; }
 label input[type=range] { display: block; width: 100%; accent-color: var(--rust); margin-top: 0.3rem; }
 label.check { display: flex; gap: 0.5rem; align-items: center; }
 .seg { display: flex; gap: 0.35rem; flex-wrap: wrap; }

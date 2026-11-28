@@ -87,6 +87,7 @@ export class UIManager {
     $('psSettings').onclick = () => { this.settingsBack = 'pauseScreen'; this.showSettings(); };
     $('psQuit').onclick = async () => { await this.game.saveGame(true); this.game.quitToMenu(); };
     $('psMap').onclick = () => { this.hideScreens(); this.openMap(); };
+    $('psAdmin').onclick = () => this.game.adminUI.open();
     // Respawn on purpose (to wake up at a sleeping bag or bed): asks once, then you die where you
     // stand and drop everything in a bag, like any death.
     $('psRespawn').onclick = () => {

@@ -22,7 +22,7 @@ const CORE_HASH = (() => {
   for (const f of ['../frontier-core.js', '../frontier-leaders.js', '../frontier-maps.js']) h.update(fs.readFileSync(require.resolve(f)));
   return h.digest('hex').slice(0, 8);
 })();
-const { filterMessage, checkName, newRate, rateCheck, createChat } = require('./chat.js');
+const { filterMessage, checkName, newRate, rateCheck, createChat, checkTeamPassword } = require('./chat.js');
 const { createImposter } = require('./imposter.js');
 const { createTimberfall } = require('./timberfall.js');
 const { createBombsite } = require('./bombsite.js');
@@ -312,6 +312,7 @@ function onMessage(ws, raw) {
 // WebSockets. WebSockets still work too, for pages opened before the switch.
 const server = http.createServer((req, res) => {
   if (challenger.handle(req, res, ipKeyOf(req))) return;
+  if (handleTeamCheck(req, res)) return;
   if (httpConns.handle(req, res)) return;
   if (req.url === '/status') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
@@ -321,6 +322,27 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('Frontier multiplayer and EduArcade chat server is running.\n');
 });
+// POST /team/check {pw}: is this the team password? (Clan Wars' admin space asks before opening.)
+function handleTeamCheck(req, res) {
+  if (!req.url.startsWith('/team/check')) return false;
+  const origin = req.headers.origin;
+  if (origin && origin !== 'null') { res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Vary', 'Origin'); }
+  res.setHeader('Cache-Control', 'no-store');
+  if (req.method === 'OPTIONS') { res.setHeader('Access-Control-Allow-Methods', 'POST'); res.setHeader('Access-Control-Allow-Headers', 'Content-Type'); res.writeHead(204).end(); return true; }
+  const reply = (code, j) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(j)); };
+  if (!originAllowed(origin)) { reply(403, { ok: false, error: 'Not allowed' }); return true; }
+  if (req.method !== 'POST') { reply(405, { ok: false, error: 'Use POST' }); return true; }
+  let size = 0; const parts = [];
+  req.on('data', c => { size += c.length; if (size > 1024) { req.destroy(); return; } parts.push(c); });
+  req.on('end', () => {
+    if (size > 1024) return;
+    let body = null; try { body = JSON.parse(Buffer.concat(parts).toString('utf8') || '{}'); } catch (e) { body = null; }
+    const r = checkTeamPassword(body && body.pw, ipKeyOf(req));
+    if (!r.ok) log('team check: wrong or blocked from ' + ipKeyOf(req));
+    reply(r.ok ? 200 : r.error.startsWith('Too many') ? 429 : 401, r);
+  });
+  return true;
+}
 // Only a hash of the address is kept, used for chat timeouts and the Challenger rate limit. The last
 // X-Forwarded-For entry is the one added by the hosting proxy; earlier entries can be faked by the client.
 function ipKeyOf(req) {

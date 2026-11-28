@@ -287,6 +287,7 @@ export class CombatSystem {
 
   // ---------- damage ----------
   damageActor(a, amount, info) {
+    if (a.isPlayer && this.game.admin && this.game.admin.god) return 0;   // admin space: can't be hurt
     if (!a.alive) return 0;
     if (a.kind !== 'survivor') { if (a.onDamage) a.onDamage(amount, info); return amount; }
     let dmg = amount;

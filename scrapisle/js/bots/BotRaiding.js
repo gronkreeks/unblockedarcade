@@ -188,6 +188,8 @@ export class BotRaiding {
   advance(team) {
     const G = this.game, r = team.raid;
     const st = G.build.structures.get(r.target);
+    if (!r.fob) r.fob = r.rally || (st ? this.chooseFob(st, G.build.zoneOf(st)) : { x: r.tx || 0, z: r.tz || 0 });   // raids from older saves had only a rally point
+    if (!r.rally) r.rally = r.fob;
     const alive = G.teams.alive(team);
     const end = (result) => {
       team.lastRaid = G.now; team.stats.raids++;
@@ -293,6 +295,7 @@ export class BotRaiding {
   memberTask(b, team) {
     const G = this.game, r = team.raid;
     if (!r) return null;
+    if (!r.fob) r.fob = r.rally || { x: r.tx || b.x, z: r.tz || b.z };   // raids from older saves
     const st = G.build.structures.get(r.target);
     if (!st) return null;
     const alive = G.teams.alive(team), prog = G.bots.progressOf(team);

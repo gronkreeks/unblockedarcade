@@ -15,7 +15,7 @@ export class OnlineBoard {
     this.nextT = performance.now() + 20000;
     this.status = null;              // last answer from the server: { rank, challenger, best }
   }
-  get on() { return !!(window.Ranked && Ranked.crStart); }
+  get on() { return !!(window.Ranked && Ranked.crStart) && !(this.game.pstats && this.game.pstats.admin); }   // admin-space worlds don't post
   stats() {
     const P = this.game.player;
     return { def: this.game.pstats.defended || 0, kills: (P && P.kills) || 0, deaths: (P && P.deaths) || 0 };

@@ -87,6 +87,22 @@ const pwHash = pw => crypto.createHash('sha256').update('eduarcade-team|' + pw).
 const TEAM_HASH = TEAM_PW ? pwHash(TEAM_PW) : null;
 const TEAM_TRIES = 5, TEAM_TRY_WINDOW_MS = 15 * 60000;   // wrong passwords allowed per address
 
+// The same team password, checked for other pages (Clan Wars' admin space: POST /team/check).
+// Wrong guesses are limited per address just like the chat sign-in. Only "right" or "wrong" goes
+// back; the password itself never leaves the server.
+const pageTries = new Map();   // ipKey -> times of wrong passwords
+function checkTeamPassword(pw, ipKey) {
+  const t = Date.now(), tries = (pageTries.get(ipKey) || []).filter(x => t - x < TEAM_TRY_WINDOW_MS);
+  if (tries.length >= TEAM_TRIES) return { ok: false, error: 'Too many wrong passwords. Try again in 15 minutes.' };
+  if (!TEAM_HASH) return { ok: false, error: 'The team password isn\'t set up on the server.' };
+  if (typeof pw !== 'string' || !pw || pw.length > 200 || !crypto.timingSafeEqual(pwHash(pw), TEAM_HASH)) {
+    tries.push(t); pageTries.set(ipKey, tries);
+    if (pageTries.size > 5000) pageTries.clear();
+    return { ok: false, error: 'Wrong password.' };
+  }
+  return { ok: true };
+}
+
 const b64 = (s, min, max) => typeof s === 'string' && s.length >= min && s.length <= max && /^[A-Za-z0-9+/]+={0,2}$/.test(s) ? s : null;
 // Friend codes: 10 characters, no look-alikes (0/O, 1/I/L)
 const CODE_ABC = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -419,4 +435,4 @@ function createChat({ send, now, log, crTitles }) {
   return { handle, close, stats: () => ({ users: onlineCount(), queued: queues.size }) };
 }
 
-module.exports = { MAX_MSG, filterMessage, checkName, newRate, rateCheck, createChat };
+module.exports = { MAX_MSG, filterMessage, checkName, newRate, rateCheck, createChat, checkTeamPassword };
