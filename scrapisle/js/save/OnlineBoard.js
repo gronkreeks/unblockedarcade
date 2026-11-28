@@ -1,5 +1,5 @@
 // Posts your Clan Wars score to the Hall of Challengers on the EduArcade homepage (server/challenger.js,
-// board 'clanwars', through ranked.js). Only worlds on Normal difficulty or harder post.
+// board 'clanwars', through ranked.js). Every world posts (Normal is the easiest difficulty).
 // Score: 1000 per raid defended, plus K/D × 100 (capped at 999) to break ties. The server keeps your
 // best world. Each post uses a run token the server signed when the previous one finished.
 const GAME = 'clanwars';
@@ -15,7 +15,7 @@ export class OnlineBoard {
     this.nextT = performance.now() + 20000;
     this.status = null;              // last answer from the server: { rank, challenger, best }
   }
-  get on() { return !!(window.Ranked && Ranked.crStart) && this.game.settings.difficulty !== 'easy'; }
+  get on() { return !!(window.Ranked && Ranked.crStart); }
   stats() {
     const P = this.game.player;
     return { def: this.game.pstats.defended || 0, kills: (P && P.kills) || 0, deaths: (P && P.deaths) || 0 };

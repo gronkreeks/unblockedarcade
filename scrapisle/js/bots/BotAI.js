@@ -8,10 +8,11 @@ import { recycleYield } from '../systems/Deployables.js';
 import * as Recoil from '../systems/Recoil.js';
 import { dist, randRange, angleWrap, clamp, pick } from '../core/util.js';
 
-const KEEP_CATS = new Set(['Ammo', 'Medical', 'Food', 'Raid']);
 const RAW = ['wood', 'stones', 'metal_ore', 'metal_frag', 'sulfur_ore', 'sulfur', 'hqm_ore', 'hqm', 'charcoal', 'cloth', 'leather', 'animal_fat', 'low_grade', 'scrap'];
-// How much raw material a bot is hauling (scrap and refined metal count extra).
-export function rawLoad(b) { let n = 0; for (const k of RAW) n += b.inv.count(k) * (k === 'scrap' || k === 'hqm' ? 8 : k === 'metal_frag' || k === 'sulfur' ? 2 : 1); return n; }
+// How much raw material a bot is hauling (scrap and refined metal count extra). With `keep`, what
+// it took out of the boxes for a job doesn't count.
+export function rawLoad(b, keep) { let n = 0; for (const k of RAW) n += Math.max(0, b.inv.count(k) - ((keep && keep[k]) || 0)) * (k === 'scrap' || k === 'hqm' ? 8 : k === 'metal_frag' || k === 'sulfur' ? 2 : 1); return n; }
+const GATHER = new Set(['harvest', 'pick', 'loot', 'lootbag', 'roam', 'monument', 'hunt', 'recycle']);
 
 export class BotAI {
   constructor(game, mgr) { this.game = game; this.mgr = mgr; }
@@ -65,6 +66,11 @@ export class BotAI {
         if (t.type === 'activity') { const tt = this.activityTask(b, team, t.act); if (tt) { if (!ai.task || ai.task.type !== tt.type || ai.task.why !== 'raid') { tt.why = 'raid'; this.setTask(b, tt); } return; } }
         else { if (!ai.task || ai.task.type !== t.type || (t.piece && ai.task.piece !== t.piece) || (t.dep && ai.task.dep !== t.dep)) this.setTask(b, t); return; }
       }
+    }
+    // out gathering with a full bag (or a fortune in materials): stop and take it home
+    if (ai.task && GATHER.has(ai.task.type) && !ai.task.calm && team && team.base && G.now - (ai.jamT || 0) > 20) {
+      const held = ai.keep && G.now < ai.keepUntil ? ai.keep : null;
+      if (b.inv.main.emptyCount() <= 1 || rawLoad(b, held) > 2500 * Math.sqrt(G.settings.mult || 1)) { ai.jamT = G.now; ai.redecide = true; }
     }
     // keep going with the current task unless it's stale
     if (ai.task && G.now < ai.task.until && !ai.redecide) return;
@@ -178,7 +184,7 @@ export class BotAI {
     // team alerts: help a teammate who is fighting nearby
     if (!best && team && team.alert && G.now - team.alert.t < 6) {
       const t = G.actorById(team.alert.id);
-      const help = ai.tier === 'easy' ? 170 : ai.tier === 'normal' ? 130 : 100;
+      const help = ai.tier === 'normal' ? 130 : 100;
       const ignored = ai.ignore instanceof Map && (ai.ignore.get(team.alert.id) || 0) > G.now;
       if (t && t.alive && !ignored && G.now - team.alert.t < 6 && dist(b.x, b.z, team.alert.x, team.alert.z) < help && (this.kitted(b) || !(t.kind === 'survivor' && this.kitted(t)))) best = t;
     }
@@ -298,9 +304,10 @@ export class BotAI {
     const armed = weaponScore(this.mgr.prog.bestWeapon(b)) > 9, theyArmed = t.kind === 'survivor' && weaponScore(this.mgr.prog.bestWeapon(t)) > 9;
     if (!armed) return 'ignore';
     if (t.kind === 'survivor' && !this.kitted(b) && (theyArmed || d > 12)) return 'ignore';
-    let kos = 0.05 * P.fight * (1 - S.caution * 0.5) * Math.min(1.5, odds) * ({ easy: 0.5, normal: 0.8, hard: 1, expert: 0.7 })[ai.tier];
+    let kos = 0.05 * P.fight * (1 - S.caution * 0.5) * Math.min(1.5, odds) * ({ normal: 0.8, hard: 1, expert: 0.7 })[ai.tier];
     if (mode_far(b)) kos *= 0.5;
     kos *= styleOf(team).avoid;   // rushers and turtles don't go looking for fights
+    kos *= 1 - 0.2 * this.mgr.report.lesson(team, 'fights');   // clans that keep losing fights pick fewer
     if (armed && !theyArmed) kos *= 1.6;
     if (d < 12) kos *= 1.5;
     return Math.random() < kos ? 'fight' : 'ignore';
@@ -340,18 +347,19 @@ export class BotAI {
     this.cleanInventory(b);
     const boxRoom = prog.boxes.some(d => d.cont.emptyCount() > 1) || (prog.tc && prog.tc.cont.emptyCount() > 1);
     const holding = ai.keep && G.now < ai.keepUntil;   // carrying materials taken out for a job
-    const load = rawLoad(b);
+    const load = rawLoad(b, holding ? ai.keep : null);
     const loaded = load > 1500;   // thousands of materials: bank them and build, don't wander off
-    // only what a deposit actually puts away counts (ammo, meds and food stay on the bot)
+    // only what a deposit actually puts away counts (see keepPlan: the bot's own ammo, two slots of
+    // food and of meds, and its raid kit stay on it)
     let bankable = 0, bankSlots = 0;
-    const ammoLeft = {};
-    for (const sl of b.inv.main.slots) {
-      if (!sl) continue;
-      // ammo beyond what this bot's own gun needs goes to the boxes for the rest of the clan
-      if (ITEMS[sl.id].cat === 'Ammo') { if (ammoLeft[sl.id] === undefined) ammoLeft[sl.id] = this.ammoKeep(b, sl.id); const extra = sl.n - ammoLeft[sl.id]; ammoLeft[sl.id] = Math.max(0, -extra); if (extra > 0) { bankable += (ITEMS[sl.id].value || 0) * extra + 30; bankSlots++; } continue; }
-      if (!(KEEP_CATS.has(ITEMS[sl.id].cat) && sl.id !== 'raw_meat')) { bankable += (ITEMS[sl.id].value || 0) * sl.n; bankSlots++; }
-    }
-    if (prog.st && boxRoom && bankSlots > 0 && (b.inv.main.emptyCount() <= (holding ? 1 : 4) || (!holding && (bankable > 60 + 140 * (1 - S.caution) || loaded)))) {
+    const kp = this.keepPlan(b);
+    b.inv.main.slots.forEach((sl, i) => {
+      if (!sl || kp[i] >= sl.n) return;
+      const extra = sl.n - kp[i];
+      bankable += (ITEMS[sl.id].value || 0) * extra + (ITEMS[sl.id].cat === 'Ammo' ? 30 : 0); bankSlots++;
+    });
+    const Ls = this.mgr.report.lesson(team, 'storage');
+    if (prog.st && boxRoom && bankSlots > 0 && (b.inv.main.emptyCount() <= (holding ? 1 : 4 + Ls) || loaded || (!holding && bankable > 60 + 140 * (1 - S.caution)))) {
       // first spend what's needed on the base, then bank the rest
       const affordable = team && team.base && this.mgr.builder.nextSteps(team, prog).find(st => st.kind !== 'deploy' && Object.keys(st.cost).length && Object.keys(st.cost).every(k => b.inv.count(k) >= st.cost[k]));
       if (affordable && !holding) { const t = this.stepTask(b, team, prog, affordable); if (t && t.type === 'build') return this.setTask(b, t); }
@@ -371,10 +379,14 @@ export class BotAI {
     const options = [];
     const Y = styleOf(team);
     const heavy = rawLoad(b) > 1200 && !!(team && team.base);
+    // bag (nearly) full and nowhere to put it: sort out storage at home before wandering off again
+    const jammed = b.inv.main.emptyCount() <= 2 && !!(team && team.base);
+    const R = this.mgr.report;
     const AWAY = new Set(['loot', 'monument', 'roam', 'hunt', 'recycle']);
     const add = (score, task) => {
       if (!task) return;
       if (heavy) score *= AWAY.has(task.type) ? 0.2 : task.type === 'build' ? 1.6 : 1;
+      if (jammed && AWAY.has(task.type)) score *= 0.25;
       // split the work: something a teammate is already doing is worth less to a second bot
       const taken = this.claimCount(team, this.taskKey(task), b);
       if (taken) score *= task.type === 'build' || task.type === 'craft' || task.type === 'hunt' ? 0.3 : taken >= 2 ? 0.3 : 0.55;
@@ -389,11 +401,12 @@ export class BotAI {
       // big crafts (workbenches) get one crafter, so the clan pools materials instead of each member
       // hoarding a share and nobody ever having enough
       if (step.kind === 'deploy' && /^workbench[23]/.test(step.item || '') && b.inv.count(step.item) === 0 && this.benchCrafter(team, step.item) !== b) return;
-      const urgent = step.kind === 'foundation' || step.kind === 'piece' || (step.kind === 'deploy' && ['claim_cabinet', 'wood_box', 'furnace'].includes(step.item)) || step.kind === 'door';
+      const storage = step.kind === 'swapbox' || (step.kind === 'deploy' && (step.item === 'large_box' || step.item === 'wood_box'));
+      const urgent = step.kind === 'foundation' || step.kind === 'piece' || step.kind === 'movetc' || (step.kind === 'deploy' && ['claim_cabinet', 'wood_box', 'furnace'].includes(step.item)) || step.kind === 'door' || (storage && (jammed || prog.boxSpace < 6));
       const ready = (!step.item || b.inv.count(step.item) > 0) && Object.keys(step.cost).every(k => b.inv.count(k) >= step.cost[k]);
       const tech = step.kind === 'deploy' && /^workbench|research_table/.test(step.item);
       const behind = tech && (prog.arms ?? -1) > prog.bench;   // the player is ahead: benches first
-      const sw = tech ? 1.6 * (team.style === 'rush' ? 1.6 : 1) * (behind ? 1.6 : 1) : urgent ? 1 : step.kind === 'upgrade' || step.kind === 'repair' ? Y.build : Math.sqrt(Y.build);
+      const sw = tech ? 1.6 * (team.style === 'rush' ? 1.6 : 1) * (behind ? 1.6 : 1) * (1 + 0.3 * R.lesson(team, 'bench')) : urgent ? (storage && jammed ? 1.6 : 1) : step.kind === 'upgrade' || step.kind === 'repair' ? Y.build : Math.sqrt(Y.build);
       add((urgent ? 2.2 : 1.3) * P.build * sw * (toolsFirst ? 0.6 : 1) * (ready ? 1.4 : 1) * (1 - i * 0.08), this.stepTask(b, team, prog, step));
     });
     const step = steps[0];
@@ -411,11 +424,11 @@ export class BotAI {
       }
     }
     // upkeep
-    if (prog.st && prog.tc && prog.upkeepH < (6 + S.ambition * 8) * Y.upkeepH) add(2.4, this.upkeepTask(b, team, prog));
+    if (prog.st && prog.tc && prog.upkeepH < (6 + S.ambition * 8) * Y.upkeepH * (1 + 0.5 * R.lesson(team, 'upkeep'))) add(prog.upkeepH < 2 ? 4 : 2.4, this.upkeepTask(b, team, prog));   // the base starts decaying soon: drop everything
     // personal wishes (first two)
     for (const [i, w] of wishes.slice(0, 3).entries()) {
       const unarmed = !this.mgr.prog.bestGun(b);
-      const base = { race: 3.0, raid: 1.7, tools: 2.6, weapon: unarmed ? 4.5 : 1.6 * P.fight, ammo: unarmed ? 3.5 : 1.2 * P.fight, clothes: 1.1, meds: 0.9, armour: 1.0 * P.fight }[w.why] || 1;
+      const base = { race: 3.0, raid: 1.7, tools: 2.6, weapon: (unarmed ? 4.5 : 1.6 * P.fight) * (1 + 0.4 * R.lesson(team, 'gear')), ammo: (unarmed ? 3.5 : 1.2 * P.fight) * (1 + 0.5 * R.lesson(team, 'ammo')), clothes: 1.1, meds: 0.9, armour: 1.0 * P.fight }[w.why] || 1;
       const act = this.mgr.prog.resolve(b, prog, w.id, w.n);
       if (act) add(base * (i === 0 ? 1 : i === 1 ? 0.8 : 0.65), this.activityTask(b, team, act));
     }
@@ -508,7 +521,7 @@ export class BotAI {
 
   stepTask(b, team, prog, step) {
     // make sure the bot holds what the step costs
-    if (step.kind === 'deploy' || step.kind === 'door' || step.kind === 'lock' || step.kind === 'swapdoor') {
+    if (step.kind === 'deploy' || step.kind === 'door' || step.kind === 'lock' || step.kind === 'swapdoor' || step.kind === 'swapbox') {
       if (b.inv.count(step.item) < 1) {
         const act = this.mgr.prog.resolve(b, prog, step.item, 1);
         return act ? this.activityTask(b, team, act) : null;
@@ -811,8 +824,15 @@ export class BotAI {
       if (realGun && ['wooden_spear', 'stone_spear', 'bone_knife', 'pipe_pistol', 'handmade_shell'].includes(id)) return true;
       if (prog.bench >= 2 && ['cloth_shirt', 'cloth_pants', 'cloth_hood', 'bone_helmet', 'wood_chest'].includes(id)) return true;
       if (keep[id] !== undefined && seen > keep[id]) return true;
+      // spare copies: a cabinet beyond one, and more tools or guns of one kind than the clan can hold
+      if (id === 'claim_cabinet' && seen > (prog.tc ? 0 : 1)) return true;
+      const ty = ITEMS[id].type;
+      if ((ty === 'tool' || ty === 'melee' || ty === 'gun') && copies(id) > G.teams.alive(team).length + 1) return true;
       return false;
     };
+    // copies of an item seen so far in the boxes, plus the ones members carry
+    const carried = {}; for (const m of G.teams.membersOf(team)) for (const s of [...m.inv.belt.slots, ...m.inv.main.slots]) if (s) carried[s.id] = (carried[s.id] || 0) + 1;
+    const copies = (id) => (seen[id] || 0) + (carried[id] || 0);
     const thrown = [], seen = {};
     for (const bx of prog.boxes) {
       for (let i = 0; i < bx.cont.size; i++) {
@@ -837,24 +857,24 @@ export class BotAI {
     const keep = {};
     for (const st of this.mgr.builder.nextSteps(team, this.mgr.progressOf(team))) for (const k in st.cost) keep[k] = (keep[k] || 0) + st.cost[k] * 3;
     if (b.ai.keep && this.game.now < b.ai.keepUntil) for (const k in b.ai.keep) keep[k] = (keep[k] || 0) + b.ai.keep[k];
-    const ammoLeft = {};
+    const kp = this.keepPlan(b);
+    // stack onto a box that already holds the same thing (so every box doesn't end up with a little
+    // of everything), else the nearest box with room
+    const boxes = this.baseContainers(b).filter(d => d.type !== 'furnace');
+    const put = (st) => {
+      const same = ITEMS[st.id].stack > 1 && boxes.find(d => d !== c && d.cont.count(st.id) > 0 && d.cont.room(st.id) >= st.n);
+      return (same || c).cont.addStack(st);
+    };
     for (let i = 0; i < b.inv.main.size; i++) {
       const s = b.inv.main.slots[i]; if (!s) continue;
       const d = ITEMS[s.id];
-      if (d.cat === 'Ammo') {
-        // keep what this bot's own gun needs, bank the rest for teammates
-        if (ammoLeft[s.id] === undefined) ammoLeft[s.id] = this.ammoKeep(b, s.id);
-        const k = Math.min(ammoLeft[s.id], s.n); ammoLeft[s.id] -= k;
-        if (k >= s.n) continue;
-        const part = { ...s, n: s.n - k }; s.n = k; const left = c.cont.addStack(part); if (left) s.n += left.n;
-        if (s.n <= 0) b.inv.main.slots[i] = null;
-        continue;
-      }
-      if (KEEP_CATS.has(d.cat) && d.id !== 'raw_meat') continue;
-      if (keep[s.id] > 0) { const k = Math.min(keep[s.id], s.n); keep[s.id] -= k; if (k >= s.n) continue; const part = { ...s, n: s.n - k }; s.n = k; const left = c.cont.addStack(part); if (left) s.n += left.n; continue; }
-      if (fur && (d.smelt || d.cooks) && fur.cont.room(s.id) >= s.n && dist(b.x, b.z, fur.x, fur.z) < 12) { fur.cont.add(s.id, s.n); b.inv.main.slots[i] = null; continue; }
-      const left = c.cont.addStack(s);
-      b.inv.main.slots[i] = left;
+      // keep the bot's own ammo, food, meds and raid kit; bank the rest
+      let k = kp[i];
+      if (k >= s.n) continue;
+      if (!k && keep[s.id] > 0 && d.cat !== 'Ammo') { k = Math.min(keep[s.id], s.n); keep[s.id] -= k; if (k >= s.n) continue; }
+      if (!k && fur && (d.smelt || d.cooks) && fur.cont.room(s.id) >= s.n && dist(b.x, b.z, fur.x, fur.z) < 12) { fur.cont.add(s.id, s.n); b.inv.main.slots[i] = null; continue; }
+      if (k > 0) { const part = { ...s, n: s.n - k }; s.n = k; const left = put(part); if (left) s.n += left.n; continue; }
+      b.inv.main.slots[i] = put(s);
     }
     b.inv.main.touch();
     if (fur && fur.cont.count('wood') < 40 && c.cont.count('wood') > 0) { const k = Math.min(100, c.cont.count('wood')); c.cont.remove('wood', k); fur.cont.add('wood', k); }
@@ -862,6 +882,19 @@ export class BotAI {
     // every so often, whoever drops stuff off also tidies the boxes
     if (team && this.game.now - (team.tidyT || 0) > 120) { team.tidyT = this.game.now; this.tidyBase(team, this.mgr.progressOf(team)); }
     return 'done';
+  }
+  // How much of each bag slot a bot keeps when it banks: ammo for its own gun, two slots each of
+  // food and meds, and its raid kit. Everything else goes in the boxes.
+  keepPlan(b) {
+    const keep = new Array(b.inv.main.size).fill(0), ammoLeft = {}, catN = {};
+    b.inv.main.slots.forEach((s, i) => {
+      if (!s) return;
+      const d = ITEMS[s.id];
+      if (d.cat === 'Ammo') { if (ammoLeft[s.id] === undefined) ammoLeft[s.id] = this.ammoKeep(b, s.id); const k = Math.min(ammoLeft[s.id], s.n); ammoLeft[s.id] -= k; keep[i] = k; return; }
+      if (d.cat === 'Raid') { keep[i] = s.n; return; }
+      if ((d.cat === 'Food' && s.id !== 'raw_meat') || d.cat === 'Medical') { const n = catN[d.cat] = (catN[d.cat] || 0) + 1; if (n <= 2) keep[i] = s.n; }
+    });
+    return keep;
   }
   t_stocktc(b, t, dt, mode) {
     const team = this.game.teams.of(b), prog = this.mgr.progressOf(team);
@@ -900,6 +933,10 @@ export class BotAI {
     if (!team || !team.base) return 'fail';
     if (s.piece && !G.build.alive(s.piece)) return 'fail';
     if (s.spec && s.spec.st && !G.build.structures.has(s.spec.st)) return 'fail';
+    // a teammate got there first: the base was founded, the piece placed or the upgrade done
+    if (s.kind === 'foundation' && (team.base.st || team.base.site !== s.newSt)) return 'done';
+    if (s.kind === 'piece' && G.build.structures.get(s.spec.st)?.pieces.has(G.build.keyOf(s.spec))) return 'done';
+    if (s.kind === 'upgrade' && s.piece.grade >= s.grade) return 'done';
     let tx, tz;
     if (s.kind === 'foundation') { const c = Math.cos(s.newSt.yaw), sn = Math.sin(s.newSt.yaw); tx = s.newSt.ox + 1.5 * c + 1.5 * sn; tz = s.newSt.oz - 1.5 * sn + 1.5 * c; }
     else if (s.kind === 'piece') { const tf = G.build.specTransform(s.spec); tx = tf.x; tz = tf.z; }
@@ -936,6 +973,19 @@ export class BotAI {
       }
       case 'lock': r = G.build.placeLock(b, s.piece, s.item); if (r.ok) { for (const m of G.teams.membersOf(team)) if (!s.piece.door.lock.auth.includes(m.team)) s.piece.door.lock.auth.push(m.team); } break;
       case 'deploy': r = G.deploy.place(b, s.item, s.x, s.y, s.z, s.yaw); if (r.ok && s.item === 'claim_cabinet') { r.dep.auth.add(team.id); } break;
+      case 'movetc': {
+        if (!G.deploy.byId.has(s.dep.id)) return 'fail';
+        r = G.deploy.relocate(s.dep, s.x, s.y, s.z, s.yaw);
+        if (r.ok) G.bots.report.note(team, 'Moved the claim cabinet into a corner');
+        else team.base.tcFails = (team.base.tcFails || 0) + 1;
+        break;
+      }
+      case 'swapbox': {
+        if (!G.deploy.byId.has(s.dep.id) || b.inv.count('large_box') < 1) return 'fail';
+        r = G.deploy.replace(s.dep, 'large_box');
+        if (r.ok) { b.inv.remove('large_box', 1); G.bots.report.note(team, 'Swapped a wooden box for a large box'); }
+        break;
+      }
     }
     if (!r || !r.ok) {
       b.ai.buildFails = (b.ai.buildFails || 0) + 1; b.ai.lastBuildErr = r && r.err;
@@ -1035,6 +1085,22 @@ export class BotAI {
     }
     // worn-out tools go too
     for (const c of [b.inv.belt, b.inv.main]) c.slots.forEach((s, i) => { if (s && s.c !== undefined && s.c <= 0 && ITEMS[s.id].type !== 'wear') { c.slots[i] = null; c.touch(); } });
+    // a completely full bag with no box room at home: drop the least valuable stack so the bot can work
+    if (b.inv.main.emptyCount() === 0 && this.game.now - (b.ai.jamDropT || 0) > 30) {
+      const prog = this.mgr.progressOf(this.game.teams.of(b));
+      const room = prog.boxes.some(d => d.cont.emptyCount() > 0);
+      if (!room) {
+        const kp = this.keepPlan(b);
+        let worst = -1, wv = Infinity;
+        b.inv.main.slots.forEach((s, i) => { if (!s || kp[i] >= s.n) return; const d = ITEMS[s.id]; if (d.type === 'gun' || d.type === 'tool') return; const v = (d.value || 0) * s.n; if (v < wv) { wv = v; worst = i; } });
+        if (worst >= 0) {
+          const s = b.inv.main.slots[worst]; b.inv.main.slots[worst] = null; b.inv.main.touch();
+          this.game.loot.dropItem(s.id, s.n, b.x, b.y + 1, b.z, s);
+          b.ai.jamDropT = this.game.now;
+          this.mgr.report.note(this.game.teams.of(b), `${b.name} dropped ${s.n} ${ITEMS[s.id].name} (bag full, no box room at home)`, 'jam');
+        }
+      }
+    }
   }
   autoWear(b) {
     for (const c of [b.inv.main, b.inv.belt]) for (let i = 0; i < c.size; i++) {
@@ -1306,7 +1372,7 @@ export class BotAI {
         }
       }
       // fire discipline: better bots wait for drift to settle; worse bots keep spraying
-      const maxDrift = ({ easy: 10, normal: 5, hard: 3.5, expert: 2.5 })[ai.tier] * (d < 15 ? 2.5 : 1);
+      const maxDrift = ({ normal: 5, hard: 3.5, expert: 2.5 })[ai.tier] * (d < 15 ? 2.5 : 1);
       if (def.type === 'gun' && def.auto) { if (rs.accP > maxDrift) { ai.burstHold = G.now + 0.15 + (1 - S.recoilCtrl) * 0.2; } if (G.now < (ai.burstHold || 0)) return; }
       else if (def.type === 'gun' && (rs.accP > maxDrift * 0.6 || G.now - (ai.lastShot || 0) < (60 / def.rpm) * (1.6 - S.recoilCtrl * 0.6))) return;
       if (def.type === 'bow') {

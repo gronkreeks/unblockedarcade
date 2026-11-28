@@ -130,6 +130,7 @@ class Game {
   step(text) { this.ui.showLoading(text); return new Promise(r => requestAnimationFrame(() => setTimeout(r, 0))); }
 
   async setup(cfg, data) {
+    if (cfg.difficulty === 'easy' || !cfg.difficulty) cfg.difficulty = 'normal';   // Easy was removed: those worlds play on Normal
     this.settings = { mult: cfg.mult, difficulty: cfg.difficulty, bots: cfg.bots, size: cfg.size, fov: this.prefs.fov, autosave: 120 };
     applyStackMult(cfg.mult);
     this.now = data ? data.now : 0;
@@ -197,6 +198,7 @@ class Game {
       this.animals.load(data.animals);
       this.teams.load(data.teams);
       this.bots.load(data.bots);
+      this.bots.report.load(data.botReport);
       this.player = this.makePlayer();
       this.player.load(data.player);
       this.player.isPlayer = true; this.player.team = 'player';
@@ -283,7 +285,7 @@ class Game {
       v: 1, cfg: this.cfg, now: this.now, uid: getUidCounter(), env: this.env.serialize(),
       player: this.player.serialize(), bots: this.bots.serialize(), teams: this.teams.serialize(),
       structures: this.build.serialize(), deploys: this.deploy.serialize(), res: this.res.serialize(), loot: this.loot.serialize(),
-      animals: this.animals.serialize(), npcs: this.npcs.serialize(), log: this.log, raidHistory: this.raidHistory, seen: [...this.seen], pstats: this.pstats,
+      animals: this.animals.serialize(), npcs: this.npcs.serialize(), log: this.log, raidHistory: this.raidHistory, seen: [...this.seen], pstats: this.pstats, botReport: this.bots.report.serialize(),
     };
   }
   async saveGame(auto) {

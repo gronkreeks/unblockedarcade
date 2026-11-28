@@ -18,7 +18,7 @@ const TEMPLATES = {
   'medium@1': { core: [3, 2], airlock: [1, -1] },
   'large@1': { core: [4, 3], airlock: [1, -1] },
 };
-const layoutOf = (base) => base.final || !TEMPLATES[base.template + '@1'] ? base.template : base.template + '@1';
+export const layoutOf = (base) => base.final || !TEMPLATES[base.template + '@1'] ? base.template : base.template + '@1';
 export const STAGES = ['hut', 'small', 'medium', 'large', 'xl', 'xxl'];
 
 export function buildTemplate(name) {
@@ -59,6 +59,10 @@ export const tpl = (n) => TPL_CACHE[n] || (TPL_CACHE[n] = buildTemplate(n));
 
 // Deployable order inside the base. 'at' = minimum progression before it's wanted.
 export const BASE_DEPLOY_ORDER = ['claim_cabinet', 'wood_box', 'furnace', 'workbench1', 'large_box', 'research_table', 'workbench2', 'large_box', 'workbench3'];
+
+// Box slots that fit each base size (a wooden box holds 24, a large box 48).
+const BOX_CAP = { hut: 48, small: 144, medium: 216, large: 288, xl: 384, xxl: 480 };
+export const boxCap = (team) => (BOX_CAP[team.base && team.base.template] || 48) + (team.style === 'turtle' ? 48 : 0);
 
 export class BotBuilder {
   constructor(game) { this.game = game; }
@@ -171,13 +175,14 @@ export class BotBuilder {
     const T = tpl(layoutOf(base));
     const st = base.st ? G.build.structures.get(base.st) : null;
     const skip = new Set(base.skip || []);
+    this._resv = null;
     if (!st) return [{ kind: 'foundation', i: T.cells[0][0], j: T.cells[0][1], newSt: base.site, cost: pieceCost('foundation', 0) }];
     const out = [];
     // grow into the next stage once this one is finished and the team has outgrown it
     if (base.final && (base.template !== base.final || base.benchCramped) && st.tc && this._stageDone(st, T, skip)) {
       const cur = STAGES.indexOf(base.template);
       if (this.wantedStage(team, prog) > cur) {
-        base.template = STAGES[cur + 1]; base.cramped = false;
+        base.template = STAGES[cur + 1]; base.cramped = false; base.tcFails = 0;
         G.logEvent(`${team.name} is expanding their base`);
         return this._nextSteps(team, prog);
       }
@@ -194,8 +199,15 @@ export class BotBuilder {
       const keep = new Set(T.walls.map(w => w.key));
       for (const p of st.pieces.values()) if (p.k === 0 && (p.type === 'wall' || p.type === 'doorway') && !keep.has(p.key)) { out.push({ kind: 'demolish', piece: p, cost: {} }); break; }
     }
-    // claim cabinet comes first once the footprint exists
-    if (footDone && !st.tc) { const s = this._deployStep(team, st, T, 'claim_cabinet', 0); if (s) return [s]; }
+    // claim cabinet comes first once the footprint exists, in a corner of the room
+    if (footDone && !st.tc) { const s = this._tcStep(team, st, T, null) || this._deployStep(team, st, T, 'claim_cabinet', 0); if (s) return [s]; }
+    // after the base grows, the old corner is in the middle of the room: carry the cabinet to a new one
+    const tcDep = st.tc ? G.deploy.byId.get(st.tc) : null;
+    this._resv = tcDep && !this.tcInCorner(st, T, tcDep) ? this._tcSpots(T)[0] : null;
+    if (shellDone && tcDep && this._resv && (base.tcFails || 0) < 3 && !(team.underAttack > 0)) {
+      const s = this._tcStep(team, st, T, tcDep);
+      if (s) out.push({ ...s, kind: 'movetc', item: undefined, dep: tcDep });
+    }
     if (shell) out.push(shell);
     // doors
     let door = null;
@@ -226,7 +238,14 @@ export class BotBuilder {
       if (!this.has(st, 'workbench2') && prog.bench >= 1 && prog.wantBench2) want.push(['workbench2', 2]);
       if (!this.has(st, 'workbench3') && prog.bench >= 2 && prog.wantBench3) want.push(['workbench3', 3]);
       if (bags < Math.min(team.size, 2)) want.push(['bag']);
-      if (prog.boxSpace < 5 && boxN < 2) want.push([prog.knows('large_box') && prog.bench >= 1 ? 'large_box' : 'wood_box', prog.knows('large_box') && prog.bench >= 1 ? 1 : 0]);
+      // storage: large boxes once there's a bench (bots learn them, 30 scrap), and more of them for
+      // clans that have learned the hard way that their bags fill up
+      const L = G.bots.report ? G.bots.report.lesson(team, 'storage') : 0;
+      const big = prog.bench >= 1 && (prog.knows('large_box') || prog.scrap >= 60);
+      const boxItem = big ? ['large_box', 1] : ['wood_box', 0];
+      const slots = prog.boxes.reduce((n, d) => n + d.cont.size, 0), cap = boxCap(team) + 48 * L;
+      const storageLow = prog.boxSpace < 6 + 2 * team.size + 4 * L;
+      if (storageLow && slots < cap) want.push(boxItem);
       if (!pendingBench) {
         if (!this.has(st, 'research_table') && prog.bench >= 1 && prog.knows('research_table')) want.push(['research_table', 1]);
         // more furnaces to boom once ore piles up (a player runs several at once)
@@ -235,20 +254,32 @@ export class BotBuilder {
         if (furnaces >= 1 && furnaces < maxF && (ore > 400 * furnaces || (prog.bench >= 2 && furnaces < 2))) want.push(['furnace', 0]);
         // surplus storage: keep spare room, like a player who adds boxes before the last one fills.
         // Room wanted grows with the clan; how many boxes fit grows with the base.
-        const room = 12 + 4 * team.size, maxBox = ({ hut: 2, small: 3, medium: 5, large: 6, xl: 8, xxl: 10 }[base.template] || 2) + (team.style === 'turtle' ? 1 : 0);
-        if (prog.boxSpace < room && boxN < maxBox) want.push([prog.knows('large_box') && prog.bench >= 1 ? 'large_box' : 'wood_box', prog.knows('large_box') && prog.bench >= 1 ? 1 : 0]);
+        const room = (16 + 6 * team.size) * (1 + 0.35 * L);
+        if (prog.boxSpace < room && slots < cap) want.push(boxItem);
         if (bags < Math.min(team.size, 4)) want.push(['bag']);
       }
-      let found = 0, cramped = false, bagDone = false;
+      let found = 0, cramped = false, bagDone = false, boxBlocked = false, boxDone = false;
       for (const [type, tier] of want) {
         if (type === 'bag' && bagDone) continue;
+        const isBox = type === 'large_box' || (type === 'wood_box' && this.has(st, 'wood_box'));
+        if (isBox && boxDone) continue;
         const dep = type === 'bag' ? this._bagStep(team, st, T, bags) : this._deployStep(team, st, T, type, tier);
         if (type === 'bag') bagDone = true;
+        if (isBox) boxDone = true;
         if (dep) { out.push(dep); if (++found >= 2) break; continue; }
+        if (isBox) boxBlocked = true;
         if (type !== 'bag' || bags < 1) cramped = true;   // no room for something the base needs
         if (type === 'workbench2' || type === 'workbench3') base.benchCramped = true;   // the base must grow for it
       }
       if (cramped) base.cramped = true;
+      // out of floor or box slots and still short of storage: swap a wooden box for a large one,
+      // and once every box is large the base plans one size bigger
+      if (storageLow && big && (boxBlocked || slots >= cap)) {
+        const wood = prog.boxes.filter(d => d.type === 'wood_box');
+        if (wood.length) out.push({ kind: 'swapbox', dep: wood[0], item: 'large_box', x: wood[0].x, y: wood[0].y, z: wood[0].z, tier: 1, cost: {} });
+        else if (boxBlocked) base.benchCramped = true;
+      }
+      base.storageBlock = storageLow ? (boxBlocked ? (big ? 'no floor room for another large box' : 'no floor room and no large boxes yet') : slots >= cap ? 'the box limit for this base size' : !big ? 'only wooden boxes (no workbench yet)' : null) : null;
     }
     // upgrades, gated by progression
     if (shellDone) {
@@ -311,6 +342,7 @@ export class BotBuilder {
     if (2 * D.size[0] + 0.34 <= Math.min(T.Wm, T.Dm)) for (const slot of this._slotOrder(T, type)) {
       const f = this._fitSlot(slot, T, type);
       if (T.doorX !== undefined && this._inWalkway(T, f.x, f.z, slot.yaw, type)) continue;
+      if (this._inReserved(f.x, f.z, slot.yaw, type)) continue;
       const w = this.game.build.toWorld(st, f.x, FOUND_H, f.z);
       if (!this.game.deploy.supportAt(w.x, w.y, w.z)) continue;   // that part of the floor was never built
       if (this.game.deploy.check(team.id, type, w.x, w.y, w.z, st.yaw + slot.yaw)) continue;
@@ -327,6 +359,7 @@ export class BotBuilder {
       for (const [ox, oz] of offs) for (const yo of [0, Math.PI / 2]) {
         const lx = (p.i + 0.5) * CELL + ox, lz = (p.j + 0.5) * CELL + oz;
         if (T.doorX !== undefined && p.j >= 0 && this._inWalkway(T, lx, lz, yo, type)) continue;
+        if (this._inReserved(lx, lz, yo, type)) continue;
         const w = this.game.build.toWorld(st, lx, FOUND_H, lz);
         if (this.game.deploy.check(team.id, type, w.x, w.y, w.z, st.yaw + yo)) continue;
         this._wantedDeploy = false;
@@ -334,6 +367,42 @@ export class BotBuilder {
       }
     }
     return null;
+  }
+  // Claim cabinet spots: the room's corners, the back ones (away from the door) first, with the
+  // cabinet's long side against the back or the side wall.
+  _tcSpots(T) {
+    if (T._tc) return T._tc;
+    const D = DEPLOYABLES.claim_cabinet, hx = D.size[0], hz = D.size[2], g = 0.17, out = [];
+    for (const [back, right] of [[1, 1], [1, 0], [0, 1], [0, 0]]) {
+      out.push({ x: right ? T.Wm - hx - g : hx + g, z: back ? T.Dm - hz - g : hz + g, yaw: back ? 0 : Math.PI });
+      out.push({ x: right ? T.Wm - hz - g : hz + g, z: back ? T.Dm - hx - g : hx + g, yaw: right ? Math.PI / 2 : -Math.PI / 2 });
+    }
+    return (T._tc = out.filter(p => T.doorX === undefined || !this._inWalkway(T, p.x, p.z, p.yaw, 'claim_cabinet')));
+  }
+  toLocal(st, x, z) { const c = Math.cos(st.yaw), s = Math.sin(st.yaw), dx = x - st.ox, dz = z - st.oz; return { x: dx * c - dz * s, z: dx * s + dz * c }; }
+  tcInCorner(st, T, tc) {
+    const l = this.toLocal(st, tc.x, tc.z);
+    return this._tcSpots(T).some(p => Math.hypot(p.x - l.x, p.z - l.z) < 0.4);
+  }
+  // A free corner for the cabinet (`self`: the cabinet that's being moved, if any).
+  _tcStep(team, st, T, self) {
+    for (const p of this._tcSpots(T)) {
+      const w = this.game.build.toWorld(st, p.x, FOUND_H, p.z);
+      if (!this.game.deploy.supportAt(w.x, w.y, w.z)) continue;
+      const err = self ? this.game.deploy.checkWithout(self, team.id, 'claim_cabinet', w.x, w.y, w.z, st.yaw + p.yaw) : this.game.deploy.check(team.id, 'claim_cabinet', w.x, w.y, w.z, st.yaw + p.yaw);
+      if (err) continue;
+      return { kind: 'deploy', item: 'claim_cabinet', x: w.x, y: w.y, z: w.z, yaw: st.yaw + p.yaw, tier: 0, cost: {} };
+    }
+    return null;
+  }
+  // nothing else goes in the corner the cabinet is about to move to
+  _inReserved(lx, lz, yaw, type) {
+    const r = this._resv; if (!r || type === 'claim_cabinet') return false;
+    const D = DEPLOYABLES[type], c = Math.abs(Math.cos(yaw)), s = Math.abs(Math.sin(yaw));
+    const ex = D.size[0] * c + D.size[2] * s, ez = D.size[0] * s + D.size[2] * c;
+    const R = DEPLOYABLES.claim_cabinet.size, rc = Math.abs(Math.cos(r.yaw)), rs = Math.abs(Math.sin(r.yaw));
+    const rx = R[0] * rc + R[2] * rs + 0.05, rz = R[0] * rs + R[2] * rc + 0.05;
+    return Math.abs(lx - r.x) < ex + rx && Math.abs(lz - r.z) < ez + rz;
   }
   _bagStep(team, st, T, n) {
     for (let k = 0; k < T.bagSpots.length; k++) {

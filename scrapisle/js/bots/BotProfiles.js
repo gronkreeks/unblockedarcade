@@ -1,21 +1,21 @@
 // Bot skill tiers, difficulty distributions, personalities and names.
 import { weightedPick, pick } from '../core/util.js';
 
-export const TIERS = ['easy', 'normal', 'hard', 'expert'];
+export const TIERS = ['normal', 'hard', 'expert'];
+// Easy bots were removed (2026-11-28): bots and clans saved as easy load as normal.
+export const tierOf = (t) => (t && TIERS.includes(t) ? t : 'normal');
 
 // Share of each skill tier for every world difficulty setting.
 export const DISTRIBUTION = {
-  easy: { easy: 0.68, normal: 0.24, hard: 0.07, expert: 0.01 },
-  normal: { easy: 0.2, normal: 0.52, hard: 0.21, expert: 0.07 },
-  hard: { easy: 0.07, normal: 0.23, hard: 0.5, expert: 0.2 },
-  expert: { easy: 0.06, normal: 0.17, hard: 0.3, expert: 0.47 },
+  normal: { normal: 0.72, hard: 0.21, expert: 0.07 },
+  hard: { normal: 0.3, hard: 0.5, expert: 0.2 },
+  expert: { normal: 0.23, hard: 0.3, expert: 0.47 },
 };
 
 // Skill parameters per tier. aimErr in radians, react in seconds. Tiers differ in how they fight
 // (aim, reactions, recoil, caution); gathering, building and planning are the same for everyone.
 export const SKILL = {
-  easy: { aimErr: 0.022, headChance: 0.03, react: 0.8, recoilCtrl: 0.25, sight: 70, efficiency: 1, noise: 0.12, caution: 0.25, strafe: 0.2, crouch: 0.05, idle: 0.03, ambition: 1, raidRate: 1.0, teamSize: [4, 8], healAt: 35, lootGreed: 0.8, siteSkill: 0.75 },
-  normal: { aimErr: 0.016, headChance: 0.06, react: 0.55, recoilCtrl: 0.5, sight: 90, efficiency: 1, noise: 0.12, caution: 0.45, strafe: 0.5, crouch: 0.15, idle: 0.03, ambition: 1, raidRate: 0.55, teamSize: [2, 5], healAt: 45, lootGreed: 0.8, siteSkill: 0.75 },
+  normal: { aimErr: 0.016, headChance: 0.06, react: 0.55, recoilCtrl: 0.5, sight: 90, efficiency: 1, noise: 0.12, caution: 0.45, strafe: 0.5, crouch: 0.15, idle: 0.03, ambition: 1, raidRate: 0.55, teamSize: [2, 7], healAt: 45, lootGreed: 0.8, siteSkill: 0.75 },
   hard: { aimErr: 0.0115, headChance: 0.12, react: 0.42, recoilCtrl: 0.72, sight: 110, efficiency: 1, noise: 0.12, caution: 0.6, strafe: 0.75, crouch: 0.3, idle: 0.03, ambition: 1, raidRate: 0.4, teamSize: [1, 3], healAt: 55, lootGreed: 0.8, siteSkill: 0.75 },
   expert: { aimErr: 0.0088, headChance: 0.18, react: 0.34, recoilCtrl: 0.88, sight: 130, efficiency: 1, noise: 0.12, caution: 0.78, strafe: 0.9, crouch: 0.45, idle: 0.03, ambition: 1, raidRate: 0.3, teamSize: [1, 3], healAt: 60, lootGreed: 0.8, siteSkill: 0.75 },
 };
@@ -29,17 +29,16 @@ export const PERSONALITIES = {
   balanced: { gather: 1, build: 1, loot: 1, fight: 1, hunt: 1, raid: 1 },
 };
 const PERS_WEIGHTS = {
-  easy: [['builder', 3], ['balanced', 3], ['hunter', 2], ['looter', 1.5], ['fighter', 1]],
   normal: [['balanced', 3], ['builder', 2], ['looter', 2], ['fighter', 1.5], ['hunter', 1.5]],
   hard: [['balanced', 2], ['looter', 2.5], ['fighter', 2], ['builder', 1.5], ['hunter', 1]],
   expert: [['looter', 2.5], ['fighter', 2.5], ['balanced', 2], ['builder', 1]],
 };
 
 export function rollTier(difficulty, r = Math.random) {
-  const d = DISTRIBUTION[difficulty] || DISTRIBUTION.normal;
+  const d = DISTRIBUTION[tierOf(difficulty)];
   return weightedPick(TIERS.map(t => [t, d[t]]), r);
 }
-export function rollPersonality(tier, r = Math.random) { return weightedPick(PERS_WEIGHTS[tier], r); }
+export function rollPersonality(tier, r = Math.random) { return weightedPick(PERS_WEIGHTS[tierOf(tier)], r); }
 
 // Team playstyles. rush: races up the tech tree with loot runs and a small base.
 // turtle: slow and steady, gathers, stocks boxes, upgrades walls early, rarely raids.
@@ -49,7 +48,6 @@ export const STYLES = {
   turtle: { name: 'Turtles', craft: 1.35, avoid: 0.7, gather: 1.35, loot: 0.5, build: 1.55, upgrade: 1, bench: 1.6, idle: 0.03, raid: 0.35, stage: 3, boxes: 5, upkeepH: 1.8, research: 0.7 },
 };
 const STYLE_WEIGHTS = {
-  easy: [['turtle', 4], ['balanced', 4.5], ['rush', 1.5]],
   normal: [['turtle', 3], ['balanced', 4.5], ['rush', 2.5]],
   hard: [['turtle', 2.5], ['balanced', 3.5], ['rush', 4]],
   expert: [['turtle', 2], ['balanced', 3], ['rush', 5]],

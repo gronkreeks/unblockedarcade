@@ -1,13 +1,12 @@
 // Team formation, shared memory (known bases, threats), shared base + stash, raid drive.
-import { TIERS, SKILL, teamName, rollStyle, styleOf } from './BotProfiles.js';
+import { TIERS, SKILL, teamName, rollStyle, styleOf, tierOf } from './BotProfiles.js';
 import { randInt, shuffle, uid, dist } from '../core/util.js';
 
 const TEAM_COLORS = ['#e05a4a', '#4a8ae0', '#5ad88a', '#e0b84a', '#b05ae0', '#4ad8d8', '#e08a4a', '#8ae04a', '#e04a9a', '#9a9ae0'];
 
 // Preferred team sizes per tier: [size, weight]
 const SIZE_PREF = {
-  easy: [[4, 2], [5, 3], [6, 3], [7, 2], [8, 1.5], [3, 0.6]],
-  normal: [[2, 2], [3, 3], [4, 2.5], [5, 1.5], [1, 0.4]],
+  normal: [[2, 2], [3, 3], [4, 2.5], [5, 1.8], [6, 1.1], [7, 0.5], [1, 0.4]],
   hard: [[1, 1.3], [2, 3], [3, 2.5], [4, 0.4]],
   expert: [[1, 2.5], [2, 3], [3, 1.6]],
 };
@@ -16,7 +15,7 @@ export class Team {
   constructor(o) {
     this.id = o.id || uid('t');
     this.name = o.name;
-    this.tier = o.tier;
+    this.tier = tierOf(o.tier);
     this.members = o.members || [];
     this.color = o.color;
     this.base = o.base || null;      // { st, x, z, yaw, template, siteScore }
@@ -32,10 +31,11 @@ export class Team {
     this.stats = o.stats || { raids: 0, raidsWon: 0, defended: 0, kills: 0 };
     this.monumentRun = null;
     this.style = o.style || rollStyle(o.tier, hashRand(this.id));
-    this.ms = o.ms || {};            // progression milestones: name -> game time reached
+    this.ms = o.ms || {};
+    this.lessons = o.lessons || null;  // what the clan learned from its mistakes (BotReport)            // progression milestones: name -> game time reached
   }
   get size() { return this.members.length; }
-  serialize() { return { id: this.id, name: this.name, tier: this.tier, members: this.members, color: this.color, base: this.base, known: [...this.known], raid: this.raid ? { ...this.raid, members: undefined, path: undefined, goal: undefined } : null, raidDrive: this.raidDrive, lastRaid: this.lastRaid, stats: this.stats, style: this.style, ms: this.ms }; }
+  serialize() { return { id: this.id, name: this.name, tier: this.tier, members: this.members, color: this.color, base: this.base, known: [...this.known], raid: this.raid ? { ...this.raid, members: undefined, path: undefined, goal: undefined } : null, raidDrive: this.raidDrive, lastRaid: this.lastRaid, stats: this.stats, style: this.style, ms: this.ms, lessons: this.lessons }; }
 }
 
 export class BotTeams {
@@ -53,7 +53,7 @@ export class BotTeams {
         // occasionally pull one member from a neighbouring tier for variety
         const ti = TIERS.indexOf(tier);
         if (size >= 2 && rng() < 0.15) {
-          const other = pools[TIERS[Math.min(3, ti + (rng() < 0.5 ? 1 : -1))] || tier];
+          const other = pools[TIERS[Math.min(TIERS.length - 1, ti + (rng() < 0.5 ? 1 : -1))] || tier];
           if (other && other.length > 2) members.push(other.pop());
         }
         out.push(this.create(tier, members, rng));

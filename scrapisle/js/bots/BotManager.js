@@ -3,12 +3,13 @@ import { Survivor } from '../entities/Survivor.js';
 import { HumanoidAvatar } from '../entities/Avatars.js';
 import { makeStack, ITEMS, weaponScore } from '../data/items.js';
 import { RECIPE } from '../data/recipes.js';
-import { SKILL, PERSONALITIES, rollTier, rollPersonality, botName, styleOf } from './BotProfiles.js';
+import { SKILL, PERSONALITIES, rollTier, rollPersonality, botName, styleOf, tierOf } from './BotProfiles.js';
 import { BotNav } from './BotNav.js';
 import { BotBuilder } from './BotBuilder.js';
 import { BotProgression } from './BotProgression.js';
 import { BotRaiding } from './BotRaiding.js';
 import { BotAI } from './BotAI.js';
+import { BotReport } from './BotReport.js';
 import { dist, randRange, pick, mulberry32 } from '../core/util.js';
 
 export const LOD = { full: 170, mid: 550, render: 360 };
@@ -23,6 +24,7 @@ export class BotManager {
     this.prog = new BotProgression(game);
     this.raiding = new BotRaiding(game);
     this.ai = new BotAI(game, this);
+    this.report = new BotReport(game, this);
     this.teamT = 0;
     this.counts = { full: 0, mid: 0, far: 0 };
     game.events.on('death', e => this.onDeath(e));
@@ -53,6 +55,7 @@ export class BotManager {
     }
   }
   create(o) {
+    o = { ...o, tier: tierOf(o.tier) };   // old saves: easy bots come back as normal
     const b = new Survivor({ name: o.name, id: o.id });
     // each bot controls recoil a little differently from others of its tier
     const h = [...String(b.id)].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7) % 1000 / 1000;
@@ -75,6 +78,7 @@ export class BotManager {
     v.respawnAt = this.game.now + randRange(20, 45);
     v.ai.task = null; v.ai.target = null; v.ai.goal = 'task';
     v.diedAt = this.game.now;
+    this.report.onDeath(e);
     // killed by someone with a gun or bow: after respawning, keep clear of them until rekitted
     if (e.killer && e.killer.kind === 'survivor' && e.killer !== v && this.prog.bestGun(e.killer)) v.ai.danger = { x: e.killer.x, z: e.killer.z, t: this.game.now };
     if (v.avatar) { if (v.avatar.root.visible) v.avatar.die(); else v.avatar.root.visible = false; }
@@ -104,7 +108,7 @@ export class BotManager {
     // firepower: the weapon each one carries, a little more with armour (numbers count, health doesn't)
     const fire = (a) => { const w = this.prog.bestWeapon(a); return weaponScore(w) * (1 + Math.min(1, a.armorScore()) * 0.5); };
     const ours = near.reduce((a, m) => a + fire(m), 0), theirs = Math.max(15, fire(P));
-    const ratio = ours / theirs, PUSH = { easy: 1.15, normal: 1.3, hard: 1.45, expert: 1.6 }[t.tier] || 1.3;
+    const ratio = ours / theirs, PUSH = { normal: 1.3, hard: 1.45, expert: 1.6 }[t.tier] || 1.3;
     const theirGun = this.prog.bestGun(P), playerTier = theirGun && ITEMS[theirGun.id].type === 'gun' ? (RECIPE[theirGun.id] ? RECIPE[theirGun.id].tier : 1) : 0;
     const clanHasGuns = near.some(m => { const g = this.prog.bestGun(m); return g && ITEMS[g.id].type === 'gun'; });
     const keep = t.push ? 0.75 : 1;   // once committed, a push doesn't stop at the first wobble
@@ -229,6 +233,7 @@ export class BotManager {
       }
     }
     G.teams.update(dt);
+    this.report.update(dt);
   }
   tickBot(b, dt, mode, think) {
     const G = this.game;

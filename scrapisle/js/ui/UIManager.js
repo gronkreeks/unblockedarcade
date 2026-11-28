@@ -9,7 +9,7 @@ import { recycleYield } from '../systems/Deployables.js';
 import { iconURL } from './Icons.js';
 import { fmtTime } from '../core/util.js';
 import { PRESETS, resolve as resolveGfx } from '../gfx/GraphicsSettings.js';
-const TIER_COLOR = { easy: '#6fdc5a', normal: '#58b4ff', hard: '#ff9a3c', expert: '#b77bff' };
+const TIER_COLOR = { normal: '#58b4ff', hard: '#ff9a3c', expert: '#b77bff' };
 
 const $ = (id) => document.getElementById(id);
 export const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft', 'ShiftRight', 'Space', 'ControlLeft', 'ControlRight']);
@@ -102,8 +102,8 @@ export class UIManager {
     document.addEventListener('fullscreenchange', fsLabel);
   }
   renderDist(d) {
-    const D = DISTRIBUTION[d];
-    $('nwDist').textContent = `Bot skill mix: ${Math.round(D.easy * 100)}% easy, ${Math.round(D.normal * 100)}% normal, ${Math.round(D.hard * 100)}% hard and ${Math.round(D.expert * 100)}% expert.`;
+    const D = DISTRIBUTION[d] || DISTRIBUTION.normal;
+    $('nwDist').textContent = `Bot skill mix: ${Math.round(D.normal * 100)}% normal, ${Math.round(D.hard * 100)}% hard and ${Math.round(D.expert * 100)}% expert.`;
   }
   hideScreens() { for (const s of document.querySelectorAll('.screen')) s.hidden = true; }
   showScreen(id) { this.hideScreens(); $(id).hidden = false; }
@@ -123,7 +123,7 @@ export class UIManager {
     let saves = [];
     try { saves = await this.game.save.list(); } catch (e) { list.innerHTML = '<p class="muted">Saves could not be read in this browser.</p>'; return; }
     if (!saves.length) { list.innerHTML = '<p class="muted">No saved worlds yet. Start a new one from the main menu.</p>'; return; }
-    list.innerHTML = saves.map(s => `<div class="saveRow"><div><b>${esc(s.name)}</b><div class="muted">Day ${s.day}, ${s.bots} bots, ${s.difficulty} difficulty, ${s.mult}x loot, saved ${new Date(s.updated).toLocaleString()}</div></div>
+    list.innerHTML = saves.map(s => `<div class="saveRow"><div><b>${esc(s.name)}</b><div class="muted">Day ${s.day}, ${s.bots} bots, ${s.difficulty === 'easy' ? 'normal' : s.difficulty} difficulty, ${s.mult}x loot, saved ${new Date(s.updated).toLocaleString()}</div></div>
       <div class="row"><button class="btn" data-load="${s.id}">Load</button><button class="btn danger" data-del="${s.id}">Delete</button></div></div>`).join('');
     list.onclick = async e => {
       const l = e.target.closest('[data-load]'), d = e.target.closest('[data-del]');
@@ -660,7 +660,7 @@ export class UIManager {
     const bases = teams.filter(t => t.base && t.base.st).length;
     // leaderboard (Normal difficulty and up): raids defended and kill/death ratio, you included
     let board = '';
-    if (G.settings.difficulty !== 'easy') {
+    {
       const P = this.P, kd = (k, d) => (k / Math.max(1, d));
       const rows = [...G.teams.teams.values()].map(t => ({ name: t.name, color: t.color, def: t.stats.defended || 0, k: t.stats.kills || 0, d: t.stats.deaths || 0 }));
       if (P) rows.push({ name: 'You', color: '#ffffff', def: G.pstats.defended, k: P.kills || 0, d: P.deaths || 0, you: true });
@@ -675,8 +675,21 @@ export class UIManager {
       <h3>Biggest clan</h3>${biggest || '<p class="muted">No clans yet.</p>'}${clanHTML}${board}
       <h3>Raids</h3><p class="muted">${G.raidHistory.length} raids so far, ${won} of them successful.</p>${raids}
       <h3>Island news</h3>${log}
-      <h3>World</h3><p>${G.bots.list.filter(b => b.alive).length} of ${G.bots.list.length} survivors alive in ${teams.length} groups, ${bases} of them with a base.</p>`;
+      <h3>World</h3><p>${G.bots.list.filter(b => b.alive).length} of ${G.bots.list.length} survivors alive in ${teams.length} groups, ${bases} of them with a base.</p>
+      ${this.botReportHTML()}`;
+    $('mapSide').onclick = e => {
+      const a = e.target.dataset && e.target.dataset.botrep; if (!a) return;
+      const text = G.bots.report.text();
+      if (a === 'copy') navigator.clipboard.writeText(text).then(() => this.toast('Bot report copied'), () => this.toast('Copying is blocked here: use Download'));
+      else { const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' })); const l = document.createElement('a'); l.href = url; l.download = `clan-wars-bot-report-day${G.env.day}.txt`; l.click(); setTimeout(() => URL.revokeObjectURL(url), 2000); }
+    };
     $('mapSide').onchange = e => { const k = e.target.dataset.mopt; if (!k) return; this.mapOpts[k] = e.target.checked; G.applyPrefs(); this.mapSide(); this.drawMap(); };
+  }
+  // What's holding the bot clans back (BotReport): the open problems, and the full report to copy
+  botReportHTML() {
+    const R = this.game.bots.report, T = this.game.teams;
+    const rows = R.open().slice(0, 8).map(r => { const t = T.teams.get(r.team); return `<p><span class="swatch" style="background:${t ? t.color : '#888'}"></span>${esc(t ? t.name : '')}: ${esc(r.text)}</p>`; }).join('') || '<p class="muted">No clan is stuck on anything right now.</p>';
+    return `<h3>Bot report</h3>${rows}<p class="muted">The full report lists every clan's progress, what it learned and a log of its problems and fixes.</p><button type="button" class="btn" data-botrep="copy">Copy report</button> <button type="button" class="btn" data-botrep="download">Download report</button>`;
   }
   drawMap() {
     if (this.open !== 'map') return;

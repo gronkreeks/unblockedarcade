@@ -224,7 +224,7 @@
                   stat: s => `${s.kills} kill${s.kills === 1 ? '' : 's'} · ${s.deaths} death${s.deaths === 1 ? '' : 's'}`, everyRun: true },
     // Clan Wars isn't on the ranked ladder: worlds on Normal or harder post as you play (scrapisle/js/net/OnlineBoard.js)
     clanwars:   { name: 'Clan Wars',   href: 'scrapisle.html', how: 'The most raids defended in one world wins, and a better kill/death ratio breaks ties.',
-                  note: 'Worlds on Normal difficulty or harder post your score while you play, and your best world counts.',
+                  note: 'Every world posts your score while you play, and your best world counts.',
                   empty: 'No Clan Wars scores yet. Defend a raid on Normal or harder to be the first.',
                   stat: s => `${s.def} raid${s.def === 1 ? '' : 's'} defended · K/D ${(s.kills / Math.max(1, s.deaths)).toFixed(2)} (${s.kills}/${s.deaths})`,
                   short: r => `${r.stats.def} def, ${(r.stats.kills / Math.max(1, r.stats.deaths)).toFixed(1)} K/D`, noTime: true },

@@ -185,6 +185,47 @@ export class Deployables {
     // no standing items under a low ceiling
     return null;
   }
+  // check() for a spot as if `self` (an item being moved or swapped) weren't there
+  checkWithout(self, team, type, x, y, z, yaw) {
+    this.hash.remove(self);
+    const st = self.type === 'claim_cabinet' && self.st ? this.game.build.structures.get(self.st) : null;
+    const tc = st && st.tc; if (st && tc === self.id) st.tc = null;
+    const err = this.check(team, type, x, y, z, yaw);
+    if (st) st.tc = tc;
+    this.hash.insert(self);
+    return err;
+  }
+  // Move an item to a new spot (bots tidying their layout: the claim cabinet into a corner).
+  relocate(d, x, y, z, yaw) {
+    const err = this.checkWithout(d, d.team, d.type, x, y, z, yaw);
+    if (err) return { ok: false, err };
+    const sup = this.supportAt(x, y, z), D = d.def, [hx, hy, hz] = D.size;
+    this.hash.remove(d);
+    d.x = x; d.y = y; d.z = z; d.yaw = yaw; if (sup) d.piece = sup.id;
+    this.hash.insert(d);
+    d.mesh.position.set(x, y, z); d.mesh.rotation.y = yaw;
+    this.game.physics.remove(d.col);
+    d.col = this.game.physics.add({ type: 'box', x, y: y + hy, z, hx, hy, hz, yaw, ref: d, tag: 'deploy', solid: D.solid !== false });
+    const st = d.st && this.game.build.structures.get(d.st); if (st) st.version++;
+    return { ok: true, dep: d };
+  }
+  // Swap an item for a bigger one in about the same spot, keeping what's inside (a wooden box
+  // becomes a large box). `offs` are nudges along the item's own x axis to try.
+  replace(d, type, offs = [0, 0.35, -0.35, 0.7, -0.7]) {
+    const c = Math.cos(d.yaw), s = Math.sin(d.yaw);
+    for (const o of offs) {
+      const x = d.x + o * c, z = d.z - o * s;
+      if (this.checkWithout(d, d.team, type, x, d.y, z, d.yaw)) continue;
+      const items = d.cont ? d.cont.serialize() : null;
+      const old = { x: d.x, z: d.z };
+      this.remove(d, false);
+      const nd = this.create({ type, x, y: d.y, z, yaw: d.yaw, team: d.team, owner: d.owner, st: d.st, piece: d.piece, auth: [...d.auth], lock: d.lock });
+      if (items && nd.cont) for (const sl of items) if (sl) { const left = nd.cont.addStack(sl); if (left) this.game.loot.dropItem(left.id, left.n, old.x, d.y + 0.5, old.z, left); }
+      this.game.events.emit('deployed', { surv: null, dep: nd });
+      return { ok: true, dep: nd };
+    }
+    return { ok: false, err: 'No room for the bigger item' };
+  }
   _localIn(c, x, z) { const dx = x - c.x, dz = z - c.z; return { x: dx * c.c - dz * c.s, z: dx * c.s + dz * c.c }; }
 
   place(surv, type, x, y, z, yaw, opts = {}) {

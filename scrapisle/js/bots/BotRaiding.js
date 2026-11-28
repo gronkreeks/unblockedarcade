@@ -5,8 +5,8 @@ import { STRUCT_DMG, DOORS, CELL } from '../data/building.js';
 import { SKILL, PERSONALITIES } from './BotProfiles.js';
 import { dist, randRange } from '../core/util.js';
 
-const COOLDOWN = { easy: 300, normal: 420, hard: 480, expert: 600 };
-const WORTH = { easy: 0.25, normal: 0.42, hard: 0.6, expert: 0.8 };
+const COOLDOWN = { normal: 420, hard: 480, expert: 600 };
+const WORTH = { normal: 0.42, hard: 0.6, expert: 0.8 };
 const ROCKET = 250;   // a rocket's blast against buildings (before the grade/door multiplier)
 
 export class BotRaiding {
