@@ -374,6 +374,9 @@ export class BotAI {
     const steps = team && team.base ? this.mgr.builder.nextSteps(team, prog) : [];
     const toolsFirst = first && first.why === 'tools';
     steps.forEach((step, i) => {
+      // big crafts (workbenches) get one crafter, so the clan pools materials instead of each member
+      // hoarding a share and nobody ever having enough
+      if (step.kind === 'deploy' && /^workbench[23]/.test(step.item || '') && b.inv.count(step.item) === 0 && this.benchCrafter(team, step.item) !== b) return;
       const urgent = step.kind === 'foundation' || step.kind === 'piece' || (step.kind === 'deploy' && ['claim_cabinet', 'wood_box', 'furnace'].includes(step.item)) || step.kind === 'door';
       const ready = (!step.item || b.inv.count(step.item) > 0) && Object.keys(step.cost).every(k => b.inv.count(k) >= step.cost[k]);
       const tech = step.kind === 'deploy' && /^workbench|research_table/.test(step.item);
@@ -955,7 +958,7 @@ export class BotAI {
       if (b.swingT <= 0) { b.swingT = st ? ITEMS[st.id].rate : 0.8; b.ai.swing = 1; this.faceTo(b, c.x, c.y + 0.5, c.z); const hits = mode === 'far' ? Math.max(1, Math.round(dt / b.swingT)) : 1; for (let h = 0; h < hits; h++) G.loot.hitContainer(c, st ? ITEMS[st.id].dmg : 6, b); if (mode === 'full') G.audio.hitAt('stone', c); }
       return;
     }
-    this.takeFrom(b, c.cont);
+    this.takeFrom(b, c.cont, true);
     G.loot.touched(c);
     return 'done';
   }
@@ -968,7 +971,23 @@ export class BotAI {
     return 'done';
   }
   // Take items from a container, most valuable first.
-  takeFrom(b, cont) {
+  // Who crafts the clan's next workbench: whoever already holds most of what it costs (kept while alive)
+  benchCrafter(team, item) {
+    const G = this.game, alive = G.teams.alive(team);
+    if (!alive.length) return null;
+    team.crafters = team.crafters || {};
+    let c = G.actorById(team.crafters[item]);
+    if (c && c.alive && c.team === team.id) return c;
+    const rc = RECIPE[item], worth = m => rc ? Object.keys(rc.cost).reduce((a, k) => a + Math.min(1, m.inv.count(k) / rc.cost[k]), 0) : 0;
+    c = alive.slice().sort((x, y) => worth(y) - worth(x) || x.id.localeCompare(y.id))[0];
+    team.crafters[item] = c.id;
+    return c;
+  }
+  // Bots play 24/7 in big groups; at low loot multipliers they get a little more scrap and HQ metal from
+  // the world (crates, barrels, nodes, recyclers) so the late game still arrives: x2.5 at 1x, x1.6 at 2x.
+  pace() { const m = this.game.settings.mult || 1; return m >= 4 ? 1 : m >= 2 ? 1.6 : 2.5; }
+  takeFrom(b, cont, world = false) {
+    if (world) { const f = this.pace(); if (f > 1) for (const s of cont.slots) if (s && (s.id === 'scrap' || s.id === 'hqm') && !s.paced) { s.n = Math.round(s.n * f); s.paced = true; } }
     const order = cont.slots.map((s, i) => [s, i]).filter(x => x[0]).sort((a, c) => ITEMS[c[0].id].value * c[0].n - ITEMS[a[0].id].value * a[0].n);
     // rushers know which crates matter and strip them for scrap
     const rush = (this.game.teams.of(b) || {}).style === 'rush';
@@ -1056,7 +1075,7 @@ export class BotAI {
       t.loaded = true; t.waitUntil = G.now + 70;
     }
     // collect output as it comes
-    for (let i = 6; i < 12; i++) { const s = r.cont.slots[i]; if (s) { const left = b.inv.giveStack(s); r.cont.slots[i] = left || null; } }
+    for (let i = 6; i < 12; i++) { const s = r.cont.slots[i]; if (s) { if ((s.id === 'scrap' || s.id === 'hqm') && !s.paced) { s.n = Math.round(s.n * this.pace()); s.paced = true; } const left = b.inv.giveStack(s); r.cont.slots[i] = left || null; } }
     r.cont.touch();
     const inputLeft = r.cont.slots.slice(0, 6).some(Boolean);
     if (!inputLeft || G.now > t.waitUntil) {
@@ -1069,6 +1088,9 @@ export class BotAI {
     // keep components the bot's next weapon/armour recipe needs
     const team = this.game.teams.of(b);
     const prog = this.mgr.progressOf(team);
+    // gun bodies are the rare part of the guns the clan is heading for: never recycle them
+    if (id === 'rifle_body') return true;
+    if ((id === 'semi_body' || id === 'smg_body') && prog.bench >= 1) return true;
     for (const w of this.mgr.prog.wishes(b, team, prog).slice(0, 3)) { const rc = RECIPE[w.id]; if (rc && rc.cost[id]) return true; }
     if (team && team.raid && RECIPE[team.raid.method] && RECIPE[team.raid.method].cost[id]) return true;
     return false;

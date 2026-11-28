@@ -213,7 +213,8 @@ export class BotProgression {
       if (a && rounds < ITEMS[id].mag * 2) return this.resolve(b, prog, a, ITEMS[id].mag * 3, depth + 1) || { a: 'withdraw', items: { [id]: 1 } };
     }
     // in the stash?
-    if (prog.st && prog.stash(id) > 0) return { a: 'withdraw', items: { [id]: Math.min(need, prog.stash(id)) } };
+    // (a real amount, not a few at a time while a furnace trickles them out)
+    if (prog.st && prog.stash(id) > 0 && (prog.stash(id) >= need || prog.stash(id) >= Math.min(100, need * 0.25) || !SOURCE[id] && !SMELT_FROM[id])) return { a: 'withdraw', items: { [id]: Math.min(need, prog.stash(id)) } };
     // low grade fuel: barrels drop it too, so not everyone has to go hunting for fat
     if (id === 'low_grade' && b.inv.count('animal_fat') + prog.stash('animal_fat') < 20 && ((b.id.charCodeAt(b.id.length - 1) + Math.floor(this.game.now / 300)) & 1)) return { a: 'loot', need, res: 'low_grade' };
     const rc = RECIPE[id];

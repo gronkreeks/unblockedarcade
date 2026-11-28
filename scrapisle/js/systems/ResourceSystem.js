@@ -186,7 +186,7 @@ export class ResourceSystem {
       if (n.type === 'tree') gave.wood = (gave.wood || 0) + Math.round(n.total.wood * 0.15 * mult);
       if (n.type === 'ore') {
         const oreTool = toolDef && toolDef.gather && toolDef.gather.ore >= 25;
-        if (n.kind === 'metal' && oreTool) gave.hqm_ore = (gave.hqm_ore || 0) + Math.max(4, Math.round((4 + Math.random() * 2) * mult));
+        if (n.kind === 'metal' && oreTool) gave.hqm_ore = (gave.hqm_ore || 0) + Math.round(Math.max(4, Math.round((4 + Math.random() * 2) * mult)) * (surv.ai ? this.game.bots.ai.pace() : 1));
         if (n.kind === 'sulfur') gave.sulfur_ore = (gave.sulfur_ore || 0) + Math.round(30 * mult);
         if (n.kind === 'stone') gave.stones = (gave.stones || 0) + Math.round(60 * mult);
       }
