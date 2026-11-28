@@ -44,7 +44,7 @@ export class ViewModel {
     for (let i = 0; i < 3; i++) { const p = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.05), fm); p.rotation.z = i * Math.PI / 3; this.flash.add(p); }
     const core = new THREE.Mesh(new THREE.CircleGeometry(0.045, 10), fm); this.flash.add(core);
     this.flash.visible = false;
-    this.light = new THREE.PointLight(0xffa850, 0, 24, 2);   // physical units: candela camera.add(this.light);
+    this.light = new THREE.PointLight(0xffa850, 0, 24, 2);   // not in the scene: LightPool draws it (candela)
     this.base = V(0.15, -0.17, -0.5);
     this.id = null; this.model = null; this.info = null;
     this.equipT = 0; this.swing = 0; this.flashT = 0; this.bobT = 0; this.inertia = V(0, 0, 0); this.aimT = 0; this.sprintT = 0; this.cycle = 0; this.cycleDur = 0; this.reloadDur = 1; this.swingDir = 1;

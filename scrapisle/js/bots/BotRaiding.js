@@ -69,11 +69,12 @@ export class BotRaiding {
     const S = SKILL[team.tier];
     const alive = G.teams.alive(team);
     if (alive.length < Math.max(1, Math.ceil(team.size * 0.5))) return;
-    if (G.now - team.lastRaid < COOLDOWN[team.tier]) return;
-    if (team.raidDrive < 1) return;
     const prog = G.bots.progressOf(team);
-    if (prog.bench < 1 || !prog.tc) return; // raiding starts once a group is established
-    const canSatchel = prog.knows('satchel_charge') && prog.bench >= 1;
+    const late = prog.bench >= 3 || (prog.knows('rocket') && prog.knows('rocket_launcher'));
+    if (G.now - team.lastRaid < COOLDOWN[team.tier] * (late ? 0.6 : 1)) return;
+    if (team.raidDrive < 1) return;
+    if (prog.bench < 2 || !prog.tc) return; // raids wait for a level 2 bench: early game is for progressing
+    const canSatchel = prog.knows('satchel_charge') && prog.bench >= 2;
     const canC4 = prog.knows('timed_charge') && prog.bench >= 3;
     const canRocket = prog.knows('rocket') && prog.knows('rocket_launcher') && prog.bench >= 2;
     const pers = alive.reduce((a, b) => a + PERSONALITIES[b.ai.pers].raid, 0) / alive.length;

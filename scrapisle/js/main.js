@@ -88,7 +88,7 @@ class Game {
   // Apply graphics settings that can change live (others need a reload; see GraphicsSettings).
   applyGraphics() {
     const g = this.gfx = resolveGfx(this.prefs.gfx);
-    this.renderer.setPixelRatio(Math.min(2, (window.devicePixelRatio || 1) * g.renderScale * this.dynScale));
+    this.renderer.setPixelRatio(Math.min(g.maxPR || 2, (window.devicePixelRatio || 1) * g.renderScale * this.dynScale));
     this.renderer.shadowMap.enabled = g.shadows;
     if (this.env) {
       this.env.gfx = g;
@@ -145,7 +145,7 @@ class Game {
     this.tex = new TextureLibrary(g.texture, Math.min(g.aniso, this.renderer.capabilities.getMaxAnisotropy()));
     let ti = 0;
     await this.tex.generate(ALL_TEXTURES, async () => { ti++; if (ti % 3 === 0) await this.step(`Painting textures (${ti} of ${ALL_TEXTURES.length})…`); });
-    this.mats = new MaterialLibrary(this.tex);
+    this.mats = new MaterialLibrary(this.tex, !!g.cheap);
     setMaterials(this.mats); setAvatarMaterials(this.mats);
     await this.step('Shaping the island…');
     this.world = new World(cfg.seed, cfg.size, cfg.layout || 1);
@@ -209,7 +209,7 @@ class Game {
     this.camera.position.set(this.player.x, this.player.y + 1.6, this.player.z);
     updateTerrainLOD(this.terrain, this.camera.position, 99);
     this.decor = new DecorLayer(this, this.veg, g);
-    this.lightPool = new LightPool(this, g.shadows === false ? 4 : 8);   // campfires, furnaces, candles, torches
+    this.lightPool = new LightPool(this, g.lights || 3);   // campfires, furnaces, candles, torches (night only)
     if (g.ao) this.post = new PostFX(this);
     this.applyGraphics();
     this.ui.hideScreens();
@@ -319,7 +319,9 @@ class Game {
     const cp = this.camera.position;
     this.camera.updateMatrixWorld(); this.audio.listen(this.camera);   // 3D sound follows your view
     this.env.update(cp, this);
-    this.lightPool.update(cp);
+    this.lightPool.update(cp, dt);
+    this.build.flushVisuals();
+    this.cullSmall(cp, dt);
     updateTerrainLOD(this.terrain, cp, 1);
     this.decor.update(cp);
     this.fx.update(dt, cp, this.env);
@@ -330,6 +332,17 @@ class Game {
     const wantClick = P.alive && !this.controls.locked && !this.ui.isOpen() && paused === false && document.getElementById('deathScreen').hidden && document.getElementById('pauseScreen').hidden;
     if (cb.hidden === wantClick) cb.hidden = !wantClick;
     if (this.post && this.post.enabled && this.post.ready) this.post.render(); else this.renderer.render(this.scene, this.camera);
+  }
+  // Small things far away aren't drawn: loot containers, bags and drops past ~140 m, deployables
+  // past ~170 m (checked a few times a second).
+  cullSmall(cp, dt) {
+    this.cullT = (this.cullT || 0) - dt;
+    if (this.cullT > 0) return;
+    this.cullT = 0.3;
+    const far = (this.gfx.viewDist || 1000) / 1000;
+    const set = (grp, r) => { const r2 = r * r; for (const o of grp.children) { const dx = o.position.x - cp.x, dz = o.position.z - cp.z, v = dx * dx + dz * dz < r2; if (o.visible !== v && !o.userData.keepHidden) o.visible = v; } };
+    set(this.loot.group, 140 * far);
+    set(this.deploy.group, 170 * far);
   }
   // Adaptive resolution: drop render scale when the frame rate sags, recover when there's headroom.
   adapt(dt) {

@@ -4,7 +4,7 @@
 export const LOOT_TABLES = {
   barrel: {
     rolls: [2, 3],
-    guaranteed: [['scrap', 2, 4]],
+    guaranteed: [['scrap', 3, 6]],
     entries: [
       ['metal_frag', 10, 10, 25], ['low_grade', 10, 4, 10], ['cloth', 6, 5, 15], ['rope', 7, 1, 2], ['tarp', 3, 1, 1],
       ['sewing_kit', 5, 1, 1], ['gears', 5, 1, 2], ['metal_pipe', 6, 1, 2], ['metal_spring', 3, 1, 1],
@@ -16,7 +16,7 @@ export const LOOT_TABLES = {
   },
   crate: {
     rolls: [2, 4],
-    guaranteed: [['scrap', 4, 8]],
+    guaranteed: [['scrap', 6, 12]],
     entries: [
       ['metal_frag', 6, 20, 50], ['hqm', 2, 2, 5], ['gears', 6, 1, 3], ['metal_pipe', 6, 1, 3], ['metal_spring', 6, 1, 2],
       ['sheet_metal', 4, 1, 2], ['road_sign', 5, 1, 3], ['semi_body', 4, 1, 1], ['smg_body', 1.5, 1, 1], ['rifle_body', 1.1, 1, 1],
@@ -38,7 +38,7 @@ export const LOOT_TABLES = {
   },
   military_crate: {
     rolls: [3, 4],
-    guaranteed: [['scrap', 8, 15]],
+    guaranteed: [['scrap', 12, 22]],
     entries: [
       ['hqm', 4, 8, 20], ['metal_frag', 3, 60, 120], ['rifle_body', 3, 1, 1], ['smg_body', 4, 1, 1], ['semi_body', 4, 1, 1],
       ['metal_spring', 5, 1, 3], ['metal_pipe', 4, 2, 4], ['tech_trash', 4, 1, 3], ['gears', 3, 2, 4], ['electric_fuse', 2, 1, 1],
@@ -51,7 +51,7 @@ export const LOOT_TABLES = {
   },
   militia: {
     rolls: [1, 2],
-    guaranteed: [['scrap', 3, 8]],
+    guaranteed: [['scrap', 5, 12]],
     entries: [
       ['rifle_ammo', 4, 8, 20], ['pistol_ammo', 4, 10, 20], ['med_syringe', 3, 1, 2], ['bandage', 3, 1, 3], ['canned_tuna', 2, 1, 1],
       ['metal_spring', 1, 1, 1], ['tech_trash', 1, 1, 1], ['anti_rad', 2, 1, 2],

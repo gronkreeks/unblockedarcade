@@ -103,9 +103,11 @@ export class BotTeams {
       // raid drive: bigger teams and easier tiers want to raid more often
       const S = SKILL[t.tier];
       const sizeF = 0.4 + t.size * 0.35;
-      // rushers don't waste sulfur and lives on raids until they have tier 2 gear
-      const hold = t.style === 'rush' && this.game.bots.progressOf(t).bench < 2;
-      if (!hold) t.raidDrive = Math.min(1.5, t.raidDrive + dt * S.raidRate * styleOf(t).raid * sizeF / 1300);
+      // raids are a late-game thing: nothing before a level 2 bench, a little at level 2, and much more
+      // once the clan has a level 3 bench or rockets (AK / rocket raids)
+      const p = this.game.bots.progressOf(t);
+      const stage = p.bench >= 3 || (p.bench >= 2 && p.knows('rocket') && p.knows('rocket_launcher')) ? 1.8 : p.bench >= 2 ? 0.5 : 0;
+      if (stage) t.raidDrive = Math.min(1.5, t.raidDrive + dt * S.raidRate * styleOf(t).raid * sizeF * stage / 1300);
     }
   }
   serialize() { return [...this.teams.values()].map(t => t.serialize()); }

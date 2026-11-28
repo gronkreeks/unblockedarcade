@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { CELL, LEVEL_H, FOUND_H, GRADES, PIECES, STRUCT_DMG, DOORS, pieceCost, pieceMaxHp, pieceUpkeep, PRIVILEGE_PAD } from '../data/building.js';
 import { GeoBuilder } from '../world/geo.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { SpatialHash } from '../core/spatial.js';
 import { uid, dist } from '../core/util.js';
 
@@ -45,6 +46,7 @@ export class BuildingSystem {
     this.ghostBad = new THREE.MeshBasicMaterial({ color: 0xd84a4a, transparent: true, opacity: 0.35, depthWrite: false });
     this.visuals = {};
     this.group = new THREE.Group();
+    this._dirty = new Set();
     game.scene.add(this.group);
   }
 
@@ -343,13 +345,8 @@ export class BuildingSystem {
     return p;
   }
   _buildPieceVisual(st, p) {
-    if (p.mesh) this.group.remove(p.mesh);
     for (const c of p.cols || []) this.game.physics.remove(c);
-    const m = this._parts(this.visual(p.type, p.grade), ['piece', p]);
-    m.position.set(p.wx, p.wy, p.wz); m.rotation.y = p.wyaw;
-    m.userData.piece = p;
-    this.group.add(m);
-    p.mesh = m;
+    this._dirty.add(st);   // pieces are drawn as one merged mesh per material per building (flushVisuals)
     p.cols = [];
     const c = Math.cos(p.wyaw), s = Math.sin(p.wyaw);
     for (const b of pieceBoxes(p.type)) {
@@ -385,7 +382,7 @@ export class BuildingSystem {
     st.pieces.delete(p.key);
     st.version++;
     this.pieceHash.remove(p);
-    if (p.mesh) this.group.remove(p.mesh);
+    this._dirty.add(st);
     for (const c of p.cols || []) this.game.physics.remove(c);
     if (p.door) { if (p.door.mesh) this.group.remove(p.door.mesh); if (p.door.col) this.game.physics.remove(p.door.col); }
     this.game.deploy.onPieceRemoved(p);
@@ -393,6 +390,39 @@ export class BuildingSystem {
     if (st.pieces.size === 0) {
       this.structures.delete(st.id);
       this.game.events.emit('structureGone', { st });
+    }
+  }
+
+  // ---------- drawing ----------
+  // Every piece of a building is merged into one mesh per material, so a whole base costs a handful of
+  // draw calls instead of hundreds. Rebuilt (at most a few times a second) when pieces change.
+  flushVisuals(force) {
+    if (!this._dirty.size) return;
+    const now = performance.now();
+    if (!force && now - (this._flushT || 0) < 150) return;
+    this._flushT = now;
+    for (const st of this._dirty) this._rebuildBatch(st);
+    this._dirty.clear();
+  }
+  _rebuildBatch(st) {
+    for (const m of st.batch || []) { this.group.remove(m); m.geometry.dispose(); }
+    st.batch = [];
+    if (!this.structures.has(st.id) || !st.pieces.size) return;
+    const buckets = new Map(), m4 = new THREE.Matrix4();
+    for (const p of st.pieces.values()) {
+      m4.makeRotationY(p.wyaw).setPosition(p.wx, p.wy, p.wz);
+      for (const part of this.visual(p.type, p.grade)) {
+        const g = part.geo, key = part.mat.uuid + '|' + Object.keys(g.attributes).sort().join(',') + (g.index ? '|i' : '|n');
+        let b = buckets.get(key); if (!b) { b = { mat: part.mat, geos: [] }; buckets.set(key, b); }
+        b.geos.push(g.clone().applyMatrix4(m4));
+      }
+    }
+    for (const b of buckets.values()) {
+      const merged = mergeGeometries(b.geos, false);
+      for (const g of b.geos) g.dispose();
+      if (!merged) continue;
+      const m = new THREE.Mesh(merged, b.mat); m.castShadow = true; m.receiveShadow = true; m.userData.st = st.id;
+      this.group.add(m); st.batch.push(m);
     }
   }
 

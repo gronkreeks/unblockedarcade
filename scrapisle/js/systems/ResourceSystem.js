@@ -17,7 +17,9 @@ const PICKUPS = {
 };
 const RESPAWN = { tree: 900, ore: 600, pick: 240 };
 const GATHER_SPEED = 1.2;   // every hit gathers a little more (nodes deplete sooner too)
-const CHUNK = 128;
+const CHUNK = 256;   // nodes are drawn in batches this big; each node picks its own detail level
+const _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _e = new THREE.Euler(), _up = new THREE.Vector3(0, 1, 0);
+const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color(), _sph = new THREE.Sphere();
 const VARIANTS = { pine: 4, pine_snow: 3, oak: 4, palm: 3, cactus: 3 };
 
 export class ResourceSystem {
@@ -64,22 +66,28 @@ export class ResourceSystem {
       const mk = (parts, shadows) => parts.map(p => {
         const m = new THREE.InstancedMesh(p.geo, p.mat, g.nodes.length);
         m.castShadow = shadows && !!p.shadow; m.receiveShadow = true;
-        if (p.tint) { for (let i = 0; i < g.nodes.length; i++) { const v = 0.82 + ((g.nodes[i].idx * 37) % 100) / 100 * 0.32; col.setRGB(v, v * (0.96 + ((g.nodes[i].idx * 13) % 10) / 100), v * 0.9); m.setColorAt(i, col); } }
+        if (p.tint) { m.userData.tint = true; m.setColorAt(0, col.setRGB(1, 1, 1)); }
         this.game.scene.add(m); return m;
       });
       g.hi = mk(hi, true); g.lo = lo ? mk(lo, false) : [];
       g.meshes = [...g.hi, ...g.lo];
-      for (const n of g.nodes) this._writeMatrix(n, m4);
-      for (const m of g.meshes) { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); }
+      // bounds from every node at full size (padded), fixed from then on; then pack what's drawn
+      for (const n of g.nodes) { n.hi = true; n.slot = g.nodes.indexOf(n); n.inLo = false; this._placeMatrix(n, m4); g.hi.forEach(m => m.setMatrixAt(n.slot, m4)); }
+      for (const m of g.hi) { m.count = g.nodes.length; m.computeBoundingSphere(); m.boundingSphere.radius += 6; }
+      for (const m of g.lo) m.boundingSphere = g.hi[0].boundingSphere.clone();
+      g.lod = 'hi';
+      this._pack(g);
     }
     for (const n of this.nodes) if (n.alive) this._addCollider(n);
   }
   // Pick a free spot in the node's own map chunk (its mesh batch lives there) and move it.
   _relocate(n) {
     const W = this.game.world, G = this.game, g = n.group, ore = n.type === 'ore';
-    const x0 = g.cx - CHUNK / 2, z0 = g.cz - CHUNK / 2;
+    // somewhere within ~70 m, inside the node's own batch area
+    const xa = Math.max(g.cx - CHUNK / 2 + 4, n.x - 70), xb = Math.min(g.cx + CHUNK / 2 - 4, n.x + 70);
+    const za = Math.max(g.cz - CHUNK / 2 + 4, n.z - 70), zb = Math.min(g.cz + CHUNK / 2 - 4, n.z + 70);
     for (let k = 0; k < 14; k++) {
-      const x = x0 + 4 + Math.random() * (CHUNK - 8), z = z0 + 4 + Math.random() * (CHUNK - 8);
+      const x = xa + Math.random() * (xb - xa), z = za + Math.random() * (zb - za);
       if (!W._okSpawn(x, z, ore ? 4 : 2) || W.slopeAt(x, z) > (ore ? 0.4 : 0.3)) continue;
       if (G.build && G.build.blockedAt(x, z, 3)) continue;
       if (G.deploy && G.deploy.hash.nearest(x, z, 4)) continue;
@@ -97,8 +105,8 @@ export class ResourceSystem {
     n.x = x; n.z = z; n.y = this.game.world.heightAt(x, z); n.rot = rot; n.moved = true; n.tilt = undefined;
     this.hash.update(n);
     if (had) this._addCollider(n);
+    if (n.group) for (const m of n.group.meshes) if (m.boundingSphere) m.boundingSphere.union(_sph.set(_p.set(x, n.y + 4, z), 10));
     this._writeMatrix(n);
-    this._dirtyBounds = this._dirtyBounds || new Set(); this._dirtyBounds.add(n.group);
   }
   _reset(n) {
     if (n.type === 'tree') { const t = TREE_TOTAL[n.kind] * n.s; n.total = { wood: Math.round(t) }; }
@@ -108,16 +116,43 @@ export class ResourceSystem {
     n.hp = n.hpMax;
     n.frac = {};
   }
-  _writeMatrix(n, m4 = new THREE.Matrix4()) {
-    const s = n.alive ? n.s : 0.0001;
-    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), n.rot);
+  // The node's transform (shrinks as ore is mined; trees lean with the slope)
+  _placeMatrix(n, m4) {
+    const q = _q.setFromAxisAngle(_up, n.rot);
     const sink = n.type === 'tree' ? -0.1 : n.type === 'ore' ? -0.15 : 0;
-    const scl = n.type === 'ore' ? Math.max(0.45, n.hp / n.hpMax) * s : s;
-    // trees lean slightly with the slope they grow on
-    if (n.type === 'tree' && n.alive && n.tilt === undefined) { const nr = this.game.world.normalAt(n.x, n.z); n.tilt = [nr.x * 0.25, nr.z * 0.25]; }
-    if (n.type === 'tree' && n.tilt) q.premultiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(n.tilt[1], 0, -n.tilt[0])));
-    m4.compose(new THREE.Vector3(n.x, n.y + sink, n.z), q, new THREE.Vector3(scl, scl, scl));
-    for (const m of n.group.meshes) { m.setMatrixAt(n.inst, m4); m.instanceMatrix.needsUpdate = true; }
+    const scl = n.type === 'ore' ? Math.max(0.45, n.hp / n.hpMax) * n.s : n.s;
+    if (n.type === 'tree' && n.tilt === undefined) { const nr = this.game.world.normalAt(n.x, n.z); n.tilt = [nr.x * 0.25, nr.z * 0.25]; }
+    if (n.type === 'tree' && n.tilt) q.premultiply(_q2.setFromEuler(_e.set(n.tilt[1], 0, -n.tilt[0])));
+    return m4.compose(_p.set(n.x, n.y + sink, n.z), q, _s.set(scl, scl, scl));
+  }
+  // Each batch draws only its live nodes, packed at the front: close ones in the detailed mesh,
+  // far ones in the simple mesh (so hidden or far instances cost nothing on the GPU).
+  _pack(g) {
+    let h = 0, l = 0;
+    for (const n of g.nodes) {
+      if (!n.alive) { n.slot = -1; continue; }
+      n.inLo = g.lo.length > 0 && n.hi === false;
+      n.slot = n.inLo ? l++ : h++;
+      this._setSlot(n);
+    }
+    for (const m of g.hi) { m.count = h; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+    for (const m of g.lo) { m.count = l; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+  }
+  _setSlot(n) {
+    const g = n.group, m4 = this._placeMatrix(n, _m4);
+    for (const m of n.inLo ? g.lo : g.hi) {
+      m.setMatrixAt(n.slot, m4);
+      if (m.userData.tint) { const v = 0.82 + ((n.idx * 37) % 100) / 100 * 0.32; m.setColorAt(n.slot, _c.setRGB(v, v * (0.96 + ((n.idx * 13) % 10) / 100), v * 0.9)); }
+    }
+  }
+  _writeMatrix(n) {
+    const g = n.group;
+    // appearing or disappearing changes what's packed; otherwise just this node's slot
+    if (!n.alive || n.slot === undefined || n.slot < 0) { this._pack(g); }
+    else {
+      this._setSlot(n);
+      for (const m of n.inLo ? g.lo : g.hi) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+    }
     // the rock's collision shrinks with it, so what you see is what you hit and bump into
     if (n.type === 'ore' && n.col) { n.col.r = 1.05 * Math.max(0.5, n.hp / n.hpMax); n.col.y1 = n.y + 1.1 * Math.max(0.55, n.hp / n.hpMax); }
   }
@@ -151,7 +186,7 @@ export class ResourceSystem {
       if (n.type === 'tree') gave.wood = (gave.wood || 0) + Math.round(n.total.wood * 0.15 * mult);
       if (n.type === 'ore') {
         const oreTool = toolDef && toolDef.gather && toolDef.gather.ore >= 25;
-        if (n.kind === 'metal' && oreTool) gave.hqm_ore = (gave.hqm_ore || 0) + Math.max(1, Math.round((1 + Math.random() * 2) * mult));
+        if (n.kind === 'metal' && oreTool) gave.hqm_ore = (gave.hqm_ore || 0) + Math.max(4, Math.round((4 + Math.random() * 2) * mult));
         if (n.kind === 'sulfur') gave.sulfur_ore = (gave.sulfur_ore || 0) + Math.round(30 * mult);
         if (n.kind === 'stone') gave.stones = (gave.stones || 0) + Math.round(60 * mult);
       }
@@ -218,20 +253,35 @@ export class ResourceSystem {
         n.alive = true; this._reset(n); this._writeMatrix(n); this._addCollider(n);
       }
     }
-    if (this._dirtyBounds && this._dirtyBounds.size) { for (const g of this._dirtyBounds) for (const m of g.meshes) m.computeBoundingSphere(); this._dirtyBounds.clear(); }
     // corpses rot away after 6 minutes
     for (let i = this.dynamic.length - 1; i >= 0; i--) { const c = this.dynamic[i]; if (now - c.born > 360) this.removeCorpse(c); }
   }
   updateVisibility(cam) {
     const gfx = this.game.gfx || {};
     const detail = gfx.treeDetail || 180, view = (gfx.viewDist || 1000) + 100;
+    const R = CHUNK * 0.71;
     for (const g of this.groups.values()) {
-      const d = Math.hypot(g.cx - cam.x, g.cz - cam.z) - CHUNK * 0.7;
+      const dc = Math.hypot(g.cx - cam.x, g.cz - cam.z), dmin = dc - R, dmax = dc + R;
       const lim = g.type === 'pick' ? 160 + detail * 0.3 : view;
-      const near = g.type === 'tree' ? d < detail : g.type === 'ore' ? d < detail * 0.8 : true;
-      const show = d < lim;
-      for (const m of g.hi) m.visible = show && (near || !g.lo.length);
-      for (const m of g.lo) m.visible = show && !near;
+      const show = dmin < lim;
+      if (!g.lo.length || !show) { for (const m of g.hi) m.visible = show; for (const m of g.lo) m.visible = false; continue; }
+      // detail per node: close ones get the full model, far ones the simple one
+      const lodR = g.type === 'tree' ? detail : detail * 0.8;
+      const state = dmax < lodR ? 'hi' : dmin > lodR ? 'lo' : 'mix';
+      let anyHi = false, anyLo = false;
+      if (state !== g.lod || state === 'mix') {
+        const r2 = lodR * lodR;
+        let changed = false;
+        for (const n of g.nodes) {
+          const hi = state === 'hi' || (state === 'mix' && (n.x - cam.x) ** 2 + (n.z - cam.z) ** 2 < r2);
+          if (hi !== (n.hi !== false)) { n.hi = hi; changed = true; }
+          if (hi) anyHi = true; else anyLo = true;
+        }
+        if (changed) this._pack(g);
+        g.lod = state; g.anyHi = anyHi; g.anyLo = anyLo;
+      }
+      for (const m of g.hi) m.visible = g.anyHi !== false && (state !== 'lo');
+      for (const m of g.lo) m.visible = state !== 'hi' && g.anyLo !== false;
     }
   }
   // Ray pick of a node within reach. Returns {node, t} or null.

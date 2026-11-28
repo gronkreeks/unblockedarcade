@@ -48,7 +48,7 @@ export class BotProgression {
       // the player out-teching everyone pulls every clan up the tree sooner
       arms: G.armsRace ?? -1,
       wantBench2: scrap >= 450 * styleOf(team).bench || hqm >= 20 * mult || ((G.armsRace ?? -1) >= 2 && scrap >= 250),
-      wantBench3: scrap >= 1000 * styleOf(team).bench || ((G.armsRace ?? -1) >= 3 && scrap >= 500),
+      wantBench3: scrap >= 1000 * Math.min(1.2, styleOf(team).bench) || ((G.armsRace ?? -1) >= 3 && scrap >= 500),
       rich: hqm >= 300 * Math.min(1, styleOf(team).bench),
     };
     // progression milestones (for tests, the island news and the clan list)
@@ -124,9 +124,11 @@ export class BotProgression {
     // a couple of barricades for gunfights once they're armed
     if (bench >= 1 && this.bestGun(b) && ITEMS[this.bestGun(b).id].type === 'gun' && b.inv.count('barricade') < 1) want('barricade', 2, 'ammo');
     // radiation protection before the train yard / launch site runs
-    if (bench >= 2 && this.bestGun(b) && ITEMS[this.bestGun(b).id].type === 'gun' && b.radProtection() < 0.5 && !has(b, 'hazmat_suit')) want('hazmat_suit', 1, 'armour');
+    if (bench >= 2 && this.bestGun(b) && ITEMS[this.bestGun(b).id].type === 'gun' && b.radProtection() < 0.5 && !has(b, 'hazmat_suit') && extra('hazmat_suit')) want('hazmat_suit', 1, 'armour');
     // raid tech: the leader works toward a rocket launcher once the clan has a level 2 bench
-    if (team && bench >= 2 && prog.scrap >= 300 && this.game.teams.leader(team) === b && !this.game.teams.membersOf(team).some(m => m.inv.count('rocket_launcher') > 0) && prog.stash('rocket_launcher') === 0) want('rocket_launcher', 1, 'raid');
+    // raid tech: the leader is the clan's rocket specialist. With a level 3 bench a launcher comes first
+    // for them (teammates go for AKs); at level 2 only once the level 3 savings are there.
+    if (team && (bench >= 3 || (bench >= 2 && prog.scrap >= 1250 + 450)) && this.game.teams.leader(team) === b && !this.game.teams.membersOf(team).some(m => m.inv.count('rocket_launcher') > 0) && prog.stash('rocket_launcher') === 0) want('rocket_launcher', 1, bench >= 3 ? 'race' : 'raid');
     // Ammo (and later explosives) duty. The crew grows with how many members carry a gun that's short
     // of its ammo type; nobody is on it when everyone has rounds. Late game the same crew also keeps
     // a stock of explosives / rockets / charges for raids.
@@ -143,7 +145,7 @@ export class BotProgression {
       // raid stock wanted once the clan can make it
       const raidWant = [];
       if (prog.bench >= 2 && prog.knows('rocket') && prog.knows('rocket_launcher')) raidWant.push(['rocket', prog.bench >= 3 ? 10 : 4]);
-      else if (prog.bench >= 1 && prog.knows('satchel_charge')) raidWant.push(['satchel_charge', prog.bench >= 2 ? 8 : 4]);
+      else if (prog.bench >= 2 && prog.knows('satchel_charge')) raidWant.push(['satchel_charge', 8]);
       if (prog.bench >= 3 && prog.knows('timed_charge')) raidWant.push(['timed_charge', 4]);
       if (prog.bench >= 2 && prog.knows('explosives')) raidWant.push(['explosives', 20]);
       const raidShort = raidWant.filter(([id, n]) => prog.stash(id) + crew.reduce((x, m) => x + m.inv.count(id), 0) < n);
@@ -244,6 +246,11 @@ export class BotProgression {
     // raw / loot-only
     const src = SOURCE[id] || (LOOT_ONLY.has(id) ? 'loot' : null);
     if (src === 'smelt') {
+      // short of HQ metal with spare pipes / springs in the boxes: recycle those (Rust's quickest HQM)
+      if (id === 'hqm' && prog.st) {
+        const pipes = prog.stash('metal_pipe') - 12, springs = prog.stash('metal_spring') - 8;
+        if (pipes >= 10 || springs >= 6) return { a: 'withdraw', items: pipes >= 10 ? { metal_pipe: Math.min(40, pipes) } : { metal_spring: Math.min(20, springs) } };
+      }
       const ore = SMELT_FROM[id];
       if (b.inv.count(ore) >= Math.min(need, 50) || (prog.furnace && prog.furnace.cont.count(id) > 0)) return { a: 'smelt', ore, out: id, need };
       return this.resolve(b, prog, ore, Math.min(need, 600), depth + 1);

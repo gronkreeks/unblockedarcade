@@ -33,7 +33,8 @@ const DEFS = {
 };
 
 export class MaterialLibrary {
-  constructor(textures) { this.tx = textures; this.cache = new Map(); this.windUniforms = { uTime: { value: 0 }, uWind: { value: 0.5 } }; }
+  // cheap: simple diffuse (Lambert) shading instead of PBR, for the Low preset
+  constructor(textures, cheap = false) { this.cheap = cheap; this.tx = textures; this.cache = new Map(); this.windUniforms = { uTime: { value: 0 }, uWind: { value: 0.5 } }; }
   get(key, opts = {}) {
     const ck = key + (opts.vc ? ':vc' : '') + (opts.color !== undefined ? ':' + opts.color : '') + (opts.repeat ? ':r' + opts.repeat : '');
     if (this.cache.has(ck)) return this.cache.get(ck);
@@ -57,7 +58,12 @@ export class MaterialLibrary {
     if (d.transparent) { p.transparent = true; p.opacity = d.transparent; p.depthWrite = false; }
     if (d.emissive) { p.emissive = new THREE.Color(d.emissive); p.emissiveIntensity = 1.5; }
     if (d.side) p.side = d.side;
-    const m = new THREE.MeshStandardMaterial(p);
+    let m;
+    if (this.cheap) {
+      const q = { ...p }; delete q.roughness; delete q.metalness; delete q.roughnessMap; delete q.metalnessMap; delete q.aoMap; delete q.aoMapIntensity;
+      if (d.metal && !q.map) q.color = (q.color || new THREE.Color(0xffffff)).clone().multiplyScalar(0.75);
+      m = new THREE.MeshLambertMaterial(q);
+    } else m = new THREE.MeshStandardMaterial(p);
     m.userData.key = key;
     if (d.wind || opts.wind) this.addWind(m, opts.windStrength ?? (key === 'blades' ? 1 : 0.6));
     this.cache.set(ck, m);

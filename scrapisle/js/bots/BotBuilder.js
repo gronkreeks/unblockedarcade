@@ -83,7 +83,10 @@ export class BotBuilder {
     if (prog.bench >= 3 && team.size >= 7) s = 5;
     if (team.style === 'turtle' && furnace) s += 1;
     if (base.cramped) s = Math.max(s, STAGES.indexOf(base.template) + 1);
-    return Math.max(0, Math.min(fi, s));
+    // the next workbench doesn't fit even in the finished base: plan one size bigger (up to 5x4)
+    let top = fi;
+    if (base.benchCramped && STAGES.indexOf(base.template) >= fi && fi < STAGES.indexOf('xl')) { top = fi + 1; base.final = STAGES[top]; base.benchCramped = false; }
+    return Math.max(0, Math.min(top, s));
   }
 
   // Pick a site for a team's base near a point. Returns { ox, oy, oz, yaw, template } or null.
@@ -171,7 +174,7 @@ export class BotBuilder {
     if (!st) return [{ kind: 'foundation', i: T.cells[0][0], j: T.cells[0][1], newSt: base.site, cost: pieceCost('foundation', 0) }];
     const out = [];
     // grow into the next stage once this one is finished and the team has outgrown it
-    if (base.final && base.template !== base.final && st.tc && this._stageDone(st, T, skip)) {
+    if (base.final && (base.template !== base.final || base.benchCramped) && st.tc && this._stageDone(st, T, skip)) {
       const cur = STAGES.indexOf(base.template);
       if (this.wantedStage(team, prog) > cur) {
         base.template = STAGES[cur + 1]; base.cramped = false;
@@ -212,25 +215,30 @@ export class BotBuilder {
       const boxN = this.count(st, 'wood_box') + this.count(st, 'large_box');
       // what the base still wants, in order; the first one that fits is the next step
       const want = [];
+      // progression first (cabinet is placed earlier): a bag, a box, a furnace and the benches. Optional
+      // things (research table, extra furnaces, surplus boxes, more bags) only take floor space once the
+      // next bench the clan wants is down, so a small base never fills up before its level 2 / 3 bench.
+      const pendingBench = (prog.wantBench2 && prog.bench >= 1 && !this.has(st, 'workbench2')) || (prog.wantBench3 && prog.bench >= 2 && !this.has(st, 'workbench3'));
       if (bags < 1) want.push(['bag']);
       if (!this.has(st, 'wood_box')) want.push(['wood_box', 0]);
-      if (bags < Math.min(team.size, 2)) want.push(['bag']);
-      if (prog.boxSpace < 5 && this.count(st, 'wood_box') < 2 && !prog.knows('large_box')) want.push(['wood_box', 0]);
       if (!this.has(st, 'furnace')) want.push(['furnace', 0]);
-      if (bags < Math.min(team.size, 4)) want.push(['bag']);
-      if (team.style === 'turtle' && boxN < Y.boxes && prog.boxSpace < 12) want.push([prog.knows('large_box') && prog.bench >= 1 ? 'large_box' : 'wood_box', 0]);
-      // more furnaces to boom once ore piles up (a player runs several at once)
-      const furnaces = this.count(st, 'furnace'), ore = prog.stash('metal_ore') + prog.stash('sulfur_ore') + prog.stash('hqm_ore');
-      const maxF = { hut: 1, small: 2, medium: 3, large: 4, xl: 5, xxl: 6 }[base.template] || 1;
-      if (furnaces >= 1 && furnaces < maxF && (ore > 400 * furnaces || (prog.bench >= 2 && furnaces < 2))) want.push(['furnace', 0]);
       if (!this.has(st, 'workbench1')) want.push(['workbench1', 1]);
-      // surplus storage: always keep spare room, like a player who adds boxes before the last one fills.
-      // Room wanted grows with the clan; how many boxes fit grows with the base.
-      const room = 12 + 4 * team.size, maxBox = ({ hut: 3, small: 4, medium: 6, large: 8, xl: 10, xxl: 12 }[base.template] || 3) + (team.style === 'turtle' ? 2 : 0);
-      if (prog.boxSpace < room && boxN < maxBox) want.push([prog.knows('large_box') && prog.bench >= 1 ? 'large_box' : 'wood_box', prog.knows('large_box') && prog.bench >= 1 ? 1 : 0]);
-      if (!this.has(st, 'research_table') && prog.bench >= 1 && prog.knows('research_table')) want.push(['research_table', 1]);
       if (!this.has(st, 'workbench2') && prog.bench >= 1 && prog.wantBench2) want.push(['workbench2', 2]);
       if (!this.has(st, 'workbench3') && prog.bench >= 2 && prog.wantBench3) want.push(['workbench3', 3]);
+      if (bags < Math.min(team.size, 2)) want.push(['bag']);
+      if (prog.boxSpace < 5 && boxN < 2) want.push([prog.knows('large_box') && prog.bench >= 1 ? 'large_box' : 'wood_box', prog.knows('large_box') && prog.bench >= 1 ? 1 : 0]);
+      if (!pendingBench) {
+        if (!this.has(st, 'research_table') && prog.bench >= 1 && prog.knows('research_table')) want.push(['research_table', 1]);
+        // more furnaces to boom once ore piles up (a player runs several at once)
+        const furnaces = this.count(st, 'furnace'), ore = prog.stash('metal_ore') + prog.stash('sulfur_ore') + prog.stash('hqm_ore');
+        const maxF = { hut: 1, small: 2, medium: 3, large: 4, xl: 5, xxl: 6 }[base.template] || 1;
+        if (furnaces >= 1 && furnaces < maxF && (ore > 400 * furnaces || (prog.bench >= 2 && furnaces < 2))) want.push(['furnace', 0]);
+        // surplus storage: keep spare room, like a player who adds boxes before the last one fills.
+        // Room wanted grows with the clan; how many boxes fit grows with the base.
+        const room = 12 + 4 * team.size, maxBox = ({ hut: 2, small: 3, medium: 5, large: 6, xl: 8, xxl: 10 }[base.template] || 2) + (team.style === 'turtle' ? 1 : 0);
+        if (prog.boxSpace < room && boxN < maxBox) want.push([prog.knows('large_box') && prog.bench >= 1 ? 'large_box' : 'wood_box', prog.knows('large_box') && prog.bench >= 1 ? 1 : 0]);
+        if (bags < Math.min(team.size, 4)) want.push(['bag']);
+      }
       let found = 0, cramped = false, bagDone = false;
       for (const [type, tier] of want) {
         if (type === 'bag' && bagDone) continue;
@@ -238,6 +246,7 @@ export class BotBuilder {
         if (type === 'bag') bagDone = true;
         if (dep) { out.push(dep); if (++found >= 2) break; continue; }
         if (type !== 'bag' || bags < 1) cramped = true;   // no room for something the base needs
+        if (type === 'workbench2' || type === 'workbench3') base.benchCramped = true;   // the base must grow for it
       }
       if (cramped) base.cramped = true;
     }

@@ -89,11 +89,16 @@ export class Environment {
     this.sun.position.x += this.sun.target.position.x - camPos.x; this.sun.position.z += this.sun.target.position.z - camPos.z;
     const cloudDim = 1 - this.cloud * 0.55 - this.rain * 0.2;
     this.sun.intensity = useMoon ? 0.35 * night : lerp(0.2, 2.8, dayT) * cloudDim;
+    // night: moon shadows are faint, so the shadow map only refreshes a few times a second
+    const sm = this.renderer.shadowMap;
+    if (useMoon) { sm.autoUpdate = false; this.shadowN = ((this.shadowN || 0) + 1) % 12; if (!this.shadowN) sm.needsUpdate = true; } else sm.autoUpdate = true;
     this.sun.color.set(useMoon ? 0x9fb4e0 : 0xfff1d6).lerp(C(0xffa060), useMoon ? 0 : dusk * 0.65);
     this.hemi.color.copy(this.zen).lerp(C(0xffffff), 0.35);
     this.hemi.groundColor.set(0x4a4234).multiplyScalar(lerp(0.4, 1, dayT));
-    this.hemi.intensity = lerp(0.35, 0.9, dayT);
-    this.ambient.intensity = lerp(0.12, 0.05, dayT);
+    // cheap (Low preset) materials don't take light from the sky reflection map, so the sky fill makes up for it
+    const fill = this.gfx.cheap ? 2.6 : 1;
+    this.hemi.intensity = lerp(0.35, 0.9, dayT) * fill;
+    this.ambient.intensity = lerp(0.12, 0.05, dayT) * fill;
     this.renderer.toneMappingExposure = lerp(1.05, 0.85, dayT);
     // sky reflections for PBR metals/water, refreshed every few seconds
     // Rebuilding it allocates GPU targets, so it only happens when the sky has visibly changed

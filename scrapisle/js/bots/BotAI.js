@@ -428,7 +428,9 @@ export class BotAI {
     const fatNeed = (b.inv.count('animal_fat') + prog.stash('animal_fat')) < 60 || (b.inv.count('leather') + prog.stash('leather')) < 30;
     add(P.hunt * (fatNeed ? 0.9 : 0.25), this.findPrey(b) ? { type: 'hunt', animal: this.findPrey(b) } : null);
     // research found items
-    if (prog.research) { const unknown = b.inv.main.slots.find(s => s && RECIPE[s.id] && !RECIPE[s.id].known && !b.bp.has(s.id)); if (unknown && b.inv.count('scrap') >= 40) add(1.5 * (team && team.style === 'rush' && prog.bench < 2 ? 0.3 : Y.research), { type: 'research', id: unknown.id, table: prog.research }); }
+    // research only with scrap to spare beyond what the next workbench needs
+    const saving = prog.bench === 1 ? 500 : prog.bench === 2 ? 1250 : 0;
+    if (prog.research && prog.scrap >= saving + 150) { const unknown = b.inv.main.slots.find(s => s && RECIPE[s.id] && !RECIPE[s.id].known && !b.bp.has(s.id)); if (unknown && b.inv.count('scrap') >= 40) add(1.5 * (team && team.style === 'rush' && prog.bench < 2 ? 0.3 : Y.research), { type: 'research', id: unknown.id, table: prog.research }); }
     // idle / roam for sloppier bots (around home, so the team stays together)
     const home = this.homeOrigin(b, team);
     add(S.idle * 3 * Y.idle, { type: 'roam', x: home.x + randRange(-40, 40), z: home.z + randRange(-40, 40), until: G.now + randRange(8, 20) });
@@ -862,8 +864,8 @@ export class BotAI {
     const fuelNeed = Math.ceil(f.cont.count(t.ore) * 0.5) + 10 - f.cont.count('wood');
     if (fuelNeed > 0) { const k = Math.min(fuelNeed, b.inv.count('wood'), f.cont.room('wood')); if (k > 0) { b.inv.remove('wood', k); f.cont.add('wood', k); } }
     if (!f.on) G.deploy.toggle(f);
-    // wait a little at the furnace when output is nearly ready
-    if (!t.waitUntil) t.waitUntil = G.now + Math.min(40, f.cont.count(t.ore) * 1.2);
+    // load it and go, like a player (output is collected on the next trip); only a short wait
+    if (!t.waitUntil) t.waitUntil = G.now + Math.min(8, f.cont.count(t.ore) * 0.3);
     if (G.now < t.waitUntil && f.on) { b.vx = b.vz = 0; return; }
     for (const id of ['metal_frag', 'sulfur', 'hqm', 'charcoal']) { const k = Math.min(f.cont.count(id), b.inv.room(id)); if (k > 0) { f.cont.remove(id, k); b.inv.give(id, k); } }
     return 'done';
@@ -1038,9 +1040,15 @@ export class BotAI {
         const s = b.inv.main.slots[i]; if (!s) continue;
         const d = ITEMS[s.id];
         if (d.type !== 'component' && !(d.type === 'wear' && d.value < 3 && b.inv.wear.count(s.id) === 0)) continue;
-        if (['rope', 'sewing_kit', 'metal_spring', 'metal_pipe', 'semi_body', 'rifle_body', 'smg_body', 'gears', 'tech_trash'].includes(s.id) && this.keepComponent(b, s.id)) continue;
         const slot = r.cont.slots.slice(0, 6).findIndex(x => !x);
         if (slot < 0) break;
+        if (['rope', 'sewing_kit', 'metal_spring', 'metal_pipe', 'semi_body', 'rifle_body', 'smg_body', 'gears', 'tech_trash'].includes(s.id) && this.keepComponent(b, s.id)) {
+          // needed for crafting: keep a working stock, recycle only the surplus (pipes and springs pile up)
+          const keep = s.id === 'metal_pipe' ? 12 : s.id === 'metal_spring' ? 8 : Infinity;
+          if (s.n <= keep) continue;
+          r.cont.slots[slot] = { ...s, n: s.n - keep }; s.n = keep;
+          continue;
+        }
         r.cont.slots[slot] = s; b.inv.main.slots[i] = null;
       }
       r.cont.touch(); b.inv.main.touch();
