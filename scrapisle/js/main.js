@@ -37,7 +37,7 @@ import { setMaterials } from './entities/WeaponModels.js';
 import { setAvatarMaterials, setAvatarBatch } from './entities/Avatars.js';
 import { Batcher } from './gfx/Batcher.js';
 import { Admin } from './ui/Admin.js';
-import { buildScenario } from './sim/Scenario.js';
+import { buildScenario, buildPvp, tickScenario } from './sim/Scenario.js';
 
 const PENDING = 'scrapisle.pending';
 
@@ -143,7 +143,7 @@ class Game {
   }
   // Admin raid scenario: a fresh small island with one base and a clan coming to raid it (sim/Scenario.js).
   async startScenario(sc) {
-    const cfg = { name: 'Raid scenario', seed: Math.floor(Math.random() * 1e6), difficulty: 'hard', mult: 2, bots: 0, size: 1024, layout: 3, scenario: sc };
+    const cfg = { name: sc.kind === 'pvp' ? 'PvP scenario' : 'Raid scenario', seed: Math.floor(Math.random() * 1e6), difficulty: 'hard', mult: 2, bots: 0, size: 1024, layout: 3, scenario: sc };
     if (this.running) { sessionStorage.setItem(PENDING, JSON.stringify({ type: 'new', cfg })); location.reload(); return; }
     this.worldId = 'scenario';
     this.cfg = cfg;
@@ -252,7 +252,7 @@ class Game {
     document.getElementById('hud').hidden = false;
     this.running = true;
     this.lastSave = 0;
-    if (cfg.scenario) { const msg = buildScenario(this, cfg.scenario); this.ui.toast(msg); this.logEvent(msg); if (this.spectate) this.ui.toast('Watching: WASD to fly, Space up, Ctrl down, Shift faster'); }
+    if (cfg.scenario) { const msg = cfg.scenario.kind === 'pvp' ? buildPvp(this, cfg.scenario) : buildScenario(this, cfg.scenario); this.ui.toast(msg); this.logEvent(msg); if (this.spectate) this.ui.toast('Watching: WASD to fly, Space up, Ctrl down, Shift faster'); }
     await this.saveGame(true);
     this.online.start();
     document.getElementById('clickBox').hidden = !this.player.alive ? true : false;
@@ -367,6 +367,7 @@ class Game {
     if (!paused) {
       this.controls.update(dt);
       this.sim.update(dt);
+      if (this.pvp) tickScenario(this, dt);
     }
     if (!P.alive) { this.camera.position.set(P.x, P.y + 0.4, P.z); this.camera.rotation.set(-0.3, P.yaw + Math.PI, 0.6, 'YXZ'); }
     const cp = this.camera.position;

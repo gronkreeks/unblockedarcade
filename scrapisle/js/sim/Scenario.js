@@ -10,9 +10,9 @@ import { botName } from '../bots/BotProfiles.js';
 // Kits for you or for bots, from early game to late game.
 export const KITS = {
   bow: { name: 'Bow', gun: 'hunting_bow', ammo: ['wooden_arrow', 60], wear: ['cloth_hood', 'cloth_shirt', 'cloth_pants', 'hide_boots'], meds: [['bandage', 6]] },
-  pistol: { name: 'Revolver', gun: 'revolver', ammo: ['pistol_ammo', 120], wear: ['bone_helmet', 'wood_chest', 'cloth_pants', 'hide_boots'], meds: [['bandage', 6], ['med_syringe', 2]] },
-  rifle: { name: 'Semi rifle', gun: 'semi_rifle', ammo: ['rifle_ammo', 160], wear: ['coffee_can_helmet', 'roadsign_vest', 'roadsign_kilt', 'hide_boots', 'leather_gloves'], meds: [['med_syringe', 4], ['bandage', 4]] },
-  ak: { name: 'Assault rifle', gun: 'assault_rifle', ammo: ['rifle_ammo', 240], wear: ['metal_facemask', 'metal_chest', 'roadsign_kilt', 'hide_boots', 'leather_gloves'], meds: [['med_syringe', 6], ['large_medkit', 2]] },
+  pistol: { name: 'Revolver', gun: 'revolver', ammo: ['pistol_ammo', 120], wear: ['bone_helmet', 'wood_chest', 'cloth_pants', 'hide_boots'], meds: [['bandage', 6], ['med_syringe', 2], ['barricade', 1]] },
+  rifle: { name: 'Semi rifle', gun: 'semi_rifle', ammo: ['rifle_ammo', 160], wear: ['coffee_can_helmet', 'roadsign_vest', 'roadsign_kilt', 'hide_boots', 'leather_gloves'], meds: [['med_syringe', 4], ['bandage', 4], ['barricade', 2]] },
+  ak: { name: 'Assault rifle', gun: 'assault_rifle', ammo: ['rifle_ammo', 240], wear: ['metal_facemask', 'metal_chest', 'roadsign_kilt', 'hide_boots', 'leather_gloves'], meds: [['med_syringe', 6], ['large_medkit', 2], ['barricade', 3]] },
 };
 export const METHODS = { satchel_charge: 'Satchel charges', timed_charge: 'C4 (timed charges)', rocket: 'Rockets', melee: 'Melee (soft side, no boom)' };
 
@@ -68,6 +68,113 @@ export function startRaid(G, team, st, method, kit, start) {
   G.logEvent(`${team.name} are coming to raid ${tgtName === 'you' ? 'you' : tgtName} (${METHODS[method]})`);
   const where = start === 'fob' ? 'They\'re putting up their raid tower outside' : start === 'home' ? 'They\'re setting out from home' : 'They\'re making the boom first';
   return { ok: true, msg: `${team.name} will raid ${tgtName === 'you' ? 'your base' : tgtName + '\'s base'} with ${need || 'no'} ${method === 'melee' ? 'boom (melee)' : ITEMS[method].name.toLowerCase() + 's'}. ${where}.`, mine: tgtName === 'you' };
+}
+
+// ---------- PvP scenario ----------
+// sc: { kind: 'pvp', role: 'fight'|'watch', place: 'field'|'woods'|'monument', distance,
+//       enemies, tier, kit, playerKit, aSize, aTier, aKit (watch: clan A), night }
+// Rounds: when one side is all down, the winner is announced and everyone is put back at their
+// starting spots with fresh kits a few seconds later.
+export function buildPvp(G, sc) {
+  G.pstats.admin = true;
+  const W = G.world, P = G.player;
+  // where: open grass, a forest, or the middle of the biggest monument
+  let C = null;
+  if (sc.place === 'monument') { const m = W.monuments.slice().sort((a, b) => b.r - a.r)[0]; if (m) C = { x: m.x, z: m.z }; }
+  const want = sc.place === 'woods' ? 3 : 2;   // biome: 2 grass, 3 forest
+  for (let k = 0; k < 600 && !C; k++) {
+    const x = (Math.random() - 0.5) * W.size * 0.7, z = (Math.random() - 0.5) * W.size * 0.7;
+    if (W.heightAt(x, z) < 3 || W.slopeAt(x, z) > 0.25 || W.monumentAt(x, z, 40)) continue;
+    if (k < 450 && W.biomeAt(x, z) !== want) continue;
+    C = { x, z };
+  }
+  C = C || { x: 0, z: 0 };
+  const d = sc.distance || 100, a0 = Math.random() * Math.PI * 2;
+  const side = (s) => { const x = C.x + Math.sin(a0) * d / 2 * s, z = C.z + Math.cos(a0) * d / 2 * s; return { x, z }; };
+  const A = side(-1), B = side(1);
+  const clan = (n, tier, at) => {
+    const members = [];
+    for (let i = 0; i < Math.max(1, n); i++) members.push(G.bots.create({ tier, pers: 'fighter', name: botName(), noKit: true }));
+    const t = G.teams.create(tier, members);
+    t.pvp = true;
+    return t;
+  };
+  const pvp = { C, A, B, a0, d, round: 1, score: { A: 0, B: 0 }, resetT: 0, sc };
+  if (sc.role === 'watch') {
+    pvp.teamA = clan(sc.aSize || 4, sc.aTier || 'hard', A).id;
+    pvp.teamB = clan(sc.enemies || 4, sc.tier || 'hard', B).id;
+  } else pvp.teamB = clan(sc.enemies || 3, sc.tier || 'hard', B).id;
+  G.pvp = pvp;
+  G.env.tod = sc.night ? 0.93 : 0.4; G.env.weather = 'clear'; G.env.weatherT = 3600;
+  G.admin = { god: sc.role === 'watch' };
+  if (sc.role === 'watch') { G.spectate = true; P.x = C.x + Math.cos(a0) * 45; P.z = C.z - Math.sin(a0) * 45; P.y = W.heightAt(P.x, P.z) + 18; P.yaw = Math.atan2(C.x - P.x, C.z - P.z); P.pitch = -0.4; }
+  startRound(G);
+  const B_ = G.teams.get(pvp.teamB);
+  return sc.role === 'watch'
+    ? `PvP scenario: ${G.teams.get(pvp.teamA).name} against ${B_.name}, ${d} m apart. First side wiped loses the round.`
+    : `PvP scenario: you against ${B_.name} (${B_.size}, ${sc.tier || 'hard'}), ${d} m apart. Wipe them to win the round.`;
+}
+// Everyone back at their spot with a fresh kit.
+function startRound(G) {
+  const pv = G.pvp, P = G.player, sc = pv.sc;
+  const place = (team, at, kit) => {
+    G.teams.membersOf(team).forEach((m, i) => {
+      if (!m.alive) { m.alive = true; m.bleed = 0; m.rads = 0; m.poison = 0; if (m.avatar) m.avatar.revive(); }
+      for (const c of [m.inv.belt, m.inv.main, m.inv.wear]) { c.slots.fill(null); c.touch(); }
+      kitUp(m, kit); m.hp = 100; m.cal = 400; m.hyd = 250;
+      const o = (i - (team.members.length - 1) / 2) * 3;
+      G.bots.placeAt(m, at.x + Math.cos(pv.a0) * o, at.z - Math.sin(pv.a0) * o);
+      m.ai.task = null; m.ai.target = null; m.ai.goal = 'task'; m.ai.ignore = null; m.ai.danger = null; m.respawnAt = Infinity;
+    });
+  };
+  if (pv.teamA) place(G.teams.get(pv.teamA), pv.A, sc.aKit || sc.kit || 'rifle');
+  place(G.teams.get(pv.teamB), pv.B, sc.kit || 'rifle');
+  if (sc.role !== 'watch') {
+    if (!P.alive) { G.respawnPlayer(null); G.ui.hideScreens(); clearInterval(G.ui.deathTimer); }
+    for (const c of [P.inv.belt, P.inv.main, P.inv.wear]) { c.slots.fill(null); c.touch(); }
+    kitUp(P, sc.playerKit || 'ak'); P.hp = 100; P.bleed = 0; P.cal = Math.max(P.cal, 300); P.hyd = Math.max(P.hyd, 200);
+    P.x = pv.A.x; P.z = pv.A.z; P.y = G.world.heightAt(P.x, P.z) + 0.2; P.vx = P.vy = P.vz = 0; P.yaw = Math.atan2(pv.B.x - P.x, pv.B.z - P.z);
+  }
+  pv.resetT = 0;
+  G.ui.toast(`Round ${pv.round}`);
+}
+// Runs every frame in a scenario world (main loop).
+export function tickScenario(G, dt) {
+  const pv = G.pvp;
+  if (!pv) return;
+  const P = G.player, sc = pv.sc;
+  const B = G.teams.get(pv.teamB), A = pv.teamA ? G.teams.get(pv.teamA) : null;
+  // the dead wait for the next round instead of respawning on a beach
+  for (const t of [A, B]) if (t) for (const m of G.teams.membersOf(t)) if (!m.alive) m.respawnAt = Infinity;
+  const aliveA = A ? G.teams.alive(A).length : (P.alive ? 1 : 0), aliveB = G.teams.alive(B).length;
+  if (pv.resetT > 0) { pv.resetT -= dt; if (pv.resetT <= 0) { pv.round++; startRound(G); } return; }
+  if (!aliveA || !aliveB) {
+    const winA = aliveA > 0;
+    pv.score[winA ? 'A' : 'B']++;
+    const nameA = A ? A.name : 'You', nameB = B.name;
+    G.ui.toast(`${winA ? nameA + (A ? ' win' : ' win') : nameB + ' win'} round ${pv.round}. ${nameA} ${pv.score.A} : ${pv.score.B} ${nameB}`);
+    G.logEvent(`Round ${pv.round}: ${winA ? nameA : nameB} won (${pv.score.A}-${pv.score.B})`);
+    pv.resetT = 6;
+    return;
+  }
+  // keep both sides coming at each other (they'd otherwise go about their day)
+  pv.pushT = (pv.pushT || 0) - dt;
+  if (pv.pushT > 0) return;
+  pv.pushT = 1.5;
+  const push = (team, foes) => {
+    const live = foes.filter(f => f && f.alive);
+    if (!live.length) return;
+    for (const m of G.teams.alive(team)) {
+      if (m.ai.target && m.ai.target.alive) continue;
+      const f = live.sort((a, c) => Math.hypot(a.x - m.x, a.z - m.z) - Math.hypot(c.x - m.x, c.z - m.z))[0];
+      team.alert = { id: f.id, x: f.x, z: f.z, t: G.now };
+      m.ai.ignore = null;
+      if (Math.hypot(f.x - m.x, f.z - m.z) < 60) { G.bots.ai.startCombat(m, f); m.ai.goal = 'fight'; }
+      else m.ai.task = { type: 'goto', x: f.x + (Math.random() - 0.5) * 20, z: f.z + (Math.random() - 0.5) * 20, arrive: 25, until: G.now + 4 };
+    }
+  };
+  push(B, A ? G.teams.membersOf(A) : [P]);
+  if (A) push(A, G.teams.membersOf(B));
 }
 
 // ---------- scenario worlds ----------

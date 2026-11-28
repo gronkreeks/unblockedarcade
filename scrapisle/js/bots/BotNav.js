@@ -197,10 +197,13 @@ export class BotNav {
     if (!T || !T.built || !T.stairTop) return false;
     const S = T.site, c = Math.cos(S.yaw), sn = Math.sin(S.yaw);
     const inside = (x, z) => { const dx = x - S.ox, dz = z - S.oz, lx = dx * c - dz * sn, lz = dx * sn + dz * c; return lx > -0.3 && lx < 9.3 && lz > -0.3 && lz < 3.3; };
-    if (!inside(b.x, b.z) || inside(tx, tz)) { b.ai.exitI = null; return false; }
-    const route = b.y > T.floorY - 0.8 ? [T.stairTop, T.stairBot, T.inDoor, T.outDoor] : [T.inDoor, T.outDoor];
-    if (b.ai.exitR !== route.length) { b.ai.exitR = route.length; b.ai.exitI = 0; b.ai.exitT = 0; }
-    const wp = route[Math.min(b.ai.exitI || 0, route.length - 1)];
+    if (!inside(b.x, b.z) || inside(tx, tz)) { b.ai.exitRoute = null; return false; }
+    // pick the route once (by where the bot starts) and keep it: halfway down the stairs the bot is
+    // neither upstairs nor downstairs, and switching routes there left it pacing the steps
+    if (!b.ai.exitRoute) { b.ai.exitRoute = b.y > T.site.oy + 2.2 ? [T.stairTop, T.stairBot, T.inDoor, T.outDoor] : [T.inDoor, T.outDoor]; b.ai.exitI = 0; b.ai.exitT = 0; }
+    const route = b.ai.exitRoute;
+    if (b.ai.exitI >= route.length) { b.ai.exitRoute = null; return false; }
+    const wp = route[b.ai.exitI];
     b.ai.exitT = (b.ai.exitT || 0) + dt;
     if (this.walkTo(b, wp.x, wp.z, dt, 0.5) || b.ai.exitT > 4) {
       if (b.ai.exitT > 4) { b.x = wp.x; b.z = wp.z; b.y = wp.y + 0.05; b.vx = b.vy = b.vz = 0; }   // caught on something: step through

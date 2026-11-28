@@ -387,7 +387,7 @@ export class BotAI {
       return this.setTask(b, { type: 'deposit' });
     }
     // 4. base: the leader picks a site
-    if (team && !team.base) {
+    if (team && !team.base && !team.pvp) {
       const leader = G.teams.leader(team);
       // the leader picks the spot; anyone hauling lots of wood does if the leader is far away
       const leaderFar = leader && leader !== b && dist(leader.x, leader.z, b.x, b.z) > 150;
@@ -1233,7 +1233,10 @@ export class BotAI {
     const live = G.combat.charges.filter(c => Math.hypot(c.x - p.wx, c.z - p.wz) < 2.5).length;
     // charges already ticking on this piece: wait in cover until they go off
     if (!melee && live > 0) { this.breachCover(b, t, p, nx, nz, side, dt, mode); return; }
-    if (!this.nav.moveTo(b, sx, sz, dt, mode, { arrive: 0.9 })) {
+    // an inner wall or door: walk the base route through what's already been blown open
+    const zn = G.build.zoneOf(t.st), deep = dist(sx, sz, zn.x, zn.z) < zn.core - 1;
+    const there = deep ? this.goTo(b, sx, sz, dt, mode, 0.9, { st: t.st, raid: true }) : this.nav.moveTo(b, sx, sz, dt, mode, { arrive: 0.9 });
+    if (!there) {
       // can't get to that face (a box, a rock, a ditch): try the other face once, then plant from as
       // close as we got, and failing that have the raid plan another way in
       t.stuck = (t.stuck || 0) + (b.ai.stuckT > 2 ? dt : 0);

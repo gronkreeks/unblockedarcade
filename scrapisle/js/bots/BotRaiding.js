@@ -363,7 +363,9 @@ export class BotRaiding {
       }
       case 'breach': {
         // remaining breaches = pieces still standing
+        const before = r.breaches.length;
         r.breaches = r.breaches.filter(id => this.findPiece(st, id));
+        if (r.breaches.length < before && r.breaches.length) this.log(`${team.name} blew through ${r.targetName === 'you' ? 'your' : r.targetName + (/s$/.test(r.targetName) ? "'" : "'s")} ${before - r.breaches.length > 1 ? 'walls' : 'first line'} and are pushing on (${r.breaches.length} more to go)`);
         // a breacher couldn't get to its wall: plan a fresh way in from the FOB
         if (r.replan) {
           r.replan = false;
@@ -371,7 +373,9 @@ export class BotRaiding {
           if (plan) { r.breaches = plan.breaches; r.path = plan.path; }
         }
         if (!r.breaches.length) { r.state = 'loot'; r.stateT = G.now; break; }
-        const boom = this.chargesCarried(team) + (this.fobBox(r) ? this.fobBox(r).cont.count(r.method) : 0);
+        const zz = G.build.zoneOf(st);
+        const bagged = G.loot.bags.reduce((a, o) => a + (o.cont && dist(o.x, o.z, zz.x, zz.z) < zz.r + 40 ? o.cont.count(r.method) : 0), 0);
+        const boom = this.chargesCarried(team) + (this.fobBox(r) ? this.fobBox(r).cont.count(r.method) : 0) + bagged;
         const ticking = G.combat.charges.some(c => c.owner && c.owner.team === team.id);
         if (r.method !== 'melee' && r.method !== 'walk' && boom <= 0 && !ticking) {
           // out of boom at the FOB: someone runs home for more (or the clan crafts it), up to 4 minutes
@@ -490,6 +494,13 @@ export class BotRaiding {
         if (prog.stash(item) > 0) return { type: 'activity', act: { a: 'withdraw', items: { [item]: 12 } } };
         const act = G.bots.prog.resolve(b, prog, item, 4);
         if (act) return { type: 'activity', act };
+      }
+      // boom on a dead teammate (their body bag near the base): go and get it back
+      if ((role === 'breacher' || role === 'runner') && b.inv.count(m === 'rocket' ? 'rocket' : m) === 0 && !(box && box.cont.count(m === 'rocket' ? 'rocket' : m) > 0)) {
+        const item = m === 'rocket' ? 'rocket' : m, z = G.build.zoneOf(st);
+        const bag = G.loot.bags.filter(o => o.cont && (o.cont.count(item) > 0 || (m === 'rocket' && o.cont.count('rocket_launcher') > 0)) && dist(o.x, o.z, z.x, z.z) < z.r + 40)
+          .sort((a, c) => dist(b.x, b.z, a.x, a.z) - dist(b.x, b.z, c.x, c.z))[0];
+        if (bag) return { type: 'lootbag', bag, dep: bag };
       }
       if (role === 'runner') {
         const item = m === 'rocket' ? 'rocket' : m;

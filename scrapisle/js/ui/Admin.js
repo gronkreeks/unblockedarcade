@@ -88,8 +88,40 @@ export class Admin {
       <label>They start <select id="scStart">${opt({ fob: 'Right outside, putting up their raid tower', home: 'From 300 m away (they walk over first)' }, 'fob')}</select></label>
       <label>Time <select id="scTime">${opt({ day: 'Day', night: 'Night' }, 'day')}</select></label>
       <p class="muted" id="adMsg">${esc(msg)}</p>
-      <div class="row"><button class="btn go" data-a="scstart">Start the scenario</button><button class="btn" data-a="${this.game.running ? 'panel' : 'back'}">Back</button></div>
+      <div class="row"><button class="btn go" data-a="scstart">Start the scenario</button><button class="btn" data-a="pvp">PvP scenario instead</button><button class="btn" data-a="${this.game.running ? 'panel' : 'back'}">Back</button></div>
     </div>`;
+  }
+  // ---------- PvP scenario (a new world) ----------
+  renderPvp(msg = '') {
+    const opt = (o, sel) => Object.entries(o).map(([k, v]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${esc(v)}</option>`).join('');
+    const kits = Object.fromEntries(Object.entries(KITS).map(([k, v]) => [k, v.name]));
+    const tiers = { normal: 'Normal', hard: 'Hard', expert: 'Expert' }, sizes = { 1: '1', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 8: '8' };
+    this.el.innerHTML = `<div class="wrap admin">
+      <h2>PvP scenario</h2>
+      <p class="muted small">A new small island and a straight fight, in rounds: when one side is wiped, everyone goes back to their spot with a fresh kit. It isn't saved.</p>
+      <label>You <select id="pvRole">${opt({ fight: 'Fight them yourself', watch: 'Watch two clans fight (fly around, nobody can see you)' }, 'fight')}</select></label>
+      <label>Where <select id="pvPlace">${opt({ field: 'Open fields', woods: 'In the woods', monument: 'At the biggest monument' }, 'field')}</select></label>
+      <label>Starting apart <select id="pvDist">${opt({ 40: '40 m (close)', 80: '80 m', 140: '140 m', 220: '220 m (long range)' }, '80')}</select></label>
+      <label>Time <select id="pvTime">${opt({ day: 'Day', night: 'Night' }, 'day')}</select></label>
+      <h4>You (fighting) or the first clan (watching)</h4>
+      <label>Your kit <select id="pvPKit">${opt(kits, 'ak')}</select></label>
+      <label>First clan: how many <select id="pvASize">${opt(sizes, '3')}</select></label>
+      <label>First clan: skill <select id="pvATier">${opt(tiers, 'hard')}</select></label>
+      <label>First clan: kit <select id="pvAKit">${opt(kits, 'rifle')}</select></label>
+      <h4>The enemy</h4>
+      <label>How many <select id="pvN">${opt(sizes, '3')}</select></label>
+      <label>Skill <select id="pvTier">${opt(tiers, 'hard')}</select></label>
+      <label>Kit <select id="pvKit">${opt(kits, 'rifle')}</select></label>
+      <p class="muted" id="adMsg">${esc(msg)}</p>
+      <div class="row"><button class="btn go" data-a="pvstart">Start the fight</button><button class="btn" data-a="scenario">Raid scenario instead</button><button class="btn" data-a="${this.game.running ? 'panel' : 'back'}">Back</button></div>
+    </div>`;
+  }
+  startPvp() {
+    const v = id => $(id).value;
+    const sc = { kind: 'pvp', role: v('pvRole'), place: v('pvPlace'), distance: +v('pvDist'), night: v('pvTime') === 'night', playerKit: v('pvPKit'),
+      aSize: +v('pvASize'), aTier: v('pvATier'), aKit: v('pvAKit'), enemies: +v('pvN'), tier: v('pvTier'), kit: v('pvKit') };
+    this.msg('Making the island…');
+    this.game.startScenario(sc);
   }
   startScenario() {
     const v = id => $(id).value;
@@ -115,7 +147,7 @@ export class Admin {
     this.el.innerHTML = `<div class="wrap admin">
       <h2>Admin space</h2>
       <p class="muted small">Scores from this world stop going to the leaderboard once you use anything here.</p>
-      <div class="row"><button class="btn go" data-a="scenario">Raid scenario on a new island</button></div>
+      <div class="row"><button class="btn go" data-a="scenario">Raid scenario on a new island</button><button class="btn go" data-a="pvp">PvP scenario on a new island</button></div>
 
       <h4>Raid on your base</h4>
       ${myBase ? '' : '<p class="muted small">You don\'t have a base. Build one, or claim a clan\'s base below.</p>'}
@@ -167,6 +199,8 @@ export class Admin {
     if (a === 'scenario') return this.renderScenario();
     if (a === 'panel') return this.render();
     if (a === 'scstart') return this.startScenario();
+    if (a === 'pvp') return this.renderPvp();
+    if (a === 'pvstart') return this.startPvp();
     const val = id => $(id) ? $(id).value : '';
     try {
       switch (a) {
