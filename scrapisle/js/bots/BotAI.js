@@ -224,6 +224,12 @@ export class BotAI {
   }
   endCombat(b, ignore) { const ai = b.ai; if (ignore && ai.target) { if (!(ai.ignore instanceof Map)) ai.ignore = new Map(); ai.ignore.set(ai.target.id, this.game.now + 150 + Math.random() * 150); } ai.target = null; ai.goal = 'task'; b.crouch = false; }
 
+  // How much of an ammo type a bot keeps on itself: four magazines for its own gun (40 at least)
+  ammoKeep(b, id) {
+    const g = this.mgr.prog.ownedGun(b); if (!g) return 0;
+    const d = ITEMS[g.id]; if (!d.ammo || !d.ammo.includes(id)) return 0;
+    return d.type === 'bow' ? 40 : Math.max(40, d.mag * 4);
+  }
   // A ranged kit: a bow or gun with arrows / ammo to shoot. Rocks, spears and empty guns don't count.
   kitted(a) { return !!(a && a.inv && this.mgr.prog.bestGun(a)); }
   // Remember where a kitted enemy is, so a bare bot keeps clear of it while it rekits
@@ -338,7 +344,13 @@ export class BotAI {
     const loaded = load > 1500;   // thousands of materials: bank them and build, don't wander off
     // only what a deposit actually puts away counts (ammo, meds and food stay on the bot)
     let bankable = 0, bankSlots = 0;
-    for (const sl of b.inv.main.slots) if (sl && !(KEEP_CATS.has(ITEMS[sl.id].cat) && sl.id !== 'raw_meat')) { bankable += (ITEMS[sl.id].value || 0) * sl.n; bankSlots++; }
+    const ammoLeft = {};
+    for (const sl of b.inv.main.slots) {
+      if (!sl) continue;
+      // ammo beyond what this bot's own gun needs goes to the boxes for the rest of the clan
+      if (ITEMS[sl.id].cat === 'Ammo') { if (ammoLeft[sl.id] === undefined) ammoLeft[sl.id] = this.ammoKeep(b, sl.id); const extra = sl.n - ammoLeft[sl.id]; ammoLeft[sl.id] = Math.max(0, -extra); if (extra > 0) { bankable += (ITEMS[sl.id].value || 0) * extra + 30; bankSlots++; } continue; }
+      if (!(KEEP_CATS.has(ITEMS[sl.id].cat) && sl.id !== 'raw_meat')) { bankable += (ITEMS[sl.id].value || 0) * sl.n; bankSlots++; }
+    }
     if (prog.st && boxRoom && bankSlots > 0 && (b.inv.main.emptyCount() <= (holding ? 1 : 4) || (!holding && (bankable > 60 + 140 * (1 - S.caution) || loaded)))) {
       // first spend what's needed on the base, then bank the rest
       const affordable = team && team.base && this.mgr.builder.nextSteps(team, prog).find(st => st.kind !== 'deploy' && Object.keys(st.cost).length && Object.keys(st.cost).every(k => b.inv.count(k) >= st.cost[k]));
@@ -825,9 +837,19 @@ export class BotAI {
     const keep = {};
     for (const st of this.mgr.builder.nextSteps(team, this.mgr.progressOf(team))) for (const k in st.cost) keep[k] = (keep[k] || 0) + st.cost[k] * 3;
     if (b.ai.keep && this.game.now < b.ai.keepUntil) for (const k in b.ai.keep) keep[k] = (keep[k] || 0) + b.ai.keep[k];
+    const ammoLeft = {};
     for (let i = 0; i < b.inv.main.size; i++) {
       const s = b.inv.main.slots[i]; if (!s) continue;
       const d = ITEMS[s.id];
+      if (d.cat === 'Ammo') {
+        // keep what this bot's own gun needs, bank the rest for teammates
+        if (ammoLeft[s.id] === undefined) ammoLeft[s.id] = this.ammoKeep(b, s.id);
+        const k = Math.min(ammoLeft[s.id], s.n); ammoLeft[s.id] -= k;
+        if (k >= s.n) continue;
+        const part = { ...s, n: s.n - k }; s.n = k; const left = c.cont.addStack(part); if (left) s.n += left.n;
+        if (s.n <= 0) b.inv.main.slots[i] = null;
+        continue;
+      }
       if (KEEP_CATS.has(d.cat) && d.id !== 'raw_meat') continue;
       if (keep[s.id] > 0) { const k = Math.min(keep[s.id], s.n); keep[s.id] -= k; if (k >= s.n) continue; const part = { ...s, n: s.n - k }; s.n = k; const left = c.cont.addStack(part); if (left) s.n += left.n; continue; }
       if (fur && (d.smelt || d.cooks) && fur.cont.room(s.id) >= s.n && dist(b.x, b.z, fur.x, fur.z) < 12) { fur.cont.add(s.id, s.n); b.inv.main.slots[i] = null; continue; }

@@ -319,7 +319,14 @@ export class Deployables {
     if (d.fuelT <= 0) {
       if (d.cont.remove('wood', 1) < 1) { d.on = false; return false; }
       d.fuelT += every;
-      if (charcoal && Math.random() < 0.75) d.cont.add('charcoal', 1);
+      if (charcoal) {
+        // charcoal scales with the loot multiplier like smelting does; bot clans' fires also get their
+        // low-multiplier pace (ammo needs a lot of it)
+        const G = this.game, botFire = d.team && G.player && d.team !== G.player.team && G.teams.get(d.team);
+        d.charAcc = (d.charAcc || 0) + 0.75 * Math.max(1, G.settings.mult || 1) * (botFire ? G.bots.ai.pace() : 1);
+        const k = Math.floor(d.charAcc);
+        if (k > 0) { d.charAcc -= k; if (d.cont.add('charcoal', k)) d.charAcc = 0; }
+      }
     }
     return true;
   }
@@ -349,7 +356,7 @@ export class Deployables {
   }
   _campfire(d, dt) {
     if (!d.on) return;
-    if (!this._burn(d, dt, 3, false)) return;
+    if (!this._burn(d, dt, 3, true)) return;   // campfires leave charcoal too
     d.procT += dt;
     if (d.procT >= 4) {
       d.procT -= 4;
