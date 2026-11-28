@@ -47,8 +47,10 @@ export class ResourceSystem {
     for (const h of W.spawns.hemp2 || []) add('pick', 'hemp', h.x, h.z, 0, 1);
     for (const o of W.spawns.nodes2 || []) add('ore', o.kind, o.x, o.z, o.r, 1);
     for (const p of W.spawns.pickups2 || []) add('pick', p.kind, p.x, p.z, (p.x * 13) % 6, 1);
-    // instanced meshes per kind + variant per chunk, with a detailed and a coarse version
+    // Map chunks only decide where a node may move to when it respawns (see _relocate).
+    // Drawing goes through one instanced pool per kind + variant for the whole island (see updateVisibility).
     const V = this.game.veg;
+    this.pools = new Map();
     for (const n of this.nodes) {
       const cx = Math.floor((n.x + W.half) / CHUNK), cz = Math.floor((n.z + W.half) / CHUNK);
       n.variant = n.type === 'tree' ? n.idx % (VARIANTS[n.kind] || 3) : n.type === 'ore' ? n.idx % 3 : 0;
@@ -56,28 +58,34 @@ export class ResourceSystem {
       let g = this.groups.get(key);
       if (!g) { g = { key, type: n.type, kind: n.kind, variant: n.variant, nodes: [], cx: (cx + 0.5) * CHUNK - W.half, cz: (cz + 0.5) * CHUNK - W.half }; this.groups.set(key, g); }
       n.group = g; n.inst = g.nodes.length; g.nodes.push(n);
+      const pk = `${n.type}:${n.kind}:${n.variant}`;
+      let pool = this.pools.get(pk);
+      if (!pool) { pool = { type: n.type, kind: n.kind, variant: n.variant, nodes: [] }; this.pools.set(pk, pool); }
+      pool.nodes.push(n);
+      n.mat = new Float32Array(16); n.where = null; n.slot = -1;
+      const v = 0.82 + ((n.idx * 37) % 100) / 100 * 0.32;
+      n.tint = [v, v * (0.96 + ((n.idx * 13) % 10) / 100), v * 0.9];
+      this._placeMatrix(n, _m4).toArray(n.mat);
     }
-    const m4 = new THREE.Matrix4(), col = new THREE.Color();
-    for (const g of this.groups.values()) {
+    // each pool draws three sets: close (detailed, casts shadows), mid (detailed) and far (coarse)
+    for (const pool of this.pools.values()) {
       let hi, lo;
-      if (g.type === 'tree') { const t = V.tree(g.kind, g.variant); hi = t.hi; lo = t.lo; }
-      else if (g.type === 'ore') { hi = V.rock(g.kind, g.variant, false); lo = V.rock(g.kind, g.variant, true); }
-      else { hi = V.pickup(g.kind); lo = null; }
+      if (pool.type === 'tree') { const t = V.tree(pool.kind, pool.variant); hi = t.hi; lo = t.lo; }
+      else if (pool.type === 'ore') { hi = V.rock(pool.kind, pool.variant, false); lo = V.rock(pool.kind, pool.variant, true); }
+      else { hi = V.pickup(pool.kind); lo = null; }
+      const cap = pool.nodes.length;
       const mk = (parts, shadows) => parts.map(p => {
-        const m = new THREE.InstancedMesh(p.geo, p.mat, g.nodes.length);
+        const m = new THREE.InstancedMesh(p.geo, p.mat, cap);
+        m.count = 0; m.visible = false; m.frustumCulled = false;
         m.castShadow = shadows && !!p.shadow; m.receiveShadow = true;
-        if (p.tint) { m.userData.tint = true; m.setColorAt(0, col.setRGB(1, 1, 1)); }
+        if (p.tint) { m.userData.tint = true; m.setColorAt(0, _c.setRGB(1, 1, 1)); }
+        m.matrixAutoUpdate = false;
         this.game.scene.add(m); return m;
       });
-      g.hi = mk(hi, true); g.lo = lo ? mk(lo, false) : [];
-      g.meshes = [...g.hi, ...g.lo];
-      // bounds from every node at full size (padded), fixed from then on; then pack what's drawn
-      for (const n of g.nodes) { n.hi = true; n.slot = g.nodes.indexOf(n); n.inLo = false; this._placeMatrix(n, m4); g.hi.forEach(m => m.setMatrixAt(n.slot, m4)); }
-      for (const m of g.hi) { m.count = g.nodes.length; m.computeBoundingSphere(); m.boundingSphere.radius += 6; }
-      for (const m of g.lo) m.boundingSphere = g.hi[0].boundingSphere.clone();
-      g.lod = 'hi';
-      this._pack(g);
+      pool.sets = { S: mk(hi, true), N: mk(hi, false), L: lo ? mk(lo, false) : [] };
+      pool.hasLo = !!lo;
     }
+    this.visDirty = true;
     for (const n of this.nodes) if (n.alive) this._addCollider(n);
   }
   // Pick a free spot in the node's own map chunk (its mesh batch lives there) and move it.
@@ -105,7 +113,6 @@ export class ResourceSystem {
     n.x = x; n.z = z; n.y = this.game.world.heightAt(x, z); n.rot = rot; n.moved = true; n.tilt = undefined;
     this.hash.update(n);
     if (had) this._addCollider(n);
-    if (n.group) for (const m of n.group.meshes) if (m.boundingSphere) m.boundingSphere.union(_sph.set(_p.set(x, n.y + 4, z), 10));
     this._writeMatrix(n);
   }
   _reset(n) {
@@ -125,34 +132,20 @@ export class ResourceSystem {
     if (n.type === 'tree' && n.tilt) q.premultiply(_q2.setFromEuler(_e.set(n.tilt[1], 0, -n.tilt[0])));
     return m4.compose(_p.set(n.x, n.y + sink, n.z), q, _s.set(scl, scl, scl));
   }
-  // Each batch draws only its live nodes, packed at the front: close ones in the detailed mesh,
-  // far ones in the simple mesh (so hidden or far instances cost nothing on the GPU).
-  _pack(g) {
-    let h = 0, l = 0;
-    for (const n of g.nodes) {
-      if (!n.alive) { n.slot = -1; continue; }
-      n.inLo = g.lo.length > 0 && n.hi === false;
-      n.slot = n.inLo ? l++ : h++;
-      this._setSlot(n);
-    }
-    for (const m of g.hi) { m.count = h; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
-    for (const m of g.lo) { m.count = l; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
-  }
-  _setSlot(n) {
-    const g = n.group, m4 = this._placeMatrix(n, _m4);
-    for (const m of n.inLo ? g.lo : g.hi) {
-      m.setMatrixAt(n.slot, m4);
-      if (m.userData.tint) { const v = 0.82 + ((n.idx * 37) % 100) / 100 * 0.32; m.setColorAt(n.slot, _c.setRGB(v, v * (0.96 + ((n.idx * 13) % 10) / 100), v * 0.9)); }
-    }
-  }
+  // The node changed (mined, felled, picked, respawned or moved): refresh its drawn copy right away.
+  // A gone node is hidden in its slot; a node that comes back is added at the end of its set. Only the
+  // changed slots are sent to the GPU.
   _writeMatrix(n) {
-    const g = n.group;
-    // appearing or disappearing changes what's packed; otherwise just this node's slot
-    if (!n.alive || n.slot === undefined || n.slot < 0) { this._pack(g); }
-    else {
-      this._setSlot(n);
-      for (const m of n.inLo ? g.lo : g.hi) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
-    }
+    if (!n.mat) return;
+    this._placeMatrix(n, _m4).toArray(n.mat);
+    if (n.where) {
+      const pool = this.pools.get(`${n.type}:${n.kind}:${n.variant}`);
+      for (const m of pool.sets[n.where]) {
+        const a = m.instanceMatrix;
+        if (n.alive) a.array.set(n.mat, n.slot * 16); else a.array.fill(0, n.slot * 16, n.slot * 16 + 16);
+        a.addUpdateRange(n.slot * 16, 16); a.needsUpdate = true;
+      }
+    } else if (n.alive) this._insert(n);
     // the rock's collision shrinks with it, so what you see is what you hit and bump into
     if (n.type === 'ore' && n.col) { n.col.r = 1.05 * Math.max(0.5, n.hp / n.hpMax); n.col.y1 = n.y + 1.1 * Math.max(0.55, n.hp / n.hpMax); }
   }
@@ -256,32 +249,55 @@ export class ResourceSystem {
     // corpses rot away after 6 minutes
     for (let i = this.dynamic.length - 1; i >= 0; i--) { const c = this.dynamic[i]; if (now - c.born > 360) this.removeCorpse(c); }
   }
+  // Refill the instanced pools from the nodes around the camera: close ones detailed and casting
+  // shadows, mid ones detailed, far ones coarse. One draw per model for the whole island, instead of one
+  // per model per map chunk. Runs twice a second, but only redraws after a 16 m move or a change.
   updateVisibility(cam) {
+    if (!this.pools) return;
     const gfx = this.game.gfx || {};
     const detail = gfx.treeDetail || 180, view = (gfx.viewDist || 1000) + 100;
-    const R = CHUNK * 0.71;
-    for (const g of this.groups.values()) {
-      const dc = Math.hypot(g.cx - cam.x, g.cz - cam.z), dmin = dc - R, dmax = dc + R;
-      const lim = g.type === 'pick' ? 160 + detail * 0.3 : view;
-      const show = dmin < lim;
-      if (!g.lo.length || !show) { for (const m of g.hi) m.visible = show; for (const m of g.lo) m.visible = false; continue; }
-      // detail per node: close ones get the full model, far ones the simple one
-      const lodR = g.type === 'tree' ? detail : detail * 0.8;
-      const state = dmax < lodR ? 'hi' : dmin > lodR ? 'lo' : 'mix';
-      let anyHi = false, anyLo = false;
-      if (state !== g.lod || state === 'mix') {
-        const r2 = lodR * lodR;
-        let changed = false;
-        for (const n of g.nodes) {
-          const hi = state === 'hi' || (state === 'mix' && (n.x - cam.x) ** 2 + (n.z - cam.z) ** 2 < r2);
-          if (hi !== (n.hi !== false)) { n.hi = hi; changed = true; }
-          if (hi) anyHi = true; else anyLo = true;
-        }
-        if (changed) this._pack(g);
-        g.lod = state; g.anyHi = anyHi; g.anyLo = anyLo;
+    const shadowR = gfx.shadows ? (gfx.shadowDist || 70) * 1.45 + 10 : 0;
+    const key = `${detail}|${view}|${shadowR}`;
+    const moved = this.visAt ? Math.hypot(cam.x - this.visAt.x, cam.z - this.visAt.z) : 1e9;
+    if (!this.visDirty && moved < 16 && key === this.visKey) return;
+    this.visDirty = false; this.visKey = key; this.visAt = { x: cam.x, z: cam.z };
+    this.visP = { detail, pickR2: (160 + detail * 0.3) ** 2, view2: view * view, s2: shadowR * shadowR };
+    for (const pool of this.pools.values()) {
+      const cnt = pool.cnt = { S: 0, N: 0, L: 0 }, sets = pool.sets;
+      for (const n of pool.nodes) {
+        n.where = null; n.slot = -1;
+        if (!n.alive) continue;
+        const w = this._setFor(pool, n);
+        if (!w) continue;
+        const k = cnt[w]++;
+        n.where = w; n.slot = k;
+        for (const m of sets[w]) { m.instanceMatrix.array.set(n.mat, k * 16); if (m.instanceColor) m.instanceColor.array.set(n.tint, k * 3); }
       }
-      for (const m of g.hi) m.visible = g.anyHi !== false && (state !== 'lo');
-      for (const m of g.lo) m.visible = state !== 'hi' && g.anyLo !== false;
+      for (const w of ['S', 'N', 'L']) for (const m of sets[w]) {
+        m.count = cnt[w]; m.visible = cnt[w] > 0;
+        const a = m.instanceMatrix; a.clearUpdateRanges(); a.addUpdateRange(0, cnt[w] * 16); a.needsUpdate = true;
+        if (m.instanceColor) { const c = m.instanceColor; c.clearUpdateRanges(); c.addUpdateRange(0, cnt[w] * 3); c.needsUpdate = true; }
+      }
+    }
+  }
+  // Which set a live node is drawn in from the last visibility pass's spot, or null when out of range.
+  _setFor(pool, n) {
+    const V = this.visP, d2 = (n.x - this.visAt.x) ** 2 + (n.z - this.visAt.z) ** 2;
+    if (d2 > (pool.type === 'pick' ? V.pickR2 : V.view2)) return null;
+    const lodR = pool.type === 'tree' ? V.detail : V.detail * 0.8;
+    return pool.hasLo && d2 > lodR * lodR ? 'L' : d2 < V.s2 ? 'S' : 'N';
+  }
+  // A node that came back (respawned or moved) joins the end of its set.
+  _insert(n) {
+    if (!this.visAt) return;
+    const pool = this.pools.get(`${n.type}:${n.kind}:${n.variant}`), w = this._setFor(pool, n);
+    if (!w) return;
+    const k = pool.cnt[w]++;
+    n.where = w; n.slot = k;
+    for (const m of pool.sets[w]) {
+      m.instanceMatrix.array.set(n.mat, k * 16); m.instanceMatrix.addUpdateRange(k * 16, 16); m.instanceMatrix.needsUpdate = true;
+      if (m.instanceColor) { m.instanceColor.array.set(n.tint, k * 3); m.instanceColor.addUpdateRange(k * 3, 3); m.instanceColor.needsUpdate = true; }
+      m.count = k + 1; m.visible = true;
     }
   }
   // Ray pick of a node within reach. Returns {node, t} or null.

@@ -4,14 +4,39 @@
 import * as THREE from 'three';
 import { ITEMS, WEAR_SLOTS } from '../data/items.js';
 import { buildItemModel } from './WeaponModels.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 let M = null;
 export function setAvatarMaterials(m) { M = m; }
+let BATCH = null;   // gfx/Batcher: draws every character's parts as shared instanced batches
+export function setAvatarBatch(b) { BATCH = b; }
 const SKIN = [0xc08a64, 0xa06a48, 0x6e4430, 0xc89a78, 0x4e3022, 0xb07a58];
 const G = {};
-function geo(key, fn) { return G[key] || (G[key] = fn()); }
+// Small parts nobody can make out past a few dozen metres; gfx/Batcher skips them for far characters.
+const DETAIL = new Set(['nose', 'eye', 'hand', 'foot', 'neck', 'strap', 'slit', 'glove', 'boot', 'hoof']);
+function geo(key, fn) {
+  if (G[key]) return G[key];
+  const v = G[key] = fn();
+  if (v && v.isBufferGeometry && DETAIL.has(key.split(':').pop())) v.userData.detail = true;
+  return v;
+}
 const capsule = (r, len, k) => geo(k, () => { const g = new THREE.CapsuleGeometry(r, len, 4, 10); g.translate(0, -len / 2 - r * 0.6, 0); return g; });
 const mesh = (g, m) => { const x = new THREE.Mesh(g, m); x.castShadow = true; return x; };
+// Parts that never move relative to each other are merged into one model per material (fewer draws).
+// list: [[geometry with its offset baked in, material]] -> [[geometry, material]]
+function mergeByMat(list) {
+  const by = new Map();
+  for (const [g, m] of list) { if (!by.has(m)) by.set(m, []); by.get(m).push(g); }
+  const out = [];
+  for (const [m, gs] of by) {
+    // models made different ways (indexed or not, extra attributes) are brought to the same form first
+    const sig = x => (x.index ? 'i' : '') + Object.keys(x.attributes).sort().join();
+    const norm = x => { const n = x.index ? x.toNonIndexed() : x; for (const k of Object.keys(n.attributes)) if (!['position', 'normal', 'uv'].includes(k)) n.deleteAttribute(k); if (!n.attributes.uv) n.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(n.attributes.position.count * 2), 2)); return n; };
+    const g = gs.length === 1 ? gs[0] : mergeGeometries(gs.every(x => sig(x) === sig(gs[0])) ? gs : gs.map(norm));
+    if (g) out.push([g, m]); else for (const x of gs) out.push([x, m]);
+  }
+  return out;
+}
 const lerp = (a, b, t) => a + (b - a) * t;
 
 function torsoGeo(w, h, d, k) {
@@ -26,9 +51,28 @@ function torsoGeo(w, h, d, k) {
   });
 }
 
+// What a character holds: the item's model merged into one piece per material and built once per item,
+// so every bot holding the same gun shares it and it's drawn as one batch.
+const HELD = new Map();
+function heldModel(id) {
+  let t = HELD.get(id);
+  if (!t) {
+    const src = buildItemModel(id), list = [];
+    src.updateMatrixWorld(true);
+    src.traverse(o => { if (o.isMesh && o.visible) list.push([o.geometry.clone().applyMatrix4(o.matrixWorld), o.material]); });
+    t = { parts: mergeByMat(list), weapon: src.userData.weapon };
+    HELD.set(id, t);
+  }
+  const g = new THREE.Group();
+  for (const [geo, mat] of t.parts) g.add(new THREE.Mesh(geo, mat));
+  g.userData.weapon = t.weapon;
+  return g;
+}
+
 export class HumanoidAvatar {
   constructor(opts = {}) {
     this.root = new THREE.Group();
+    if (BATCH) BATCH.add(this.root);
     const skinCol = opts.skin ?? SKIN[Math.floor(Math.random() * SKIN.length)];
     this.skin = M.get('skin', { color: skinCol });
     this.hairMat = M.get('flat', { color: [0x2a1e14, 0x4a3420, 0x1a1a1a, 0x8a6a3a][Math.floor(Math.random() * 4)] });
@@ -126,7 +170,7 @@ export class HumanoidAvatar {
     this.heldId = id;
     while (this.hand.children.length) this.hand.remove(this.hand.children[0]);
     if (!id) return;
-    const m = buildItemModel(id);
+    const m = heldModel(id);
     m.rotation.x = -Math.PI / 2;
     m.traverse(o => { if (o.isMesh) o.castShadow = true; });
     this.hand.add(m);
@@ -201,33 +245,48 @@ export class AnimalAvatar {
   constructor(species) {
     const L = SPECIES_LOOK[species];
     this.L = L;
-    const fur = M.get('fur', { color: L.col }), dark = M.get('flat', { color: 0x1e1a16 });
+    // models are shared by every animal of a species, so they can be drawn as one batch (gfx/Batcher)
+    const cg = (k, fn) => geo(species + ':' + k, fn);
+    const fur = M.get('fur', { color: L.col }), dark = M.get('flat', { color: 0x1e1a16 }), horn = M.get('flat', { color: 0xcab89a });
     this.root = new THREE.Group();
     const body = new THREE.Group(); body.position.y = L.leg + L.h * 0.5; this.root.add(body); this.body = body;
-    const torso = mesh(new THREE.CapsuleGeometry(L.h * 0.5, L.len * 0.7, 4, 12).rotateX(Math.PI / 2), fur); torso.scale.set(L.w / L.h, 1, 1); body.add(torso);
+    const torso = mesh(cg('torso', () => new THREE.CapsuleGeometry(L.h * 0.5, L.len * 0.7, 4, 12).rotateX(Math.PI / 2).scale(L.w / L.h, 1, 1)), fur); body.add(torso);
     const neck = new THREE.Group(); neck.position.set(0, L.h * 0.25, L.len * 0.48); body.add(neck); this.neck = neck;
-    neck.add(mesh(new THREE.CapsuleGeometry(L.head * 0.55, L.neck, 3, 8).rotateX(-0.9).translate(0, L.neck * 0.35, L.neck * 0.25), fur));
+    neck.add(mesh(cg('neckA', () => new THREE.CapsuleGeometry(L.head * 0.55, L.neck, 3, 8).rotateX(-0.9).translate(0, L.neck * 0.35, L.neck * 0.25)), fur));
     const head = new THREE.Group(); head.position.set(0, L.neck * 0.75, L.neck * 0.5); neck.add(head); this.head = head;
-    head.add(mesh(new THREE.SphereGeometry(L.head, 10, 8).scale(0.85, 0.85, 1.1), fur));
-    head.add(mesh(new THREE.CylinderGeometry(L.head * 0.45, L.head * 0.6, L.head * 1.2, 8).rotateX(Math.PI / 2).translate(0, -L.head * 0.2, L.head * 1.0), fur));
-    head.add(mesh(new THREE.SphereGeometry(L.head * 0.2, 6, 6).translate(0, -L.head * 0.15, L.head * 1.6), dark));
-    for (const s of [-1, 1]) {
-      head.add(mesh(new THREE.SphereGeometry(L.head * 0.12, 6, 6).translate(s * L.head * 0.45, L.head * 0.25, L.head * 0.6), dark));
-      if (L.ears) head.add(mesh(new THREE.ConeGeometry(L.head * 0.25, L.head * 0.55, 5).translate(s * L.head * 0.5, L.head * 0.85, -L.head * 0.1), fur));
-      if (L.antler) { const a = new THREE.Group(); a.position.set(s * L.head * 0.4, L.head * 0.8, 0); head.add(a); a.add(mesh(new THREE.CylinderGeometry(0.015, 0.025, 0.45, 5).translate(0, 0.22, 0).rotateZ(-s * 0.4), M.get('flat', { color: 0xcab89a }))); a.add(mesh(new THREE.CylinderGeometry(0.01, 0.02, 0.25, 5).translate(0, 0.12, 0).rotateZ(s * 0.3).translate(-s * 0.08, 0.25, 0.05), M.get('flat', { color: 0xcab89a }))); }
-      if (L.tusk) head.add(mesh(new THREE.ConeGeometry(0.018, 0.1, 5).rotateX(-0.6).translate(s * L.head * 0.5, -L.head * 0.3, L.head * 1.3), M.get('flat', { color: 0xece6d6 })));
-    }
-    if (L.beak) head.add(mesh(new THREE.ConeGeometry(0.025, 0.07, 5).rotateX(Math.PI / 2).translate(0, -0.01, L.head * 1.6), M.get('flat', { color: 0xd8a23a })));
-    const tail = mesh(new THREE.CapsuleGeometry(Math.max(0.02, L.h * 0.12), L.tail, 3, 6).translate(0, -L.tail * 0.5, 0), fur); tail.position.set(0, L.h * 0.25, -L.len * 0.5); tail.rotation.x = -0.9; body.add(tail); this.tail = tail;
+    const ivory = M.get('flat', { color: 0xece6d6 }), beak = M.get('flat', { color: 0xd8a23a });
+    const headParts = geo(species + ':headParts', () => {
+      const list = [];
+      list.push([new THREE.SphereGeometry(L.head, 10, 8).scale(0.85, 0.85, 1.1), fur]);
+      list.push([new THREE.CylinderGeometry(L.head * 0.45, L.head * 0.6, L.head * 1.2, 8).rotateX(Math.PI / 2).translate(0, -L.head * 0.2, L.head * 1.0), fur]);
+      list.push([new THREE.SphereGeometry(L.head * 0.2, 6, 6).translate(0, -L.head * 0.15, L.head * 1.6), dark]);
+      for (const s of [-1, 1]) {
+        list.push([new THREE.SphereGeometry(L.head * 0.12, 6, 6).translate(s * L.head * 0.45, L.head * 0.25, L.head * 0.6), dark]);
+        if (L.ears) list.push([new THREE.ConeGeometry(L.head * 0.25, L.head * 0.55, 5).translate(s * L.head * 0.5, L.head * 0.85, -L.head * 0.1), fur]);
+        if (L.antler) {
+          const ox = s * L.head * 0.4, oy = L.head * 0.8;
+          list.push([new THREE.CylinderGeometry(0.015, 0.025, 0.45, 5).translate(0, 0.22, 0).rotateZ(-s * 0.4).translate(ox, oy, 0), horn]);
+          list.push([new THREE.CylinderGeometry(0.01, 0.02, 0.25, 5).translate(0, 0.12, 0).rotateZ(s * 0.3).translate(-s * 0.08, 0.25, 0.05).translate(ox, oy, 0), horn]);
+        }
+        if (L.tusk) list.push([new THREE.ConeGeometry(0.018, 0.1, 5).rotateX(-0.6).translate(s * L.head * 0.5, -L.head * 0.3, L.head * 1.3), ivory]);
+      }
+      if (L.beak) list.push([new THREE.ConeGeometry(0.025, 0.07, 5).rotateX(Math.PI / 2).translate(0, -0.01, L.head * 1.6), beak]);
+      const out = mergeByMat(list);
+      for (const [g, m] of out) if (m === dark) g.userData.detail = true;   // eyes and nose
+      return out;
+    });
+    for (const [g, m] of headParts) head.add(mesh(g, m));
+    const tail = mesh(cg('tail', () => new THREE.CapsuleGeometry(Math.max(0.02, L.h * 0.12), L.tail, 3, 6).translate(0, -L.tail * 0.5, 0)), fur); tail.position.set(0, L.h * 0.25, -L.len * 0.5); tail.rotation.x = -0.9; body.add(tail); this.tail = tail;
     this.legs = [];
     for (const [x, z] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) {
       const up = new THREE.Group(); up.position.set(x * L.w * 0.32, -L.h * 0.15, z * L.len * 0.38); body.add(up);
-      up.add(mesh(new THREE.CapsuleGeometry(L.w * 0.13, L.leg * 0.4, 3, 6).translate(0, -L.leg * 0.25, 0), fur));
+      up.add(mesh(cg('legU', () => new THREE.CapsuleGeometry(L.w * 0.13, L.leg * 0.4, 3, 6).translate(0, -L.leg * 0.25, 0)), fur));
       const lo = new THREE.Group(); lo.position.y = -L.leg * 0.5; up.add(lo);
-      lo.add(mesh(new THREE.CapsuleGeometry(L.w * 0.09, L.leg * 0.4, 3, 6).translate(0, -L.leg * 0.22, 0), fur));
-      lo.add(mesh(new THREE.BoxGeometry(L.w * 0.2, 0.04, L.w * 0.25).translate(0, -L.leg * 0.45, 0.02), dark));
+      lo.add(mesh(cg('legL', () => new THREE.CapsuleGeometry(L.w * 0.09, L.leg * 0.4, 3, 6).translate(0, -L.leg * 0.22, 0)), fur));
+      lo.add(mesh(cg('hoof', () => new THREE.BoxGeometry(L.w * 0.2, 0.04, L.w * 0.25).translate(0, -L.leg * 0.45, 0.02)), dark));
       this.legs.push({ up, lo, z });
     }
+    if (BATCH) BATCH.add(this.root);
     this.phase = Math.random() * 6; this.deathT = -1;
   }
   animate(dt, speed) {

@@ -52,7 +52,7 @@ export class AnimalSystem {
     };
     a.onDamage = (amount, info) => this.onDamage(a, amount, info);
     a.avatar = new AnimalAvatar(species);
-    a.avatar.root.position.set(x, y, z);
+    a.avatar.root.position.set(x, y, z); a.avatar.root.visible = false;   // shown once it's close (update)
     this.game.scene.add(a.avatar.root);
     this.list.push(a);
     this.game.actors.add(a);
@@ -89,7 +89,7 @@ export class AnimalSystem {
       const step = a._acc; a._acc = 0;
       this.think(a, step);
       this.move(a, step, near);
-      a.avatar.root.visible = near;
+      a.avatar.root.visible = near && (a.x - P.x) ** 2 + (a.z - P.z) ** 2 < 200 * 200;   // too small to see further out
     }
   }
   senseThreat(a) {

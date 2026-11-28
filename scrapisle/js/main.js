@@ -34,9 +34,28 @@ import { VegetationLibrary, DecorLayer } from './gfx/Vegetation.js';
 import { PostFX } from './gfx/PostFX.js';
 import { LightPool } from './gfx/LightPool.js';
 import { setMaterials } from './entities/WeaponModels.js';
-import { setAvatarMaterials } from './entities/Avatars.js';
+import { setAvatarMaterials, setAvatarBatch } from './entities/Avatars.js';
+import { Batcher } from './gfx/Batcher.js';
 
 const PENDING = 'scrapisle.pending';
+
+// three.js refreshes every object's matrices each frame, hidden ones too, and a world holds thousands
+// of hidden things (far bots, loot, deployables). This refreshes only what can be drawn. A hidden object
+// catches up the frame it's shown, since every visited object recomputes its own matrix.
+function updateVisible(o, force) {
+  if (o.matrixAutoUpdate) o.updateMatrix();
+  if (o.matrixWorldNeedsUpdate || force) {
+    if (o.parent === null) o.matrixWorld.copy(o.matrix); else o.matrixWorld.multiplyMatrices(o.parent.matrixWorld, o.matrix);
+    o.matrixWorldNeedsUpdate = false; force = true;
+  }
+  const ch = o.children;
+  for (let i = 0; i < ch.length; i++) {
+    const c = ch[i];
+    if (!c.visible) continue;
+    if (c.isCamera) c.updateMatrixWorld(force);   // cameras also keep their inverse matrix
+    else updateVisible(c, force);
+  }
+}
 
 class Game {
   constructor() {
@@ -52,6 +71,7 @@ class Game {
     this.dynScale = 1;
     this.renderer.setSize(innerWidth, innerHeight);
     this.scene = new THREE.Scene();
+    this.scene.matrixWorldAutoUpdate = false;   // the loop refreshes only what's drawn (see updateVisible)
     this.camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 2200);
     this.scene.add(this.camera);
     addEventListener('resize', () => { this.camera.aspect = innerWidth / innerHeight; this.camera.updateProjectionMatrix(); this.renderer.setSize(innerWidth, innerHeight); if (this.post) this.post.setSize(innerWidth, innerHeight); });
@@ -148,6 +168,7 @@ class Game {
     await this.tex.generate(ALL_TEXTURES, async () => { ti++; if (ti % 3 === 0) await this.step(`Painting textures (${ti} of ${ALL_TEXTURES.length})…`); });
     this.mats = new MaterialLibrary(this.tex, !!g.cheap);
     setMaterials(this.mats); setAvatarMaterials(this.mats);
+    this.batch = new Batcher(this.scene); setAvatarBatch(this.batch);   // characters, loot and deployables drawn as instanced batches
     await this.step('Shaping the island…');
     this.world = new World(cfg.seed, cfg.size, cfg.layout || 1);
     this.physics = new Physics(this.world);
@@ -164,6 +185,7 @@ class Game {
     this.loot = new LootSystem(this); this.loot.init(this.world, mons);
     this.build = new BuildingSystem(this);
     this.deploy = new Deployables(this);
+    this.batch.addGroup(this.loot.group); this.batch.addGroup(this.deploy.group);
     this.crafting = new CraftingSystem(this);
     this.combat = new CombatSystem(this);
     this.surv = new SurvivalSystem(this);
@@ -310,7 +332,7 @@ class Game {
   loop(t) {
     requestAnimationFrame(tt => this.loop(tt));
     const dt = Math.min(0.05, (t - this.last) / 1000); this.last = t;
-    if (!this.running) { this.renderer.render(this.scene, this.camera); return; }
+    if (!this.running) { updateVisible(this.scene, false); this.renderer.render(this.scene, this.camera); return; }
     const paused = !document.getElementById('pauseScreen').hidden || !document.getElementById('settingsScreen').hidden;
     const P = this.player;
     if (!paused) {
@@ -333,6 +355,8 @@ class Game {
     const cb = document.getElementById('clickBox');
     const wantClick = P.alive && !this.controls.locked && !this.ui.isOpen() && paused === false && document.getElementById('deathScreen').hidden && document.getElementById('pauseScreen').hidden;
     if (cb.hidden === wantClick) cb.hidden = !wantClick;
+    updateVisible(this.scene, false);
+    this.batch.update(cp, this.gfx.shadows ? (this.gfx.shadowDist || 70) * 1.45 + 5 : 0);
     if (this.post && this.post.enabled && this.post.ready) this.post.render(); else this.renderer.render(this.scene, this.camera);
   }
   // Small things far away aren't drawn: loot containers, bags and drops past ~140 m, deployables

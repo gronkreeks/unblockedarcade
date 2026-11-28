@@ -65,6 +65,7 @@ export class MaterialLibrary {
       m = new THREE.MeshLambertMaterial(q);
     } else m = new THREE.MeshStandardMaterial(p);
     m.userData.key = key;
+    m.userData.base = key + (opts.vc ? ':vc' : '') + (opts.repeat ? ':r' + opts.repeat : '');   // same look but for the colour (gfx/Batcher tints per instance)
     if (d.wind || opts.wind) this.addWind(m, opts.windStrength ?? (key === 'blades' ? 1 : 0.6));
     this.cache.set(ck, m);
     return m;

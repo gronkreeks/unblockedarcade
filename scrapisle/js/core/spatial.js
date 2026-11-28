@@ -38,9 +38,23 @@ export class SpatialHash {
     this.query(x, z, r, o => { const dx = o.x - x, dz = o.z - z; if (dx * dx + dz * dz <= r2 && (!filter || filter(o))) out.push(o); });
     return out;
   }
+  // Searches outward ring by ring and stops once nothing further out can be closer, so a match next
+  // door costs a few cells instead of the whole square (bots look for trees and ore up to 700 m away).
   nearest(x, z, r, filter) {
+    const c = this.cell, cx0 = Math.floor(x / c), cz0 = Math.floor(z / c), last = Math.ceil(r / c) + 1;
     let best = null, bd = r * r;
-    this.query(x, z, r, o => { const dx = o.x - x, dz = o.z - z; const d = dx * dx + dz * dz; if (d < bd && (!filter || filter(o))) { bd = d; best = o; } });
+    const scan = (cx, cz) => {
+      const b = this.map.get(this._key(cx, cz));
+      if (!b) return;
+      for (let i = 0; i < b.length; i++) { const o = b[i], dx = o.x - x, dz = o.z - z, d = dx * dx + dz * dz; if (d < bd && (!filter || filter(o))) { bd = d; best = o; } }
+    };
+    scan(cx0, cz0);
+    for (let k = 1; k <= last; k++) {
+      const near = (k - 1) * c;   // every cell in this ring is at least this far away
+      if (near * near > bd) break;
+      for (let cx = cx0 - k; cx <= cx0 + k; cx++) { scan(cx, cz0 - k); scan(cx, cz0 + k); }
+      for (let cz = cz0 - k + 1; cz <= cz0 + k - 1; cz++) { scan(cx0 - k, cz); scan(cx0 + k, cz); }
+    }
     return best;
   }
   clear() { this.map.clear(); this.where.clear(); }

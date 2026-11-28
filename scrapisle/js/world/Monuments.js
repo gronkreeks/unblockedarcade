@@ -1,5 +1,6 @@
 // Monument layouts: geometry, colliders, loot spawn points, recyclers, militia posts and radiation zones.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GeoBuilder } from './geo.js';
 import { mulberry32 } from '../core/util.js';
 
@@ -335,6 +336,20 @@ export function buildMonuments(world, scene, physics, mats) {
     const b = new MonBuilder(m, physics, mats, world);
     LAYOUTS[m.type](b);
     out.push(b.finish(scene));
+  }
+  // All monuments together are only a few thousand triangles: one mesh per material for the whole
+  // island draws them in a handful of calls instead of five or so per monument.
+  const by = new Map();
+  for (const md of out) for (const mesh of md.meshes) { const k = mesh.material.id + (mesh.castShadow ? 's' : '') + (mesh.receiveShadow ? 'r' : ''); if (!by.has(k)) by.set(k, []); by.get(k).push(mesh); }
+  for (const list of by.values()) {
+    if (list.length < 2) continue;
+    for (const m of list) m.updateMatrixWorld(true);
+    const g = mergeGeometries(list.map(m => m.geometry.clone().applyMatrix4(m.matrixWorld)));
+    if (!g) continue;
+    const merged = new THREE.Mesh(g, list[0].material);
+    merged.castShadow = list[0].castShadow; merged.receiveShadow = list[0].receiveShadow;
+    for (const m of list) { scene.remove(m); m.geometry.dispose(); }
+    scene.add(merged);
   }
   return out;
 }
