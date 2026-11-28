@@ -87,6 +87,15 @@ export class UIManager {
     $('psSettings').onclick = () => { this.settingsBack = 'pauseScreen'; this.showSettings(); };
     $('psQuit').onclick = async () => { await this.game.saveGame(true); this.game.quitToMenu(); };
     $('psMap').onclick = () => { this.hideScreens(); this.openMap(); };
+    // Respawn on purpose (to wake up at a sleeping bag or bed): asks once, then you die where you
+    // stand and drop everything in a bag, like any death.
+    $('psRespawn').onclick = () => {
+      const G = this.game, P = this.P;
+      if (!P || !P.alive) return;
+      if (!this.respawnAsk) { this.respawnAsk = true; $('psRespawn').textContent = 'Click again to respawn (you drop everything you carry)'; return; }
+      this.respawnAsk = false; $('psRespawn').textContent = 'Respawn';
+      G.combat.kill(P, { type: 'respawn' });
+    };
     // fullscreen also locks the keyboard to the game, so crouch-walking (Ctrl+W) can't close the tab
     // fullscreen is on by default; leaving it here keeps it off until you switch it back on
     const fsLabel = () => { $('psFull').textContent = document.fullscreenElement ? 'Leave fullscreen' : 'Fullscreen'; };
@@ -152,6 +161,7 @@ export class UIManager {
   showPause() {
     if (!this.game.running || !this.P) return;
     this.showScreen('pauseScreen'); $('psMsg').textContent = '';
+    this.respawnAsk = false; $('psRespawn').textContent = 'Respawn';
     const P = this.P;
     $('psInfo').textContent = `Day ${this.game.env.day}, ${this.game.env.clock()}. You have ${P.kills} kills and ${P.deaths} deaths.`;
   }
@@ -760,6 +770,7 @@ export class UIManager {
     else if (killer && killer.kind === 'animal') cause = `You were killed by a ${killer.species}.`;
     else if (info.info && info.info.cause) cause = `You died of ${info.info.cause}.`;
     else if (info.info && info.info.type === 'fall') cause = 'You died from a fall.';
+    else if (info.info && info.info.type === 'respawn') cause = 'You chose to respawn.';
     this.showScreen('deathScreen');
     $('dsCause').innerHTML = /<b /.test(cause) ? cause : esc(cause);
     const draw = () => {

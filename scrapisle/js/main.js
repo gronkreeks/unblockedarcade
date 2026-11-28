@@ -287,7 +287,7 @@ class Game {
         this.deathSpot = { x: this.player.x, z: this.player.z };
         this.ui.showDeath(e);
         const tier = e.killer && e.killer.ai ? ` (${e.killer.ai.tier.toUpperCase()})` : '';
-        this.logEvent(e.killer && e.killer.name ? `${e.killer.name}${tier} killed you` : 'You died');
+        this.logEvent(e.killer && e.killer.name ? `${e.killer.name}${tier} killed you` : e.info && e.info.type === 'respawn' ? 'You respawned' : 'You died');
       } else if (e.killer === this.player && e.victim.kind === 'survivor') this.ui.toastHTML(`You killed ${this.ui.esc(e.victim.name)}${this.ui.tierTag(e.victim)}`);
       else if (e.victim.kind === 'survivor' && e.killer && e.killer.kind === 'survivor' && Math.random() < 0.05) this.logEvent(`${e.killer.name} killed ${e.victim.name}`);
     });
