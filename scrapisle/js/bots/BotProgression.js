@@ -125,8 +125,19 @@ export class BotProgression {
     if (bench >= 1 && this.bestGun(b) && ITEMS[this.bestGun(b).id].type === 'gun' && b.inv.count('barricade') < 1) want('barricade', 2, 'ammo');
     // raid tech: the leader works toward a rocket launcher once the clan has a level 2 bench
     if (team && bench >= 2 && prog.scrap >= 300 && this.game.teams.leader(team) === b && !this.game.teams.membersOf(team).some(m => m.inv.count('rocket_launcher') > 0) && prog.stash('rocket_launcher') === 0) want('rocket_launcher', 1, 'raid');
+    // ammo duty: when the clan's guns are short of rounds, about a third of the members (always the
+    // same ones) farm sulfur, make gunpowder and craft ammunition before anything else
+    if (team && prog.st) {
+      const am = this.ammoStatus(team, prog);
+      const short = Object.keys(am.need).filter(a => am.have[a] < am.need[a] * 0.6 && RECIPE[a]);
+      if (short.length) {
+        const crew = this.game.teams.alive(team).slice().sort((x, y) => x.id.localeCompare(y.id));
+        const duty = crew.slice(0, Math.max(1, Math.ceil(crew.length / 3)));
+        if (duty.includes(b)) want(short[0], Math.min(120, am.need[short[0]] - am.have[short[0]] + 20), 'race');
+      }
+    }
     // ammo for whatever gun they carry
-    const g = this.bestGun(b);
+    const g = this.ownedGun(b);
     if (g) { const d = ITEMS[g.id]; const at = d.ammo.find(a => RECIPE[a]) || d.ammo[0]; const target = d.type === 'bow' ? 24 : Math.max(20, d.mag * 3); if (b.inv.count(at) + (g.ammo || 0) < target) want(at, target, 'ammo'); }
     return this.order(W);
   }
@@ -143,10 +154,27 @@ export class BotProgression {
     for (const s of [...b.inv.belt.slots, ...b.inv.main.slots]) { if (!s) continue; const d = ITEMS[s.id]; if (!d.dmg) continue; if (s.c !== undefined && s.c <= 0) continue; const sc = weaponScore(s.id) * ((d.type === 'gun' || d.type === 'bow') ? (b.inv.count(s.at) + (s.ammo || 0) > 0 ? 1 : 0.15) : 1); if (sc > bs) { bs = sc; best = s; } }
     return best ? best.id : null;
   }
-  bestGun(b) {
+  // Best ranged weapon the bot can actually shoot (ammo carried or loaded). ownedGun ignores ammo.
+  bestGun(b, ignoreAmmo = false) {
     let best = null, bs = 0;
-    for (const s of [...b.inv.belt.slots, ...b.inv.main.slots]) { if (!s) continue; const d = ITEMS[s.id]; if (d.type !== 'gun' && d.type !== 'bow') continue; if (s.c !== undefined && s.c <= 0) continue; const sc = weaponScore(s.id); if (sc > bs) { bs = sc; best = s; } }
+    for (const s of [...b.inv.belt.slots, ...b.inv.main.slots]) {
+      if (!s) continue; const d = ITEMS[s.id]; if (d.type !== 'gun' && d.type !== 'bow') continue; if (s.c !== undefined && s.c <= 0) continue;
+      if (!ignoreAmmo && (s.ammo || 0) <= 0 && !d.ammo.some(a => b.inv.count(a) > 0)) continue;
+      const sc = weaponScore(s.id); if (sc > bs) { bs = sc; best = s; }
+    }
     return best;
+  }
+  ownedGun(b) { return this.bestGun(b, true); }
+  ammoFor(id) { const d = ITEMS[id]; return d && d.ammo ? (d.ammo.find(a => RECIPE[a]) || d.ammo[0]) : null; }
+  // Ammo the clan has against what its guns need (carried + stored). Cached with the progress snapshot.
+  ammoStatus(team, prog) {
+    if (prog._ammo) return prog._ammo;
+    const G = this.game, need = {}, have = {};
+    const addGun = (id) => { const d = ITEMS[id]; if (!d || d.type !== 'gun') return; const a = this.ammoFor(id); if (a) need[a] = (need[a] || 0) + Math.max(30, d.mag * 4); };
+    for (const m of G.teams.membersOf(team)) for (const sl of [...m.inv.belt.slots, ...m.inv.main.slots]) if (sl) addGun(sl.id);
+    for (const bx of prog.boxes) for (const sl of bx.cont.slots) if (sl) addGun(sl.id);
+    for (const a in need) { have[a] = prog.stash(a); for (const m of G.teams.membersOf(team)) have[a] += m.inv.count(a); }
+    return (prog._ammo = { need, have });
   }
 
   // Resolve "get n of id" into the next concrete activity. Returns activity or null if satisfied.
@@ -157,6 +185,11 @@ export class BotProgression {
     const have = b.inv.count(id) + (depth === 0 ? b.inv.wear.count(id) : 0) + this.game.crafting.queuedCount(b, id);
     if (have >= n) return null;
     const need = n - have;
+    // a gun in the box stays there until there are rounds for it: make the ammo first
+    if (ITEMS[id] && ITEMS[id].type === 'gun' && prog.st && prog.stash(id) > 0) {
+      const a = this.ammoFor(id), rounds = a ? b.inv.count(a) + prog.stash(a) : 0;
+      if (a && rounds < ITEMS[id].mag * 2) return this.resolve(b, prog, a, ITEMS[id].mag * 3, depth + 1) || { a: 'withdraw', items: { [id]: 1 } };
+    }
     // in the stash?
     if (prog.st && prog.stash(id) > 0) return { a: 'withdraw', items: { [id]: Math.min(need, prog.stash(id)) } };
     // low grade fuel: barrels drop it too, so not everyone has to go hunting for fat

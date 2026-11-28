@@ -2,6 +2,7 @@
 // Every action goes through the same systems the player uses.
 import { ITEMS, weaponScore } from '../data/items.js';
 import { RECIPE } from '../data/recipes.js';
+import { sortContainer } from '../systems/InventorySystem.js';
 import { PERSONALITIES, styleOf } from './BotProfiles.js';
 import { recycleYield } from '../systems/Deployables.js';
 import * as Recoil from '../systems/Recoil.js';
@@ -712,6 +713,34 @@ export class BotAI {
     if (Object.values(t.items).some(v => v > 0) && conts.length > 1) return;
     return 'done';
   }
+  // Like a player sorting their base: throw out what the clan has outgrown (stone tools once metal
+  // ones exist, spears and pipe pistols once they have real guns, spare cloth clothes, rocks and
+  // torches) into a bag outside, then sort what's left.
+  tidyBase(team, prog) {
+    const G = this.game;
+    const has = (ids) => ids.some(id => prog.stash(id) > 0 || G.teams.membersOf(team).some(m => m.inv.count(id) > 0));
+    const realGun = has(['revolver', 'double_barrel', 'semi_pistol', 'pump_shotgun', 'drum_smg', 'scrap_smg', 'semi_rifle', 'assault_rifle', 'bolt_rifle']);
+    const keep = { hunting_bow: Math.max(1, G.teams.alive(team).length), wooden_arrow: 400, cloth_shirt: 1, cloth_pants: 1, cloth_hood: 1 };
+    const junk = (id, seen) => {
+      if (id === 'rock' || id === 'torch') return true;
+      if ((id === 'stone_hatchet' && has(['hatchet', 'salvaged_axe'])) || (id === 'stone_pickaxe' && has(['pickaxe', 'salvaged_icepick']))) return true;
+      if (realGun && ['wooden_spear', 'stone_spear', 'bone_knife', 'pipe_pistol', 'handmade_shell'].includes(id)) return true;
+      if (prog.bench >= 2 && ['cloth_shirt', 'cloth_pants', 'cloth_hood', 'bone_helmet', 'wood_chest'].includes(id)) return true;
+      if (keep[id] !== undefined && seen > keep[id]) return true;
+      return false;
+    };
+    const thrown = [], seen = {};
+    for (const bx of prog.boxes) {
+      for (let i = 0; i < bx.cont.size; i++) {
+        const sl = bx.cont.slots[i]; if (!sl) continue;
+        seen[sl.id] = (seen[sl.id] || 0) + sl.n;
+        if (junk(sl.id, seen[sl.id])) { thrown.push(sl); bx.cont.slots[i] = null; }
+      }
+      sortContainer(bx.cont);
+    }
+    if (thrown.length && prog.st) { const z = G.build.zoneOf(prog.st); G.loot.spawnBag(z.x + z.r + 2, G.world.heightAt(z.x + z.r + 2, z.z) + 0.5, z.z, thrown, 'Thrown out', 300); }
+    return thrown.length;
+  }
   t_deposit(b, t, dt, mode) {
     const conts = this.baseContainers(b).filter(d => d.type !== 'furnace' && d.cont.emptyCount() > 0);
     if (!conts.length) return 'done';
@@ -736,6 +765,8 @@ export class BotAI {
     b.inv.main.touch();
     if (fur && fur.cont.count('wood') < 40 && c.cont.count('wood') > 0) { const k = Math.min(100, c.cont.count('wood')); c.cont.remove('wood', k); fur.cont.add('wood', k); }
     if (fur && !fur.on && fur.cont.count('wood') > 0 && fur.cont.slots.some(s => s && (ITEMS[s.id].smelt || ITEMS[s.id].cooks))) this.game.deploy.toggle(fur);
+    // every so often, whoever drops stuff off also tidies the boxes
+    if (team && this.game.now - (team.tidyT || 0) > 120) { team.tidyT = this.game.now; this.tidyBase(team, this.mgr.progressOf(team)); }
     return 'done';
   }
   t_stocktc(b, t, dt, mode) {
@@ -748,7 +779,12 @@ export class BotAI {
   }
   t_smelt(b, t, dt, mode) {
     const team = this.game.teams.of(b), prog = this.mgr.progressOf(team);
-    const f = prog.furnace; if (!f) return 'fail';
+    // with several furnaces, use the one with the least ore in it (pick once per trip)
+    if (!t.f || !this.game.deploy.list.includes(t.f)) {
+      const fs = prog.deps.filter(d => d.type === 'furnace');
+      t.f = fs.sort((a, c) => (a.cont.count('metal_ore') + a.cont.count('sulfur_ore') + a.cont.count('hqm_ore')) - (c.cont.count('metal_ore') + c.cont.count('sulfur_ore') + c.cont.count('hqm_ore')))[0] || null;
+    }
+    const f = t.f; if (!f) return 'fail';
     if (!this.goTo(b, f.x, f.z, dt, mode, 1.8)) return;
     const G = this.game;
     // take finished output

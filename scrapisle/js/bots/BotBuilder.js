@@ -49,7 +49,7 @@ export function buildTemplate(name) {
   const bagSpots = T.airlock
     ? [{ x: (ai + 0.5) * CELL, z: (aj + 0.5) * CELL }, { x: Wm / 2, z: Dm / 2 }, { x: Wm / 2 + 1, z: Dm / 2 - 1 }, { x: Wm / 2 - 1, z: Dm / 2 + 0.8 }]
     : [{ x: 1.5, z: 1.1 }, { x: 1.0, z: 1.6 }, { x: 2.0, z: 1.6 }, { x: 1.5, z: 2.0 }];
-  return { name, cells, walls, floors: cells.map(([i, j]) => ({ i, j })), doorways: [...doorways], airlock: T.airlock, slots, bagSpots, Wm, Dm };
+  return { name, cells, walls, floors: cells.map(([i, j]) => ({ i, j })), doorways: [...doorways], airlock: T.airlock, slots, bagSpots, Wm, Dm, doorX };
 }
 const TPL_CACHE = {};
 export const tpl = (n) => TPL_CACHE[n] || (TPL_CACHE[n] = buildTemplate(n));
@@ -206,6 +206,10 @@ export class BotBuilder {
       if (!this.has(st, 'furnace')) want.push(['furnace', 0]);
       if (bags < Math.min(team.size, 4)) want.push(['bag']);
       if (team.style === 'turtle' && boxN < Y.boxes && prog.boxSpace < 12) want.push([prog.knows('large_box') && prog.bench >= 1 ? 'large_box' : 'wood_box', 0]);
+      // more furnaces to boom once ore piles up (a player runs several at once)
+      const furnaces = this.count(st, 'furnace'), ore = prog.stash('metal_ore') + prog.stash('sulfur_ore') + prog.stash('hqm_ore');
+      const maxF = { hut: 1, small: 2, medium: 3, large: 4 }[base.template] || 1;
+      if (furnaces >= 1 && furnaces < maxF && (ore > 400 * furnaces || (prog.bench >= 2 && furnaces < 2))) want.push(['furnace', 0]);
       if (!this.has(st, 'workbench1')) want.push(['workbench1', 1]);
       if (prog.boxSpace < 6 && this.count(st, 'large_box') < Y.boxes && prog.knows('large_box')) want.push(['large_box', 1]);
       if (!this.has(st, 'research_table') && prog.bench >= 1 && prog.knows('research_table')) want.push(['research_table', 1]);
@@ -260,22 +264,45 @@ export class BotBuilder {
     if (slot.wall === 'right') return { x: T.Wm - hz - gap, z: clampA(slot.z, T.Dm) };
     return { x: hz + gap, z: clampA(slot.z, T.Dm) };
   }
+  // Keep the way in clear: nothing goes in the lane from the inner door into the room
+  // (about 1.3 m wide, and only half the room deep so small huts still fit their furniture).
+  _inWalkway(T, lx, lz, yaw, type) {
+    const D = DEPLOYABLES[type], c = Math.cos(yaw), s = Math.sin(yaw);
+    const ex = Math.abs(D.size[0] * c) + Math.abs(D.size[2] * s), ez = Math.abs(D.size[0] * s) + Math.abs(D.size[2] * c);
+    const depth = Math.min(2.2, T.Dm * 0.53);
+    return Math.abs(lx - T.doorX) < 0.65 + ex && lz - ez < depth && lz + ez > 0;
+  }
+  // Where things go, like a player lays out a base: the cabinet tucked in the back, boxes along the
+  // back wall, furnaces and benches on the side walls away from the door.
+  _slotOrder(T, type) {
+    const pref = { claim_cabinet: ['back', 'right', 'left'], wood_box: ['back', 'left', 'right'], large_box: ['back', 'left', 'right'], furnace: ['right', 'left', 'back'],
+      workbench1: ['left', 'right', 'back'], workbench2: ['left', 'right', 'back'], workbench3: ['left', 'right', 'back'], research_table: ['back', 'left', 'right'] }[type] || ['back', 'left', 'right', 'front'];
+    const rank = (sl) => { const w = pref.indexOf(sl.wall); return (w < 0 ? 9 : w) * 100 - (sl.wall === 'back' ? Math.abs(sl.x - T.doorX) : sl.z) ; };
+    return T.slots.slice().sort((a, b) => rank(a) - rank(b));
+  }
   _deployStep(team, st, T, type, tier) {
     this._wantedDeploy = true;
     const D = DEPLOYABLES[type];
-    if (2 * D.size[0] + 0.34 <= Math.min(T.Wm, T.Dm)) for (const slot of T.slots) {
+    if (2 * D.size[0] + 0.34 <= Math.min(T.Wm, T.Dm)) for (const slot of this._slotOrder(T, type)) {
       const f = this._fitSlot(slot, T, type);
+      if (T.doorX !== undefined && this._inWalkway(T, f.x, f.z, slot.yaw, type)) continue;
       const w = this.game.build.toWorld(st, f.x, FOUND_H, f.z);
       if (!this.game.deploy.supportAt(w.x, w.y, w.z)) continue;   // that part of the floor was never built
       if (this.game.deploy.check(team.id, type, w.x, w.y, w.z, st.yaw + slot.yaw)) continue;
       this._wantedDeploy = false;
       return { kind: 'deploy', item: type, x: w.x, y: w.y, z: w.z, yaw: st.yaw + slot.yaw, tier, cost: {} };
     }
-    // fallback: anywhere on a built foundation
-    for (const p of st.pieces.values()) {
-      if (p.type !== 'foundation') continue;
-      for (const [ox, oz] of [[0, 0], [-0.7, -0.7], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7]]) for (const yo of [0, Math.PI / 2]) {
-        const w = this.game.build.toWorld(st, (p.i + 0.5) * CELL + ox, FOUND_H, (p.j + 0.5) * CELL + oz);
+    // fallback: on a built foundation, cells against the outer walls first, the middle of the room last
+    const fnds = [...st.pieces.values()].filter(p => p.type === 'foundation');
+    const inner = (p) => [[1, 0], [-1, 0], [0, 1], [0, -1]].every(([a, c]) => st.pieces.has(`c:${p.i + a},${p.j + c},0`));
+    fnds.sort((a, c) => inner(a) - inner(c));
+    for (const p of fnds) {
+      const out = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([a, c]) => !st.pieces.has(`c:${p.i + a},${p.j + c},0`));
+      const offs = out.map(([a, c]) => [a * 0.75, c * 0.75]).concat([[0, 0], [-0.7, -0.7], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7]]);
+      for (const [ox, oz] of offs) for (const yo of [0, Math.PI / 2]) {
+        const lx = (p.i + 0.5) * CELL + ox, lz = (p.j + 0.5) * CELL + oz;
+        if (T.doorX !== undefined && p.j >= 0 && this._inWalkway(T, lx, lz, yo, type)) continue;
+        const w = this.game.build.toWorld(st, lx, FOUND_H, lz);
         if (this.game.deploy.check(team.id, type, w.x, w.y, w.z, st.yaw + yo)) continue;
         this._wantedDeploy = false;
         return { kind: 'deploy', item: type, x: w.x, y: w.y, z: w.z, yaw: st.yaw + yo, tier, cost: {} };
