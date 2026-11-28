@@ -61,6 +61,7 @@ export const DEPLOYABLES = {
   workbench2: { name: 'Workbench Level 2', hp: 750, size: [1, 0.55, 0.55], slots: 0, bench: 2, color: 0x8f969e, dmg: { melee: 0.1, bullet: 0.02, explosive: 1 } },
   workbench3: { name: 'Workbench Level 3', hp: 1000, size: [1.1, 0.6, 0.6], slots: 0, bench: 3, color: 0x4a6b8a, dmg: { melee: 0.05, bullet: 0.01, explosive: 1 } },
   research_table: { name: 'Research Table', hp: 300, size: [0.8, 0.45, 0.45], slots: 2, color: 0x5b8fd6, dmg: { melee: 0.3, bullet: 0.05, explosive: 1 } },
+  candle: { name: 'Candle', hp: 20, size: [0.06, 0.1, 0.06], slots: 0, solid: false, color: 0xefe4c4, dmg: { melee: 1, bullet: 1, explosive: 1 } },
   sleeping_bag: { name: 'Sleeping Bag', hp: 50, size: [0.45, 0.06, 1], slots: 0, solid: false, spawn: true, color: 0x5a7a3a, dmg: { melee: 1, bullet: 0.5, explosive: 1 } },
   bed: { name: 'Bed', hp: 200, size: [0.55, 0.25, 1.1], slots: 0, spawn: true, color: 0x3a5a7a, dmg: { melee: 0.5, bullet: 0.2, explosive: 1 } },
   claim_cabinet: { name: 'Claim Cabinet', hp: 500, size: [0.45, 0.9, 0.3], slots: 24, color: 0x7a5130, dmg: { melee: 0.2, bullet: 0.05, explosive: 1 } },

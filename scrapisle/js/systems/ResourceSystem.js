@@ -43,6 +43,8 @@ export class ResourceSystem {
     for (const h of W.spawns.hemp) add('pick', 'hemp', h.x, h.z, 0, 1);
     for (const p of W.spawns.pickups) add('pick', p.kind, p.x, p.z, (p.x * 13) % 6, 1);
     for (const h of W.spawns.hemp2 || []) add('pick', 'hemp', h.x, h.z, 0, 1);
+    for (const o of W.spawns.nodes2 || []) add('ore', o.kind, o.x, o.z, o.r, 1);
+    for (const p of W.spawns.pickups2 || []) add('pick', p.kind, p.x, p.z, (p.x * 13) % 6, 1);
     // instanced meshes per kind + variant per chunk, with a detailed and a coarse version
     const V = this.game.veg;
     for (const n of this.nodes) {

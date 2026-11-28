@@ -534,5 +534,32 @@ export class World {
       const b = this.biomeAt(x, z);
       if ((b === BIOME.GRASS && r2() < 0.45) || (b === BIOME.FOREST && r2() < 0.35) || (b === BIOME.BEACH && r2() < 0.08)) S.hemp2.push({ x, z });
     }
+    // More ore nodes and loose piles everywhere, extra on flat open ground. Own random stream and lists
+    // (appended after the older ones), so saved worlds keep their node numbering and just gain these.
+    S.nodes2 = []; S.pickups2 = [];
+    const r3 = mulberry32((this.seed ^ 0x7a11d) >>> 0);
+    for (let t = 0; t < 12000 * area; t++) {
+      const x = (r3() * 2 - 1) * half, z = (r3() * 2 - 1) * half;
+      if (!this._okSpawn(x, z, 4)) continue;
+      const b = this.biomeAt(x, z), sl = this.slopeAt(x, z);
+      if (sl > 0.4) continue;
+      const flat = sl < 0.12 ? 1.8 : 1;
+      const dens = { [BIOME.ROCK]: 0.3, [BIOME.SNOW]: 0.2, [BIOME.DESERT]: 0.18, [BIOME.FOREST]: 0.07, [BIOME.GRASS]: 0.12, [BIOME.BEACH]: 0.05 }[b] || 0;
+      if (r3() > dens * flat) continue;
+      const w = b === BIOME.SNOW ? [['stone', 3], ['metal', 5], ['sulfur', 2]] : b === BIOME.DESERT ? [['stone', 3], ['metal', 2], ['sulfur', 5]]
+        : b === BIOME.ROCK ? [['stone', 4], ['metal', 3], ['sulfur', 3]] : [['stone', 5], ['metal', 3], ['sulfur', 2]];
+      let rr = r3() * w.reduce((a, e) => a + e[1], 0), kind = 'stone';
+      for (const e of w) { rr -= e[1]; if (rr <= 0) { kind = e[0]; break; } }
+      S.nodes2.push({ x, z, kind, r: r3() * Math.PI * 2 });
+    }
+    for (let t = 0; t < 3000 * area; t++) {
+      const x = (r3() * 2 - 1) * half, z = (r3() * 2 - 1) * half;
+      if (!this._okSpawn(x, z, 2) || this.slopeAt(x, z) > 0.25) continue;
+      const b = this.biomeAt(x, z), q = r3();
+      const kind = b === BIOME.GRASS || b === BIOME.FOREST ? (q < 0.45 ? 'stone_pile' : q < 0.7 ? 'metal_pile' : q < 0.85 ? 'sulfur_pile' : 'wood_pile')
+        : b === BIOME.ROCK || b === BIOME.SNOW ? (q < 0.4 ? 'stone_pile' : q < 0.7 ? 'metal_pile' : 'sulfur_pile')
+        : b === BIOME.DESERT ? (q < 0.5 ? 'sulfur_pile' : 'stone_pile') : b === BIOME.BEACH && q < 0.4 ? 'stone_pile' : null;
+      if (kind) S.pickups2.push({ x, z, kind });
+    }
   }
 }

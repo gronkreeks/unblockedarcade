@@ -138,6 +138,7 @@ dep('wood_box', 'Wooden Box', { deploy: 'wood_box', color: '#9a6b3f', value: 3 }
 dep('large_box', 'Large Wood Box', { deploy: 'large_box', color: '#7a5130', value: 8 });
 dep('furnace', 'Furnace', { deploy: 'furnace', icon: 'furnace', color: '#8d8d8d', value: 6 });
 dep('campfire', 'Campfire', { deploy: 'campfire', icon: 'fire', color: '#e08b2a', value: 1, stack: 1 });
+dep('candle', 'Candle', { deploy: 'candle', icon: 'candle', color: '#efe4c4', value: 1, stack: 10 });
 dep('workbench1', 'Workbench Level 1', { deploy: 'workbench1', icon: 'bench', color: '#9a6b3f', value: 60 });
 dep('workbench2', 'Workbench Level 2', { deploy: 'workbench2', icon: 'bench', color: '#8f969e', value: 600 });
 dep('workbench3', 'Workbench Level 3', { deploy: 'workbench3', icon: 'bench', color: '#4a6b8a', value: 1500 });

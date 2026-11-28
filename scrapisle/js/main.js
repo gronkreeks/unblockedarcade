@@ -32,6 +32,7 @@ import { PRESETS, detectPreset, resolve as resolveGfx } from './gfx/GraphicsSett
 import { Particles } from './gfx/Particles.js';
 import { VegetationLibrary, DecorLayer } from './gfx/Vegetation.js';
 import { PostFX } from './gfx/PostFX.js';
+import { LightPool } from './gfx/LightPool.js';
 import { setMaterials } from './entities/WeaponModels.js';
 import { setAvatarMaterials } from './entities/Avatars.js';
 
@@ -208,6 +209,7 @@ class Game {
     this.camera.position.set(this.player.x, this.player.y + 1.6, this.player.z);
     updateTerrainLOD(this.terrain, this.camera.position, 99);
     this.decor = new DecorLayer(this, this.veg, g);
+    this.lightPool = new LightPool(this, g.shadows === false ? 4 : 8);   // campfires, furnaces, candles, torches
     if (g.ao) this.post = new PostFX(this);
     this.applyGraphics();
     this.ui.hideScreens();
@@ -317,6 +319,7 @@ class Game {
     const cp = this.camera.position;
     this.camera.updateMatrixWorld(); this.audio.listen(this.camera);   // 3D sound follows your view
     this.env.update(cp, this);
+    this.lightPool.update(cp);
     updateTerrainLOD(this.terrain, cp, 1);
     this.decor.update(cp);
     this.fx.update(dt, cp, this.env);

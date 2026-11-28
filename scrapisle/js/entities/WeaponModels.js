@@ -4,6 +4,8 @@
 // barrels, string, arrow, muzzle (empty marker), lh (left hand marker), sight (eye height above origin).
 import * as THREE from 'three';
 import { ITEMS } from '../data/items.js';
+const FLAME_OUT = new THREE.MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.85, depthWrite: false });
+const FLAME_IN = new THREE.MeshBasicMaterial({ color: 0xffe08a });
 
 let M = null; // material library, set by setMaterials
 export function setMaterials(m) { M = m; }
@@ -253,7 +255,11 @@ const TOOLS = {
   torch(g) {
     handle(g, 0.45);
     g.add(part(cyl(0.028, 0.024, 0.08, 10), mat('cloth', 0x5a4a3a), 0, 0, -0.36));
-    const f = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.12, 8).rotateX(-Math.PI / 2), mat('emissive')); f.name = 'flame'; f.position.set(0, 0, -0.45); g.add(f);
+    // flame: an orange outer cone around a yellow core, unlit so it glows at night
+    const f = new THREE.Group(); f.name = 'flame'; f.position.set(0, 0, -0.47);
+    f.add(new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.2, 9).rotateX(-Math.PI / 2), FLAME_OUT));
+    const core = new THREE.Mesh(new THREE.ConeGeometry(0.028, 0.12, 8).rotateX(-Math.PI / 2), FLAME_IN); core.position.z = 0.02; f.add(core);
+    g.add(f);
   },
   stone_hatchet(g) { handle(g, 0.5); const h = new THREE.Mesh(rockGeo(), mat('rock')); h.scale.set(0.5, 0.9, 0.7); h.position.set(0, 0.04, -0.38); g.add(h); g.add(part(cyl(0.02, 0.02, 0.04, 8), mat('leather', 0x6b4a2e), 0, 0, -0.38)); },
   stone_pickaxe(g) { handle(g, 0.55); const h = new THREE.Mesh(rockGeo(), mat('rock')); h.scale.set(0.45, 0.45, 1.6); h.rotation.x = Math.PI / 2; h.position.set(0, 0.02, -0.43); g.add(h); g.add(part(cyl(0.02, 0.02, 0.04, 8), mat('leather', 0x6b4a2e), 0, 0, -0.43)); },
@@ -352,6 +358,7 @@ const ITEM_MODELS = {
   pills(g, d) { g.add(part(cyl(0.025, 0.025, 0.07, 14), mat('flat', hex(d, '#d07a2a')), 0, 0, -0.08, Math.PI / 2)); g.add(part(cyl(0.027, 0.027, 0.02, 14), mat('flat', 0xf0f0f0), 0, 0.045, -0.08, Math.PI / 2)); g.add(part(cyl(0.0255, 0.0255, 0.03, 14), mat('flat', 0xf4f0e6), 0, 0.0, -0.08, Math.PI / 2)); },
   box(g, d) { const big = d.id === 'large_box'; const w = big ? 0.26 : 0.18; g.add(part(bbox(w, 0.12, 0.12, 0.006), mat('wood'), 0, 0.02, -0.1)); for (const x of [-w / 2 + 0.008, w / 2 - 0.008]) g.add(part(bbox(0.014, 0.124, 0.124, 0.003), mat('gunwood'), x, 0.02, -0.1)); g.add(part(bbox(0.03, 0.025, 0.006, 0.003), mat('metal'), 0, 0.06, -0.162)); },
   furnace(g) { g.add(part(lathe([[0, 0], [0.09, 0], [0.085, 0.06], [0.06, 0.16], [0.03, 0.2], [0, 0.2]], 14), mat('stone'), 0, -0.06, -0.1)); g.add(part(bbox(0.05, 0.04, 0.02, 0.004), mat('rubber'), 0, -0.02, -0.18)); g.add(part(bbox(0.035, 0.02, 0.012, 0.003), mat('emissive'), 0, -0.025, -0.186)); },
+  candle(g) { const V = Math.PI / 2; g.add(part(cyl(0.045, 0.04, 0.012, 14), mat('metal'), 0, -0.04, -0.1, V)); g.add(part(cyl(0.026, 0.024, 0.13, 14), mat('flat', 0xefe4c4), 0, 0.03, -0.1, V)); g.add(part(cyl(0.003, 0.003, 0.02, 4), mat('rubber'), 0, 0.105, -0.1, V)); },
   fire(g) { const s = mat('stone'); for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2; const r = new THREE.Mesh(rockGeo(), s); r.scale.setScalar(0.28); r.position.set(Math.cos(a) * 0.07, -0.02, -0.1 + Math.sin(a) * 0.07); g.add(r); } for (const a of [0.4, -0.5, 1.6]) g.add(part(cyl(0.012, 0.012, 0.13, 8), mat('bark'), 0, 0.0, -0.1, 0, a, 0)); },
   bench(g, d) { const top = d.id === 'research_table' ? mat('flat', 0x5b8fd6) : d.id === 'workbench3' ? mat('flat', 0x4a6b8a) : d.id === 'workbench2' ? mat('metal') : mat('wood'); g.add(part(bbox(0.22, 0.02, 0.1, 0.004), top, 0, 0.04, -0.1)); for (const [x, z] of [[-0.09, -0.06], [0.09, -0.06], [-0.09, -0.14], [0.09, -0.14]]) g.add(part(bbox(0.014, 0.08, 0.014, 0.003), mat('gunwood'), x, 0.0, z)); g.add(part(bbox(0.04, 0.03, 0.03, 0.004), mat('gunmetal'), 0.07, 0.065, -0.08)); },
   bag(g, d) { const m = mat('cloth', hex(d)); g.add(part(cyl(0.05, 0.05, 0.2, 14), m, 0, 0, -0.1, 0, Math.PI / 2, 0)); for (const x of [-0.06, 0.06]) g.add(part(new THREE.TorusGeometry(0.052, 0.006, 6, 16), mat('leather', 0x4a3424), x, 0, -0.1, 0, Math.PI / 2, 0)); },

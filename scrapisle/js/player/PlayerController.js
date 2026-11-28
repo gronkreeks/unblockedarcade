@@ -221,6 +221,7 @@ export class PlayerController {
     if (t.dep) {
       const d = t.dep;
       if (d.def.bench) { G.ui.openTechTree(d); return; }
+      if (d.type === 'candle') { G.deploy.toggle(d); G.ui.toast(d.on ? 'Candle lit' : 'Candle blown out'); return; }
       if (!d.cont) return;
       if (!G.deploy.canAccess(s.team, d)) {
         if (d.lock.type === 'code') G.ui.openCodeEntry(code => { if (d.lock.code === code) { d.lock.auth.push(s.team); G.ui.toast('Code accepted'); G.ui.openLoot({ kind: 'dep', ref: d, cont: d.cont, title: d.def.name }); } else G.ui.toast('Wrong code'); });

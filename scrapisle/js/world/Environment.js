@@ -41,7 +41,7 @@ export class Environment {
 
   advance(dt) {
     const night = this.sunHeight() < 0;
-    const rate = (night ? 2.2 : 0.8) / DAY_SECONDS;
+    const rate = (night ? 5 : 0.8) / DAY_SECONDS;   // night lasts about 4 minutes, day about 25
     const before = this.tod;
     this.tod += dt * rate; this.time += dt;
     if (this.tod >= 1) { this.tod -= 1; this.day++; }

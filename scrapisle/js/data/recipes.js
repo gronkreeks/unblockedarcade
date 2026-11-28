@@ -89,6 +89,7 @@ r('barricade', 1, { wood: 200 }, 6, 0);
 r('large_box', 1, { wood: 250, metal_frag: 50 }, 10, 1, { unlock: 30 });
 r('furnace', 1, { stones: 200, wood: 100, low_grade: 50 }, 15, 0);
 r('campfire', 1, { wood: 100 }, 4, 0);
+r('candle', 2, { animal_fat: 10, cloth: 2 }, 3, 0);
 r('sleeping_bag', 1, { cloth: 30 }, 6, 0);
 r('bed', 1, { cloth: 60, metal_frag: 100, sewing_kit: 1 }, 15, 1, { unlock: 40 });
 r('claim_cabinet', 1, { wood: 1000 }, 15, 0);

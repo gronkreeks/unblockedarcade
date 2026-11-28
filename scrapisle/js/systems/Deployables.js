@@ -56,6 +56,10 @@ function depBuild(type, g) {
       g.setMat('metal'); g.cyl(xf, 0, 1.12, 0, 0.16, 0.55, 0x6a6a6a, 10, true); g.box(xf, 0, 0.36, 0.47, 0.22, 0.19, 0.04, 0x5a5a5a);
       g.setMat('dark'); g.box(xf, 0, 0.36, 0.5, 0.16, 0.13, 0.01, 0x111111);
       break;
+    case 'candle':
+      g.setMat('paint'); g.cyl(xf, 0, 0, 0, 0.045, 0.012, 0x6a6a6a, 12, true, 0.04); g.cyl(xf, 0, 0.012, 0, 0.026, 0.14, 0xefe4c4, 12, true, 0.024);
+      g.setMat('dark'); g.cyl(xf, 0, 0.15, 0, 0.003, 0.02, 0x222222, 4, true);
+      break;
     case 'campfire':
       g.setMat('rock'); for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2; g.box(xf, Math.cos(a) * 0.48, 0.07, Math.sin(a) * 0.48, 0.11, 0.08, 0.09, 0xa09a92, -a); }
       g.setMat('bark'); for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI; g.stick(xf, Math.cos(a) * 0.35, 0.05, Math.sin(a) * 0.35, -Math.cos(a) * 0.35, 0.18, -Math.sin(a) * 0.35, 0.05, W); }
@@ -208,6 +212,10 @@ export class Deployables {
     m.userData.dep = d;
     this.group.add(m);
     d.mesh = m;
+    if (o.type === 'candle') {
+      const f = new THREE.Mesh(this.flameGeo, this.flameMat); f.position.set(0, 0.19, 0); f.scale.set(0.07, 0.09, 0.07);
+      m.add(f); d.flame = f; if (o.on === undefined) d.on = true;   // candles burn from the moment they're set down
+    }
     if (o.type === 'campfire' || o.type === 'furnace') {
       const f = new THREE.Mesh(this.flameGeo, this.flameMat);
       f.position.set(0, o.type === 'campfire' ? 0.35 : 0.4, o.type === 'furnace' ? 0.38 : 0);
@@ -238,7 +246,7 @@ export class Deployables {
     if (tc && !this.game.build.isAuthed(surv.team, st)) return 'You need building privilege';
     if (!tc && d.team !== surv.team) return 'This isn\'t yours';
     if (d.lock && !d.lock.auth.includes(surv.team)) return 'It\'s locked';
-    if (d.on) return 'Turn it off first';
+    if (d.on && d.type !== 'candle') return 'Turn it off first';
     return null;
   }
   pickup(surv, d) {
@@ -301,7 +309,7 @@ export class Deployables {
     }
   }
   toggle(d) {
-    if (d.type === 'recycler') { d.on = !d.on; return true; }
+    if (d.type === 'recycler' || d.type === 'candle') { d.on = !d.on; return true; }
     if (d.type !== 'furnace' && d.type !== 'campfire') return false;
     if (!d.on && d.cont.count('wood') <= 0) return false;
     d.on = !d.on; return true;
