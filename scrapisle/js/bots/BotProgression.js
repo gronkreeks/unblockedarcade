@@ -123,17 +123,37 @@ export class BotProgression {
     }
     // a couple of barricades for gunfights once they're armed
     if (bench >= 1 && this.bestGun(b) && ITEMS[this.bestGun(b).id].type === 'gun' && b.inv.count('barricade') < 1) want('barricade', 2, 'ammo');
+    // radiation protection before the train yard / launch site runs
+    if (bench >= 2 && this.bestGun(b) && ITEMS[this.bestGun(b).id].type === 'gun' && b.radProtection() < 0.5 && !has(b, 'hazmat_suit')) want('hazmat_suit', 1, 'armour');
     // raid tech: the leader works toward a rocket launcher once the clan has a level 2 bench
     if (team && bench >= 2 && prog.scrap >= 300 && this.game.teams.leader(team) === b && !this.game.teams.membersOf(team).some(m => m.inv.count('rocket_launcher') > 0) && prog.stash('rocket_launcher') === 0) want('rocket_launcher', 1, 'raid');
-    // ammo duty: when the clan's guns are short of rounds, about a third of the members (always the
-    // same ones) farm sulfur, make gunpowder and craft ammunition before anything else
+    // Ammo (and later explosives) duty. The crew grows with how many members carry a gun that's short
+    // of its ammo type; nobody is on it when everyone has rounds. Late game the same crew also keeps
+    // a stock of explosives / rockets / charges for raids.
+    b.ai.duty = false;
     if (team && prog.st) {
-      const am = this.ammoStatus(team, prog);
-      const short = Object.keys(am.need).filter(a => am.have[a] < am.need[a] * 0.6 && RECIPE[a]);
-      if (short.length) {
-        const crew = this.game.teams.alive(team).slice().sort((x, y) => x.id.localeCompare(y.id));
-        const duty = crew.slice(0, Math.max(1, Math.ceil(crew.length / 3)));
-        if (duty.includes(b)) want(short[0], Math.min(120, am.need[short[0]] - am.have[short[0]] + 20), 'race');
+      const G = this.game, crew = G.teams.alive(team).slice().sort((x, y) => x.id.localeCompare(y.id));
+      const short = {};   // ammo type -> members needing it
+      for (const m of crew) {
+        const gun = this.ownedGun(m); if (!gun || ITEMS[gun.id].type !== 'gun') continue;
+        const a = this.ammoFor(gun.id), mag = ITEMS[gun.id].mag;
+        if (a && RECIPE[a] && (gun.ammo || 0) + m.inv.count(a) < mag * 2 && prog.stash(a) < mag * 2) short[a] = (short[a] || 0) + 1;
+      }
+      const needy = Object.values(short).reduce((x, y) => x + y, 0);
+      // raid stock wanted once the clan can make it
+      const raidWant = [];
+      if (prog.bench >= 2 && prog.knows('rocket') && prog.knows('rocket_launcher')) raidWant.push(['rocket', prog.bench >= 3 ? 10 : 4]);
+      else if (prog.bench >= 1 && prog.knows('satchel_charge')) raidWant.push(['satchel_charge', prog.bench >= 2 ? 8 : 4]);
+      if (prog.bench >= 3 && prog.knows('timed_charge')) raidWant.push(['timed_charge', 4]);
+      if (prog.bench >= 2 && prog.knows('explosives')) raidWant.push(['explosives', 20]);
+      const raidShort = raidWant.filter(([id, n]) => prog.stash(id) + crew.reduce((x, m) => x + m.inv.count(id), 0) < n);
+      const size = Math.min(Math.max(0, crew.length - 1) || 1, Math.ceil(needy * 0.6) + (raidShort.length ? 1 : 0));
+      const duty = crew.slice(0, size);
+      if (duty.includes(b)) {
+        b.ai.duty = true;
+        const a = Object.keys(short).sort((x, y) => short[y] - short[x])[0];
+        if (a) want(a, Math.min(150, short[a] * 40 + 20), 'race');
+        else if (raidShort.length) want(raidShort[0][0], raidShort[0][1], 'race');
       }
     }
     // ammo for whatever gun they carry

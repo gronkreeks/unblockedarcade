@@ -11,12 +11,15 @@ const TEMPLATES = {
   small: { core: [2, 2], airlock: [0, -1] },
   medium: { core: [3, 2], airlock: [0, -1] },
   large: { core: [4, 3], airlock: [0, -1] },
+  // big clan bases (5+ and 7+ members): 15 x 12 m and 18 x 15 m inside
+  xl: { core: [5, 4], airlock: [0, -1] },
+  xxl: { core: [6, 5], airlock: [0, -1] },
   // layouts of bases in saves from before bases grew in stages (kept so they aren't rebuilt)
   'medium@1': { core: [3, 2], airlock: [1, -1] },
   'large@1': { core: [4, 3], airlock: [1, -1] },
 };
 const layoutOf = (base) => base.final || !TEMPLATES[base.template + '@1'] ? base.template : base.template + '@1';
-export const STAGES = ['hut', 'small', 'medium', 'large'];
+export const STAGES = ['hut', 'small', 'medium', 'large', 'xl', 'xxl'];
 
 export function buildTemplate(name) {
   const T = TEMPLATES[name];
@@ -63,8 +66,8 @@ export class BotBuilder {
   // The base the team grows into (the site is picked to fit it).
   templateFor(team) {
     const n = team.size, Y = styleOf(team);
-    let f = n >= 6 ? 3 : n >= 3 ? 2 : 1;
-    if (team.style === 'turtle') f = Math.min(3, f + 1);
+    let f = n >= 7 ? 5 : n >= 5 ? 4 : n >= 4 ? 3 : n >= 3 ? 2 : 1;
+    if (team.style === 'turtle') f = Math.min(5, f + 1);
     if (team.style === 'rush' && n < 4) f = Math.min(f, Y.stage);
     return STAGES[f];
   }
@@ -76,6 +79,8 @@ export class BotBuilder {
     if (furnace && boxes >= 1 && (prog.bench >= 1 || prog.boxSpace < 10 || base.cramped)) s = 1;
     if (prog.bench >= 1 && furnace && (boxes >= 2 || base.cramped) && team.size >= 2) s = 2;
     if (prog.bench >= 2 && team.size >= 3) s = 3;
+    if (prog.bench >= 2 && team.size >= 5 && furnace && boxes >= 3) s = 4;      // a real clan base
+    if (prog.bench >= 3 && team.size >= 7) s = 5;
     if (team.style === 'turtle' && furnace) s += 1;
     if (base.cramped) s = Math.max(s, STAGES.indexOf(base.template) + 1);
     return Math.max(0, Math.min(fi, s));
@@ -83,8 +88,16 @@ export class BotBuilder {
 
   // Pick a site for a team's base near a point. Returns { ox, oy, oz, yaw, template } or null.
   chooseSite(team, near, rng = Math.random) {
+    // try the full-size base first, then smaller footprints if nothing that big fits nearby
+    for (let f = STAGES.indexOf(this.templateFor(team)); f >= 1; f--) {
+      const site = this._chooseSite(team, near, rng, STAGES[f]);
+      if (site) return site;
+    }
+    return null;
+  }
+  _chooseSite(team, near, rng, name) {
     const G = this.game, W = G.world;
-    const name = this.templateFor(team), T = tpl(name);
+    const T = tpl(name);
     const S = SKILL[team.tier];
     let best = null, bs = -Infinity;
     const radius = 120 + S.siteSkill * 260;
@@ -208,7 +221,7 @@ export class BotBuilder {
       if (team.style === 'turtle' && boxN < Y.boxes && prog.boxSpace < 12) want.push([prog.knows('large_box') && prog.bench >= 1 ? 'large_box' : 'wood_box', 0]);
       // more furnaces to boom once ore piles up (a player runs several at once)
       const furnaces = this.count(st, 'furnace'), ore = prog.stash('metal_ore') + prog.stash('sulfur_ore') + prog.stash('hqm_ore');
-      const maxF = { hut: 1, small: 2, medium: 3, large: 4 }[base.template] || 1;
+      const maxF = { hut: 1, small: 2, medium: 3, large: 4, xl: 5, xxl: 6 }[base.template] || 1;
       if (furnaces >= 1 && furnaces < maxF && (ore > 400 * furnaces || (prog.bench >= 2 && furnaces < 2))) want.push(['furnace', 0]);
       if (!this.has(st, 'workbench1')) want.push(['workbench1', 1]);
       if (prog.boxSpace < 6 && this.count(st, 'large_box') < Y.boxes && prog.knows('large_box')) want.push(['large_box', 1]);

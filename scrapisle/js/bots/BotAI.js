@@ -468,6 +468,17 @@ export class BotAI {
     }
     return null;
   }
+  // May this bot go to that monument? Guarded ones (militia) need a real gun with ammo, some armour
+  // and good health; irradiated ones need radiation protection (hazmat for the launch site).
+  monumentReady(b, m) {
+    const G = this.game, gun = this.mgr.prog.bestGun(b), real = gun && ITEMS[gun.id].type === 'gun';
+    const rounds = real ? (gun.ammo || 0) + b.inv.count(this.mgr.prog.ammoFor(gun.id)) : 0;
+    const guarded = G.npcs.posts.some(p => p.mon === m.id);
+    if (guarded && !(real && rounds >= ITEMS[gun.id].mag * 2 && b.armorScore() >= 0.6 && b.hp > 60)) return false;
+    if (m.tier >= 2 && !real) return false;
+    if (m.rad >= 1 && b.radProtection() < 0.25 * m.rad) return false;
+    return true;
+  }
   lootTask(b, team, prog, kitted = true, res = null) {
     const G = this.game, ai = b.ai, S = ai.S;
     const gear = weaponScore(this.mgr.prog.bestWeapon(b));
@@ -481,32 +492,26 @@ export class BotAI {
       const c = G.loot.hash.nearest(o.x, o.z, 140, x => x.kind && x.alive && !x.mon && !this.unreachable(b, x));
       return c ? { type: 'loot', cont: c } : null;
     }
-    // join a team monument run (body runs go to the big monuments regardless)
-    const runMon = team && team.monumentRun && G.now < team.monumentRun.until ? G.world.monuments.find(m => m.id === team.monumentRun.mon) : null;
-    if (runMon && (!res || !/_body$/.test(res) || runMon.tier >= (res === 'rifle_body' ? 3 : 2))) return { type: 'monument', mon: runMon.id };
-    // go with a teammate who is already out looting
-    if (team && team.size > 1) {
-      for (const m of G.teams.alive(team)) {
-        if (m === b || !m.ai.task) continue;
-        if (m.ai.task.type === 'monument' && gear > 8) return { type: 'monument', mon: m.ai.task.mon };
-        if (m.ai.task.type === 'loot' && Math.random() < 0.6) { const c = G.loot.hash.nearest(m.x, m.z, 120, o => o.kind && o.alive && !o.mon && o !== m.ai.task.cont && !this.unreachable(b, o)); if (c) return { type: 'loot', cont: c }; }
-      }
-    }
-    const wantMon = (res && /_body$/.test(res) && this.mgr.prog.bestGun(b)) || (Math.random() < (ai.pers === 'looter' ? 0.8 : 0.45) * Math.min(1.3, Y_loot(team)) && gear > 8);
-    if (wantMon) {
-      const gun = this.mgr.prog.bestGun(b);
-      const hasGun = gun && ITEMS[gun.id].type === 'gun' && (gun.ammo || 0) + b.inv.count(gun.at) >= 10;
-      const armour = b.armorScore();
-      let maxTier = hasGun && gear > 60 && armour > 0.8 ? 3 : hasGun && armour > 0.25 ? 2 : 1;
-      // after a gun body: the military crates at the big monuments are where they are
-      const body = res === 'rifle_body' || res === 'smg_body' || res === 'semi_body';
-      if (body && hasGun) maxTier = res === 'rifle_body' ? 3 : Math.max(maxTier, 2);
-      const mons = G.world.monuments.filter(m => m.tier <= maxTier && (!body || m.tier >= (res === 'rifle_body' ? 3 : 2)) && (m.rad < 2 || b.radProtection() > 0.3 || S.caution < 0.5));
-      mons.sort((a, c) => (dist(b.x, b.z, a.x, a.z) - a.tier * (body ? 400 : 120) * S.lootGreed) - (dist(b.x, b.z, c.x, c.z) - c.tier * (body ? 400 : 120) * S.lootGreed));
-      const m = mons[Math.floor(Math.random() * Math.min(2, mons.length))];
-      if (m) {
-        if (team && team.size > 1) team.monumentRun = { mon: m.id, until: G.now + 300 };
-        return { type: 'monument', mon: m.id };
+    // a clan run is on: everyone who's ready for that monument goes along
+    const run = team && team.monumentRun && G.now < team.monumentRun.until ? team.monumentRun : null;
+    const runMon = run ? G.world.monuments.find(m => m.id === run.mon) : null;
+    if (runMon && this.monumentReady(b, runMon)) return { type: 'monument', mon: runMon.id, run: true };
+    // start a run: most of the clan goes together, to a harder monument once they need better parts
+    const body = res === 'rifle_body' || res === 'smg_body' || res === 'semi_body';
+    const wantMon = body || Math.random() < (ai.pers === 'looter' ? 0.8 : 0.45) * Math.min(1.3, Y_loot(team));
+    if (wantMon && gear > 8 && (!team || G.now > (team.nextRunT || 0))) {
+      const crew = team ? G.teams.alive(team) : [b];
+      const minTier = res === 'rifle_body' ? 3 : (body || prog.bench >= 2) ? 2 : 1;
+      const options = G.world.monuments.filter(m => m.tier >= minTier)
+        .map(m => ({ m, ready: crew.filter(x => this.monumentReady(x, m)) }))
+        .filter(o => o.ready.includes(b) && o.ready.length >= Math.max(1, Math.ceil(crew.length * 0.6)));
+      let pick = null, bs = -Infinity;
+      for (const o of options) { const sc = o.m.tier * 140 * S.lootGreed - dist(b.x, b.z, o.m.x, o.m.z) + o.ready.length * 20; if (sc > bs) { bs = sc; pick = o; } }
+      // nothing hard enough is safe yet: a tier 1 run instead
+      if (!pick && !body) { const t1 = G.world.monuments.filter(m => m.tier === 1 && crew.filter(x => this.monumentReady(x, m)).length >= Math.max(1, Math.ceil(crew.length * 0.6))); t1.sort((x, y) => dist(b.x, b.z, x.x, x.z) - dist(b.x, b.z, y.x, y.z)); if (t1[0]) pick = { m: t1[0] }; }
+      if (pick) {
+        if (team && crew.length > 1) { team.monumentRun = { mon: pick.m.id, until: G.now + 420 }; G.logEvent(`${team.name} are heading to the ${pick.m.name}`); }
+        return { type: 'monument', mon: pick.m.id, run: true };
       }
     }
     const c = G.loot.hash.nearest(b.x, b.z, 350, o => o.kind && o.alive && !o.mon && !this.unreachable(b, o));
@@ -516,7 +521,9 @@ export class BotAI {
   }
   recycleTask(b) {
     const G = this.game;
-    const r = G.deploy.list.filter(d => d.type === 'recycler').sort((a, c) => dist(b.x, b.z, a.x, a.z) - dist(b.x, b.z, c.x, c.z))[0];
+    // only recyclers at monuments this bot can safely go to (not past the militia or into radiation)
+    const ok = (d) => { const m = G.world.monuments.find(mm => dist(d.x, d.z, mm.x, mm.z) < mm.r + 12); return !m || this.monumentReady(b, m); };
+    const r = G.deploy.list.filter(d => d.type === 'recycler' && ok(d)).sort((a, c) => dist(b.x, b.z, a.x, a.z) - dist(b.x, b.z, c.x, c.z))[0];
     return r && dist(b.x, b.z, r.x, r.z) < 900 ? { type: 'recycle', rec: r } : null;
   }
 
@@ -600,6 +607,14 @@ export class BotAI {
   t_harvest(b, t, dt, mode) {
     const n = t.node, G = this.game;
     if (!n.alive) {
+      // duty crew on a farm run: sulfur first, then wood (charcoal), stone and metal on the way,
+      // until the bags are nearly full
+      if (b.ai.duty && b.inv.main.emptyCount() > 3) {
+        const pri = (m) => m.type === 'ore' && m.kind === 'sulfur' ? 0 : m.type === 'tree' ? 1 : m.type === 'ore' ? 2 : 9;
+        let best = null, bs = Infinity;
+        G.res.hash.query(b.x, b.z, 45, m => { if (!m.alive || this.unreachable(b, m) || pri(m) > 2) return; const sc = pri(m) * 25 + dist(b.x, b.z, m.x, m.z); if (sc < bs) { bs = sc; best = m; } });
+        if (best) { t.node = best; t.need = Infinity; t.farm = true; return; }
+      }
       if (b.inv.count(t.res) >= t.need) return 'done';
       // next node of the same kind nearby
       const nx = G.res.nearest(b.x, b.z, 80, m => m.type === n.type && (n.type === 'tree' || m.kind === n.kind) && !this.unreachable(b, m));
@@ -630,6 +645,7 @@ export class BotAI {
     }
     if (b.inv.count(t.res) >= t.need) return 'done';
     if (b.inv.main.emptyCount() === 0 && b.inv.belt.emptyCount() === 0) return 'done';
+    if (t.farm && b.inv.main.emptyCount() <= 3) return 'done';   // farm run over: head home and bank it
   }
   t_pick(b, t, dt, mode) {
     const n = t.node;
@@ -936,10 +952,15 @@ export class BotAI {
     const G = this.game, m = G.world.monuments.find(x => x.id === t.mon);
     if (!m) return 'fail';
     if (!t.phase) t.phase = 'travel';
+    // turn back if this bot isn't ready for it any more (lost its gun, hurt, out of ammo)
+    // at a guarded or irradiated monument that check holds the whole time: out of ammo or hurt means leaving
+    const risky = m.rad >= 1 || G.npcs.posts.some(p => p.mon === m.id);
+    if ((t.phase !== 'loot' || risky) && !this.monumentReady(b, m)) return 'fail';
     if (t.phase === 'travel') {
       if (!this.nav.moveTo(b, m.x, m.z, dt, mode, { arrive: m.r * 0.6 })) return;
-      t.phase = 'loot'; t.done = new Set();
+      t.phase = 'loot'; t.done = new Set(); t.lootUntil = G.now + 150 + m.tier * 60;
     }
+    if (t.phase === 'loot' && G.now > t.lootUntil) t.phase = 'recycle';   // don't hang around
     if (t.phase === 'loot') {
       if (t.sub) { const fn = t.sub.type === 'lootbag' ? this.t_lootbag : this.t_loot; const r = fn.call(this, b, t.sub, dt, mode); if (r === 'done' || r === 'fail') { t.done.add(t.sub.cont); t.sub = null; } return; }
       if (b.inv.main.emptyCount() < 3) { t.phase = 'recycle'; return; }
@@ -950,6 +971,8 @@ export class BotAI {
     if (t.phase === 'recycle') {
       const rec = G.deploy.list.find(d => d.type === 'recycler' && dist(d.x, d.z, m.x, m.z) < m.r + 10);
       const hasComp = b.inv.main.slots.some(s => s && ITEMS[s.id].type === 'component');
+      const team = G.teams.of(b);
+      if (team && team.monumentRun && team.monumentRun.mon === m.id) { team.monumentRun = null; team.nextRunT = G.now + 360; }   // run over; next one later
       if (rec && hasComp) { t.type = 'recycle'; t.rec = rec; t.phase = null; return; }
       return 'done';
     }
