@@ -22,6 +22,14 @@ export class BotAI {
     if (!b.alive) return;
     this.selfCare(b);
     this.perceive(b, mode);
+    // the clan is pushing the player: everyone nearby joins in, using what the clan knows
+    const P = G.player;
+    if (team && team.push && G.now < team.push.until && P && P.alive && dist(b.x, b.z, P.x, P.z) < 350 && !(team.raid && team.raid.state === 'breach') && !(team.underAttack > 0 && ai.goal === 'fight' && ai.target && ai.target !== P)) {
+      if (ai.target !== P) this.startCombat(b, P);
+      ai.targetSeen = G.now; ai.lastSeen = { x: team.intel.x, z: team.intel.z };
+      ai.goal = b.hp < 20 && !(ai.cornered > G.now) ? 'flee' : 'fight';
+      return;
+    }
     if (ai.target) {
       const keep = this.underFire(b, ai.target) ? 300 : ai.S.sight * 1.2;
       if (!ai.target.alive || dist(b.x, b.z, ai.target.x, ai.target.z) > keep || (G.now - ai.targetSeen > 12)) { this.endCombat(b); }
@@ -171,6 +179,7 @@ export class BotAI {
       if (t && t.alive && !ignored && G.now - team.alert.t < 6 && dist(b.x, b.z, team.alert.x, team.alert.z) < help) best = t;
     }
     if (best) {
+      if (best === G.player) this.mgr.spotPlayer(team, best.x, best.z);
       if (best !== ai.target) this.startCombat(b, best);
       ai.targetSeen = G.now; ai.lastSeen = { x: best.x, z: best.z };
     }
@@ -182,6 +191,7 @@ export class BotAI {
     if (a.kind === 'survivor' && a.team && a.team === b.team) return;
     if (a.kind === 'animal' && nearMiss) return;
     ai.shotAt = { src: a, t: G.now, x: a.x, z: a.z, hit: !nearMiss };
+    if (a === G.player) this.mgr.spotPlayer(G.teams.of(b), a.x, a.z);
     ai.perceiveT = 0;
     const team = G.teams.of(b);
     if (team && a.kind === 'survivor') {
@@ -218,8 +228,10 @@ export class BotAI {
     return weaponScore(w) + a.armorScore() * 18 + a.hp / 5;
   }
   engageDecision(b, t) {
-    const G = this.game, ai = b.ai, S = ai.S, P = PERSONALITIES[ai.pers];
+    const G = this.game, ai = b.ai, S = ai.S, P = PERSONALITIES[ai.pers], team0 = G.teams.of(b);
     if (ai.cornered > G.now && ai.target === t) return 'fight';   // nowhere left to run
+    // outgunned as a clan (an AK against bows): everyone keeps away from the player
+    if (team0 && team0.retreat && G.now < team0.retreat.until && t === G.player) return 'flee';
     if (ai.ignore instanceof Map && (ai.ignore.get(t.id) || 0) > G.now && b.lastHitBy !== t) return 'ignore';
     const mine = this.powerOf(b), theirs = this.powerOf(t);
     const attacked = b.lastHitBy === t && G.now - b.lastHitTime < 12;
@@ -1070,7 +1082,15 @@ export class BotAI {
     ai.strafeT = (ai.strafeT || 0) - dt;
     if (ai.strafeT <= 0) { ai.strafeT = randRange(0.6, 1.8); ai.strafeDir = Math.random() < 0.5 ? -1 : 1; b.crouch = ranged && d > 25 && Math.random() < S.crouch; }
     const reloading = b.reloadT > 0;
-    if (!ranged || d > want + 6) { this.nav.moveTo(b, tx, tz, dt, mode, { arrive: ranged ? want : 1.2, run: true }); b.crouch = false; }
+    // pushing as a clan: fan out around the target instead of walking in a line
+    let gx = tx, gz = tz;
+    if (team && team.push && t === G.player && d > 8) {
+      // only clanmates actually in on the push count, and the fan closes up as they get near
+      const mates = G.teams.alive(team).filter(m => dist(m.x, m.z, tx, tz) < 150), idx = mates.indexOf(b), n = mates.length;
+      const off = idx < 0 ? 0 : (idx - (n - 1) / 2) * 6 * Math.min(1, (d - 8) / 30);
+      gx = tx - (b.z - tz) / d * off; gz = tz + (b.x - tx) / d * off;
+    }
+    if (!ranged || d > want + 6) { this.nav.moveTo(b, gx, gz, dt, mode, { arrive: ranged ? want : 1.2, run: true }); b.crouch = false; }
     else if (d < want - 4 || (reloading && S.caution > 0.5)) { const ax = b.x - (tx - b.x), az = b.z - (tz - b.z); this.nav.moveTo(b, ax, az, dt, mode, { arrive: 0.5, run: true }); }
     else if (Math.random() < S.strafe) {
       const ang = Math.atan2(tx - b.x, tz - b.z) + ai.strafeDir * Math.PI / 2;
@@ -1114,6 +1134,15 @@ export class BotAI {
     if (ai.reactT > 0 || Math.abs(dy) > 0.12) return;
     if (ranged) {
       if (!ai.los || d > (def.id === 'bolt_rifle' ? 160 : def.type === 'bow' ? 60 : 110)) return;
+      // a teammate in the line of fire: hold the shot and sidestep for a clear one
+      if (team) {
+        const ux = (tx - e.x) / d, uz = (tz - e.z) / d;
+        for (const m of G.teams.alive(team)) {
+          if (m === b) continue;
+          const mx = m.x - e.x, mz = m.z - e.z, along = mx * ux + mz * uz;
+          if (along > 0.5 && along < d && Math.abs(mx * uz - mz * ux) < 1.1) { ai.strafeT = 0; return; }
+        }
+      }
       // fire discipline: better bots wait for drift to settle; worse bots keep spraying
       const maxDrift = ({ easy: 10, normal: 5, hard: 3.5, expert: 2.5 })[ai.tier] * (d < 15 ? 2.5 : 1);
       if (def.type === 'gun' && def.auto) { if (rs.accP > maxDrift) { ai.burstHold = G.now + 0.15 + (1 - S.recoilCtrl) * 0.2; } if (G.now < (ai.burstHold || 0)) return; }

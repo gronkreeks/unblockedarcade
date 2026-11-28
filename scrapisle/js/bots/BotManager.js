@@ -1,7 +1,7 @@
 // Owns every bot: spawning, teams, level-of-detail scheduling, avatars, respawns, save/load.
 import { Survivor } from '../entities/Survivor.js';
 import { HumanoidAvatar } from '../entities/Avatars.js';
-import { makeStack, ITEMS } from '../data/items.js';
+import { makeStack, ITEMS, weaponScore } from '../data/items.js';
 import { RECIPE } from '../data/recipes.js';
 import { SKILL, PERSONALITIES, rollTier, rollPersonality, botName, styleOf } from './BotProfiles.js';
 import { BotNav } from './BotNav.js';
@@ -80,12 +80,38 @@ export class BotManager {
     if (k && k.kind === 'survivor' && k.ai) { const t = this.game.teams.of(k); if (t) t.stats.kills++; }
     const vt = this.game.teams.of(v); if (vt) vt.stats.deaths = (vt.stats.deaths || 0) + 1;
   }
+  // A clan learns where the player is (seen, heard shooting, or shot by them).
+  spotPlayer(team, x, z) { if (team) team.intel = { x, z, t: this.game.now }; }
+  // Push or back off, as a clan: their combined firepower near you against your gear.
+  // AK against a clan of bows: they all back off. AK against three or more guns: they all come.
+  assessPlayer(t) {
+    const G = this.game, P = G.player;
+    const clear = () => { t.push = null; t.retreat = null; };
+    if (!P || !P.alive || !t.intel || G.now - t.intel.t > 90) return clear();
+    const near = G.teams.alive(t).filter(m => dist(m.x, m.z, P.x, P.z) < 350);
+    if (!near.length) return clear();
+    // firepower: the weapon each one carries, a little more with armour (numbers count, health doesn't)
+    const fire = (a) => { const w = this.prog.bestWeapon(a); return weaponScore(w) * (1 + Math.min(1, a.armorScore()) * 0.5); };
+    const ours = near.reduce((a, m) => a + fire(m), 0), theirs = Math.max(15, fire(P));
+    const ratio = ours / theirs, PUSH = { easy: 1.15, normal: 1.3, hard: 1.45, expert: 1.6 }[t.tier] || 1.3;
+    const theirGun = this.prog.bestGun(P), playerTier = theirGun && ITEMS[theirGun.id].type === 'gun' ? (RECIPE[theirGun.id] ? RECIPE[theirGun.id].tier : 1) : 0;
+    const clanHasGuns = near.some(m => { const g = this.prog.bestGun(m); return g && ITEMS[g.id].type === 'gun'; });
+    const keep = t.push ? 0.75 : 1;   // once committed, a push doesn't stop at the first wobble
+    if (((near.length >= 2 && ratio >= PUSH * keep) || ratio >= PUSH * 1.8) && (clanHasGuns || playerTier < 2)) {
+      if (!t.push) G.logEvent(`${t.name} are coming for you (${near.length} of them)`);
+      t.push = { until: G.now + 60 }; t.retreat = null;
+    } else if (ratio < 0.8 || (playerTier >= 2 && !clanHasGuns)) {
+      if (!t.retreat) G.logEvent(`${t.name} are keeping away from you`);
+      t.retreat = { until: G.now + 60 }; t.push = null;
+    } else clear();
+  }
   onNoise(e) {
     if (!e.src || e.kind === 'charge') return;
     this.game.actorHash.query(e.x, e.z, Math.min(e.r, 160), a => {
       if (!a.ai || a === e.src || !a.alive) return;
       if (e.src.team && e.src.team === a.team) return;
       a.ai.heard = { src: e.src, t: this.game.now, x: e.x, z: e.z };
+      if (e.src === this.game.player && e.kind === 'shot') this.spotPlayer(this.game.teams.of(a), e.x, e.z);
     });
   }
   respawn(b) {
@@ -153,6 +179,7 @@ export class BotManager {
         t._raidT = (t._raidT || 0) - 5;
         if (t._raidT <= 0) { t._raidT = t.raid ? 5 : 15; this.raiding.consider(t); }
         if (t.monumentRun && G.now > t.monumentRun.until) t.monumentRun = null;
+        this.assessPlayer(t);
       }
     }
     G.teams.update(dt);

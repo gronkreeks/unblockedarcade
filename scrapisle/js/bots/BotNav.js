@@ -33,8 +33,28 @@ export class BotNav {
     }
     let want = Math.atan2(tx - b.x, tz - b.z);
     want = this.avoidMonuments(b, tx, tz, want);
+    // walls, rocks or a building in the way (or stuck): walk a planned route around them
+    let routed = false, steer = null;
+    if (mode === 'full' && d > 2.5 && d < 70 && !opts.noGrid) {
+      const G = this.game; let gp = ai.gpath;
+      steer = this.avoid(b, want);
+      const blockedAhead = steer !== want;
+      // keep a route until the goal moves or the bot stops making progress (replanning every few
+      // seconds made bots flip between going left and right around the same wall)
+      if ((blockedAhead || ai.stuckT > 1) && (!gp || dist(gp.tx, gp.tz, tx, tz) > 4 || (G.now - gp.t > 3 && ai.stuckT > 1.5))) {
+        const pts = this.gridPath(b, tx, tz);
+        gp = ai.gpath = pts && pts.length ? { pts, i: 0, t: G.now, tx, tz } : null;
+        if (!gp) ai.gpathFail = G.now;
+      }
+      if (gp && G.now - gp.t < 15) {
+        while (gp.i < gp.pts.length - 1 && dist(b.x, b.z, gp.pts[gp.i].x, gp.pts[gp.i].z) < 0.9) gp.i++;
+        const wp = gp.pts[gp.i];
+        want = Math.atan2(wp.x - b.x, wp.z - b.z); routed = true;
+        if (gp.i >= gp.pts.length - 1 && dist(b.x, b.z, wp.x, wp.z) < 0.9) ai.gpath = null;
+      } else if (gp) ai.gpath = null;
+    }
     // obstacle avoidance (full detail only)
-    if (mode === 'full' && d > 1.5) want = this.avoid(b, want);
+    if (mode === 'full' && d > 1.5 && !routed) want = steer ?? this.avoid(b, want);
     // water: don't walk into deep water unless the target is there
     const ahead = 3;
     const wx = b.x + Math.sin(want) * ahead, wz = b.z + Math.cos(want) * ahead;
@@ -46,7 +66,7 @@ export class BotNav {
     }
     // stuck recovery
     ai.stuckT = ai.stuckT || 0;
-    if (ai.unstuck > 0) { ai.unstuck -= dt; want = ai.unstuckDir; }
+    if (ai.unstuck > 0 && !routed) { ai.unstuck -= dt; want = ai.unstuckDir; }
     b.yaw += angleWrap(want - b.yaw) * Math.min(1, dt * 8);
     const water = W.waterSurface(b.x, b.z);
     const swim = water && water.y - b.y > 1.25;
@@ -81,6 +101,74 @@ export class BotNav {
       ai.progX = b.x; ai.progZ = b.z; ai.progT = 0;
     }
     return false;
+  }
+  // ---------- local grid paths around walls, rocks and buildings ----------
+  // A* on a 1 m grid in a window around the bot and its goal, with solid colliders (inflated by the
+  // bot's radius) as blocked cells. Low things you can step or hop onto stay open.
+  gridPath(b, tx, tz) {
+    const P = this.game.physics, R = 0.45;
+    const d = dist(b.x, b.z, tx, tz);
+    const half = Math.min(32, Math.max(14, d / 2 + 8));
+    const cx = (b.x + tx) / 2, cz = (b.z + tz) / 2, N = Math.ceil(half * 2);
+    const x0 = cx - half, z0 = cz - half;
+    const blocked = new Uint8Array(N * N);
+    const cols = [];
+    P.near(cx, cz, half * 1.5, c => {
+      if (!c.solid || c.tag === 'drop' || c.tag === 'bag' || c.ref === b) return;
+      if (c.tag === 'door' && c.ref.door && c.ref.door.open) return;
+      const top = c.type === 'box' ? c.y + c.hy : c.y1, bot = c.type === 'box' ? c.y - c.hy : c.y0;
+      if (top - b.y <= 0.8 || bot - b.y > 1.9) return;   // hop-able or overhead
+      cols.push(c);
+    });
+    for (const c of cols) {
+      const ext = c.type === 'box' ? Math.hypot(c.hx, c.hz) + R : c.r + R;
+      const i0 = Math.max(0, Math.floor(c.x - ext - x0)), i1 = Math.min(N - 1, Math.ceil(c.x + ext - x0));
+      const j0 = Math.max(0, Math.floor(c.z - ext - z0)), j1 = Math.min(N - 1, Math.ceil(c.z + ext - z0));
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+        const px = x0 + i + 0.5, pz = z0 + j + 0.5;
+        if (c.type === 'box') {
+          const cc = Math.cos(c.yaw || 0), ss = Math.sin(c.yaw || 0), dx = px - c.x, dz = pz - c.z;
+          const lx = dx * cc - dz * ss, lz = dx * ss + dz * cc;
+          if (Math.abs(lx) < c.hx + R && Math.abs(lz) < c.hz + R) blocked[j * N + i] = 1;
+        } else if (Math.hypot(px - c.x, pz - c.z) < c.r + R) blocked[j * N + i] = 1;
+      }
+    }
+    const cell = (x, z) => [Math.max(0, Math.min(N - 1, Math.floor(x - x0))), Math.max(0, Math.min(N - 1, Math.floor(z - z0)))];
+    const [si, sj] = cell(b.x, b.z); let [gi, gj] = cell(tx, tz);
+    blocked[sj * N + si] = 0;
+    if (blocked[gj * N + gi]) {   // goal inside something: aim for the nearest open cell next to it
+      let best = null, bd = Infinity;
+      for (let j = Math.max(0, gj - 4); j <= Math.min(N - 1, gj + 4); j++) for (let i = Math.max(0, gi - 4); i <= Math.min(N - 1, gi + 4); i++) if (!blocked[j * N + i]) { const dd = (i - gi) ** 2 + (j - gj) ** 2; if (dd < bd) { bd = dd; best = [i, j]; } }
+      if (!best) return null; [gi, gj] = best;
+    }
+    const g = new Float32Array(N * N).fill(Infinity), came = new Int32Array(N * N).fill(-1), open = [];
+    const h = (i, j) => Math.hypot(i - gi, j - gj);
+    const start = sj * N + si, goal = gj * N + gi;
+    g[start] = 0; open.push([h(si, sj), start]);
+    const closed = new Uint8Array(N * N); let found = false, iter = 0;
+    while (open.length && iter++ < 6000) {
+      let bi = 0; for (let k = 1; k < open.length; k++) if (open[k][0] < open[bi][0]) bi = k;
+      const [, cur] = open.splice(bi, 1)[0];
+      if (cur === goal) { found = true; break; }
+      if (closed[cur]) continue; closed[cur] = 1;
+      const ci = cur % N, cj = (cur / N) | 0;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        if (!di && !dj) continue;
+        const ni = ci + di, nj = cj + dj; if (ni < 0 || nj < 0 || ni >= N || nj >= N) continue;
+        const nk = nj * N + ni; if (blocked[nk] || closed[nk]) continue;
+        if (di && dj && (blocked[cj * N + ni] || blocked[nj * N + ci])) continue;   // no corner cutting
+        const ng = g[cur] + (di && dj ? 1.414 : 1);
+        if (ng < g[nk]) { g[nk] = ng; came[nk] = cur; open.push([ng + h(ni, nj), nk]); }
+      }
+    }
+    if (!found) return null;
+    const cells = []; for (let k = goal; k !== -1; k = came[k]) cells.push(k); cells.reverse();
+    // keep only the turns (string pulling against the grid)
+    const clear = (a, c) => { const ai = a % N, aj = (a / N) | 0, ci = c % N, cj = (c / N) | 0, n = Math.max(Math.abs(ci - ai), Math.abs(cj - aj)) * 2; for (let s = 1; s < n; s++) { const i = Math.round(ai + (ci - ai) * s / n), j = Math.round(aj + (cj - aj) * s / n); if (blocked[j * N + i]) return false; } return true; };
+    const pts = []; let anchor = 0;
+    for (let k = 2; k < cells.length; k++) if (!clear(cells[anchor], cells[k])) { anchor = k - 1; pts.push(cells[anchor]); }
+    pts.push(cells[cells.length - 1]);
+    return pts.map(k => ({ x: x0 + (k % N) + 0.5, z: z0 + ((k / N) | 0) + 0.5 }));
   }
   // Steer around monuments with armed guards unless the target is inside one.
   avoidMonuments(b, tx, tz, want) {
