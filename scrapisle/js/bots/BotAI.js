@@ -25,7 +25,7 @@ export class BotAI {
     this.perceive(b, mode);
     // the clan is pushing the player: everyone nearby joins in, using what the clan knows
     const P = G.player;
-    if (team && team.push && G.now < team.push.until && P && P.alive && this.kitted(b) && dist(b.x, b.z, P.x, P.z) < 350 && !(team.raid && team.raid.state === 'breach') && !(team.underAttack > 0 && ai.goal === 'fight' && ai.target && ai.target !== P)) {
+    if (team && team.push && G.now < team.push.until && P && P.alive && this.kitted(b) && (!team.push.hunt || this.mgr.huntReady(b) || (ai.target === P && b.hp > 30)) && dist(b.x, b.z, P.x, P.z) < (team.push.hunt ? 500 : 350) && !(team.raid && team.raid.state === 'breach') && !(team.underAttack > 0 && ai.goal === 'fight' && ai.target && ai.target !== P)) {
       if (ai.target !== P) this.startCombat(b, P);
       ai.targetSeen = G.now; ai.lastSeen = { x: team.intel.x, z: team.intel.z };
       ai.goal = b.hp < 20 && !(ai.cornered > G.now) ? 'flee' : 'fight';

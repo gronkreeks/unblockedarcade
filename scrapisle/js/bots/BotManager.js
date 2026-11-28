@@ -89,7 +89,16 @@ export class BotManager {
   assessPlayer(t) {
     const G = this.game, P = G.player;
     const clear = () => { t.push = null; t.retreat = null; };
+    if (t.hunt && (G.now > t.hunt.until || !P || !P.alive)) t.hunt = null;
     if (!P || !P.alive || !t.intel || G.now - t.intel.t > 90) return clear();
+    // a well-off clan that heard your shots keeps coming unless it's clearly outgunned
+    if (t.hunt) {
+      const fire = (a) => { const w = this.prog.bestWeapon(a); return weaponScore(w) * (1 + Math.min(1, a.armorScore()) * 0.5); };
+      const crew = G.teams.alive(t).filter(m => this.huntReady(m) && dist(m.x, m.z, P.x, P.z) < 500);
+      const ratio = crew.reduce((a, m) => a + fire(m), 0) / Math.max(15, fire(P));
+      if (crew.length && ratio >= 0.6) { t.push = { until: G.now + 60, hunt: true }; t.retreat = null; return; }
+      t.hunt = null;
+    }
     const near = G.teams.alive(t).filter(m => dist(m.x, m.z, P.x, P.z) < 350);
     if (!near.length) return clear();
     // firepower: the weapon each one carries, a little more with armour (numbers count, health doesn't)
@@ -107,8 +116,43 @@ export class BotManager {
       t.retreat = { until: G.now + 60 }; t.push = null;
     } else clear();
   }
+  // Fight-ready: a real gun with two magazines of rounds, decent health and something to heal with.
+  huntReady(m) {
+    if (!m.alive || m.hp < 55) return false;
+    const g = this.prog.bestGun(m); if (!g || ITEMS[g.id].type !== 'gun') return false;
+    const rounds = (g.ammo || 0) + m.inv.count(this.prog.ammoFor(g.id));
+    if (rounds < ITEMS[g.id].mag * 2) return false;
+    return m.inv.count('bandage') + m.inv.count('med_syringe') + m.inv.count('large_medkit') > 0;
+  }
+  // Not lacking anything: a base and bench, ammo stocked for its guns, most of the clan fight-ready,
+  // and nothing else going on (a raid, being raided, a monument run, or backing off from you).
+  wellOff(t) {
+    const G = this.game, prog = this.progressOf(t), alive = G.teams.alive(t);
+    if (!prog.st || prog.bench < 1 || t.raid || t.underAttack > 0) return false;
+    if ((t.retreat && G.now < t.retreat.until) || (t.monumentRun && G.now < t.monumentRun.until)) return false;
+    const ready = alive.filter(m => this.huntReady(m)).length;
+    if (ready < Math.min(t.size, 2) || ready < Math.ceil(t.size * 0.5)) return false;
+    const am = this.prog.ammoStatus(t, prog);
+    for (const a in am.need) if (ITEMS[a] && ITEMS[a].cat !== 'Raid' && a !== 'rocket' && (am.have[a] || 0) < am.need[a] * 0.5) return false;   // rockets are raid stock, not kit
+    return true;
+  }
+  // Your gunshots (and explosions) carry: well-off clans in earshot come to fight you.
+  answerShots(e) {
+    const G = this.game, R = Math.min(350, (e.r || 150) * 1.5);
+    for (const t of G.teams.teams.values()) {
+      const alive = G.teams.alive(t); if (!alive.length) continue;
+      const heard = alive.some(m => dist(m.x, m.z, e.x, e.z) < R) || (t.base && dist(t.base.x, t.base.z, e.x, e.z) < R);
+      if (!heard) continue;
+      if (t.hunt && G.now < t.hunt.until) { t.hunt.until = G.now + 120; this.spotPlayer(t, e.x, e.z); continue; }
+      if (!this.wellOff(t)) continue;
+      t.hunt = { x: e.x, z: e.z, t: G.now, until: G.now + 120 };
+      this.spotPlayer(t, e.x, e.z);
+      G.logEvent(`${t.name} heard your shots and are coming to fight`);
+    }
+  }
   onNoise(e) {
     if (!e.src || e.kind === 'charge') return;
+    if (e.src === this.game.player && (e.kind === 'explosion' || (e.kind === 'shot' && ITEMS[e.weapon] && ITEMS[e.weapon].type === 'gun'))) this.answerShots(e);
     this.game.actorHash.query(e.x, e.z, Math.min(e.r, 160), a => {
       if (!a.ai || a === e.src || !a.alive) return;
       if (e.src.team && e.src.team === a.team) return;
