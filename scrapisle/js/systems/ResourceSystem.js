@@ -74,6 +74,32 @@ export class ResourceSystem {
     }
     for (const n of this.nodes) if (n.alive) this._addCollider(n);
   }
+  // Pick a free spot in the node's own map chunk (its mesh batch lives there) and move it.
+  _relocate(n) {
+    const W = this.game.world, G = this.game, g = n.group, ore = n.type === 'ore';
+    const x0 = g.cx - CHUNK / 2, z0 = g.cz - CHUNK / 2;
+    for (let k = 0; k < 14; k++) {
+      const x = x0 + 4 + Math.random() * (CHUNK - 8), z = z0 + 4 + Math.random() * (CHUNK - 8);
+      if (!W._okSpawn(x, z, ore ? 4 : 2) || W.slopeAt(x, z) > (ore ? 0.4 : 0.3)) continue;
+      if (G.build && G.build.blockedAt(x, z, 3)) continue;
+      if (G.deploy && G.deploy.hash.nearest(x, z, 4)) continue;
+      if (this.hash.nearest(x, z, ore ? 4 : 2, m => m !== n && (m.alive || m.type !== 'pick'))) continue;
+      let busy = false; G.actorHash.query(x, z, 6, a => { if (a.alive && Math.hypot(a.x - x, a.z - z) < 6) { busy = true; return true; } });
+      if (busy) continue;
+      this._moveTo(n, x, z, Math.random() * Math.PI * 2);
+      return true;
+    }
+    return false;
+  }
+  _moveTo(n, x, z, rot) {
+    const had = !!n.col;
+    if (had) this._removeCollider(n);
+    n.x = x; n.z = z; n.y = this.game.world.heightAt(x, z); n.rot = rot; n.moved = true; n.tilt = undefined;
+    this.hash.update(n);
+    if (had) this._addCollider(n);
+    this._writeMatrix(n);
+    this._dirtyBounds = this._dirtyBounds || new Set(); this._dirtyBounds.add(n.group);
+  }
   _reset(n) {
     if (n.type === 'tree') { const t = TREE_TOTAL[n.kind] * n.s; n.total = { wood: Math.round(t) }; }
     else if (n.type === 'ore') n.total = { ...ORE_TOTAL[n.kind] };
@@ -187,9 +213,12 @@ export class ResourceSystem {
       const n = this.nodes[this._cursor];
       if (!n.alive && now >= n.respawnAt) {
         if (this.game.build && this.game.build.blockedAt(n.x, n.z, 2.5)) { n.respawnAt = now + 120; continue; }
+        // ore and loose piles come back somewhere else in the area, like Rust (trees stay where they grew)
+        if (n.type === 'ore' || (n.type === 'pick' && n.group)) this._relocate(n);
         n.alive = true; this._reset(n); this._writeMatrix(n); this._addCollider(n);
       }
     }
+    if (this._dirtyBounds && this._dirtyBounds.size) { for (const g of this._dirtyBounds) for (const m of g.meshes) m.computeBoundingSphere(); this._dirtyBounds.clear(); }
     // corpses rot away after 6 minutes
     for (let i = this.dynamic.length - 1; i >= 0; i--) { const c = this.dynamic[i]; if (now - c.born > 360) this.removeCorpse(c); }
   }
@@ -228,13 +257,19 @@ export class ResourceSystem {
 
   serialize() {
     const out = [];
-    for (const n of this.nodes) if (!n.alive || n.hp < n.hpMax) out.push([n.idx, n.alive ? 1 : 0, Math.round(n.hp * 10) / 10, Math.round(n.respawnAt)]);
+    for (const n of this.nodes) {
+      if (n.alive && n.hp >= n.hpMax && !n.moved) continue;
+      const e = [n.idx, n.alive ? 1 : 0, Math.round(n.hp * 10) / 10, Math.round(n.respawnAt)];
+      if (n.moved) e.push(Math.round(n.x * 10) / 10, Math.round(n.z * 10) / 10, Math.round(n.rot * 100) / 100);
+      out.push(e);
+    }
     return out;
   }
   load(arr) {
     if (!arr) return;
-    for (const [i, alive, hp, at] of arr) {
+    for (const [i, alive, hp, at, mx, mz, mr] of arr) {
       const n = this.nodes[i]; if (!n) continue;
+      if (mx !== undefined) this._moveTo(n, mx, mz, mr || 0);
       n.alive = !!alive; n.hp = hp; n.respawnAt = at;
       if (!n.alive) this._removeCollider(n);
       this._writeMatrix(n);
