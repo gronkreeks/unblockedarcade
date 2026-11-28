@@ -294,6 +294,20 @@ class Game {
     E.on('hurt', e => { if (e.victim === this.player && e.dmg > 0.5) { this.ui.damageFlash(); this.audio.hurt(); } });
     E.on('crafted', e => { if (e.surv === this.player) { this.ui.pickupNote(e.id, e.n); this.audio.craftDone(); } });
     E.on('unlocked', e => { if (e.surv === this.player) this.ui.toast(`Blueprint learned: ${ITEMS[e.id].name}`); });
+    // Explosions shake the screen (harder the closer and bigger they are) and flash it when close.
+    E.on('explosion', e => {
+      const cp = this.camera.position, d = Math.hypot(e.x - cp.x, (e.y || cp.y) - cp.y, e.z - cp.z), size = e.size || 1;
+      const reach = 70 + 40 * size, k = Math.max(0, 1 - d / reach);
+      if (k > 0) this.trauma = Math.min(1, (this.trauma || 0) + k * k * (0.55 + 0.35 * size));
+      if (d < 16 * size) this.ui.blastFlash((1 - d / (16 * size)) * 0.85);
+    });
+    // Explosives on your base (or a clan's raid reaching your walls): the raid banner and alarm.
+    E.on('raidStarted', e => { if (e.st && e.st.team === this.player.team) this.ui.raidAlert(e.team.name); });
+    E.on('structureHit', e => {
+      if (!e.st || e.st.team !== this.player.team || !e.attacker || e.attacker === this.player) return;
+      const t = e.attacker.team && this.teams.get(e.attacker.team);
+      if (e.type === 'explosive' || (t && t.raid && t.raid.target === e.st.id)) this.ui.raidAlert(t ? t.name : 'someone');
+    });
     E.on('structureHit', e => { if (e.st && e.st.team === this.player.team && e.attacker && e.attacker !== this.player && (!this._warnT || this.now - this._warnT > 30)) { this._warnT = this.now; this.ui.toast('Your base is taking damage'); } });
   }
   onUnlock() {
@@ -341,6 +355,7 @@ class Game {
     }
     if (!P.alive) { this.camera.position.set(P.x, P.y + 0.4, P.z); this.camera.rotation.set(-0.3, P.yaw + Math.PI, 0.6, 'YXZ'); }
     const cp = this.camera.position;
+    if (this.trauma > 0 && (!paused || !P.alive)) this.shakeCamera(dt);   // (while paused the view isn't rebuilt each frame)
     this.camera.updateMatrixWorld(); this.audio.listen(this.camera);   // 3D sound follows your view
     this.env.update(cp, this);
     this.lightPool.update(cp, dt);
@@ -358,6 +373,15 @@ class Game {
     updateVisible(this.scene, false);
     this.batch.update(cp, this.gfx.shadows ? (this.gfx.shadowDist || 70) * 1.45 + 5 : 0);
     if (this.post && this.post.enabled && this.post.ready) this.post.render(); else this.renderer.render(this.scene, this.camera);
+  }
+  // Screen shake from explosions: a jolt that dies away over about a second. The view is rebuilt
+  // from the player every frame, so the offsets never add up.
+  shakeCamera(dt) {
+    const c = this.camera, a = this.trauma * this.trauma, t = performance.now() * 0.001;
+    const n = (f, p) => Math.sin(t * f + p) * 0.6 + Math.sin(t * f * 1.9 + p * 2.3) * 0.4;
+    c.rotation.x += a * 0.07 * n(37, 0.3); c.rotation.y += a * 0.07 * n(31, 1.7); c.rotation.z += a * 0.05 * n(27, 4.1);
+    c.position.x += a * 0.12 * n(43, 2.2); c.position.y += a * 0.12 * n(39, 5.3);
+    this.trauma = Math.max(0, this.trauma - dt * 1.1);
   }
   // Small things far away aren't drawn: loot containers, bags and drops past ~140 m, deployables
   // past ~170 m (checked a few times a second).

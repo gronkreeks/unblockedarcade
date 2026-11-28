@@ -75,6 +75,14 @@ label.check { display: flex; gap: 0.5rem; align-items: center; }
 #hitmark::before { transform: rotate(45deg); } #hitmark::after { transform: rotate(-45deg); }
 #hitmark.show { opacity: 1; } #hitmark.head::before, #hitmark.head::after { background: #ff4a4a; }
 #dmgflash { position: absolute; inset: 0; background: #a01010; opacity: 0; transition: opacity 0.15s; }
+#blastflash { position: absolute; inset: 0; background: #fff1d8; opacity: 0; pointer-events: none; }
+#raidBanner { position: absolute; top: 34px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; color: #e0241b; text-shadow: 0 2px 6px #000; animation: raidPulse 1.1s ease-in-out infinite; pointer-events: none; }
+#raidBanner b { display: block; font-size: 1.7rem; font-weight: 900; line-height: 1.1; text-align: center; }
+#raidBanner small { display: block; font-size: 0.85rem; font-weight: 700; color: #ffd6d2; text-align: center; }
+#raidBanner .skull svg { width: 34px; height: 34px; display: block; filter: drop-shadow(0 2px 4px #000); }
+#raidBanner .skull:nth-child(2), #raidBanner .skull:nth-child(4) { opacity: 0.75; }
+#raidBanner .skull:nth-child(2) svg, #raidBanner .skull:nth-child(4) svg { width: 26px; height: 26px; }
+@keyframes raidPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 #clock { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); font-weight: 800; font-size: 0.85rem; text-shadow: 0 1px 2px #000; }
 #perf { position: absolute; top: 10px; right: 12px; font-size: 0.8rem; color: var(--muted); text-shadow: 0 1px 2px #000; }
 #notes { position: absolute; left: 14px; bottom: 140px; display: flex; flex-direction: column; gap: 4px; }

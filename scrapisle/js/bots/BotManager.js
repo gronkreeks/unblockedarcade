@@ -9,6 +9,7 @@ import { BotBuilder } from './BotBuilder.js';
 import { BotProgression } from './BotProgression.js';
 import { BotRaiding } from './BotRaiding.js';
 import { BotAI } from './BotAI.js';
+import { CELL } from '../data/building.js';
 import { BotReport } from './BotReport.js';
 import { dist, randRange, pick, mulberry32 } from '../core/util.js';
 
@@ -88,6 +89,49 @@ export class BotManager {
   }
   // A clan learns where the player is (seen, heard shooting, or shot by them).
   spotPlayer(team, x, z) { if (team) team.intel = { x, z, t: this.game.now }; }
+
+  // ---------- keeping out of other people's bases ----------
+  // Every base on the island, refreshed every few seconds. Bots who don't belong keep this far away:
+  // walking past right outside someone's walls gets you shot (and having bots loiter outside your
+  // base all day is just annoying), so they only come close to raid or to fight.
+  baseZones() {
+    const G = this.game;
+    if (this._zones && G.now - this._zonesT < 5) return this._zones;
+    this._zonesT = G.now;
+    const out = [];
+    for (const st of G.build.structures.values()) {
+      if (st.pieces.size < 2) continue;
+      const z = G.build.zoneOf(st), player = G.player && st.team === G.player.team;
+      out.push({ x: z.x, z: z.z, r: z.r + (player ? 40 : 22), team: st.team, st: st.id, player });
+    }
+    return (this._zones = out);
+  }
+  // The base zone at (x, z) that bot b has no business in (not its own, not its raid target), or null.
+  foreignBaseAt(b, x, z) {
+    const team = this.game.teams.of(b), raid = team && team.raid;
+    for (const zn of this.baseZones()) {
+      if (zn.team === b.team || (raid && raid.target === zn.st)) continue;
+      const dx = x - zn.x, dz = z - zn.z;
+      if (dx * dx + dz * dz < zn.r * zn.r) return zn;
+    }
+    return null;
+  }
+  // Is the player standing on a floor inside one of their own buildings?
+  playerInside() {
+    const G = this.game, P = G.player;
+    if (!P || !P.alive) return false;
+    let inside = false;
+    G.build.pieceHash.query(P.x, P.z, 4, p => {
+      const st = G.build.structures.get(p.st);
+      if (!st || st.team !== P.team) return;
+      const L = G.build.toLocal(st, P.x, P.y, P.z), i = Math.floor(L.x / CELL), j = Math.floor(L.z / CELL);
+      for (let k = 0; k < 5; k++) if (G.build.cellPiece(st, i, j, k)) { inside = true; return true; }
+    });
+    return inside;
+  }
+  // The player has been inside their base for more than 5 s: bots stop bothering them (unless
+  // they're raiding that base, or the player shoots at them).
+  playerSheltered() { const P = this.game.player; return !!(P && P.alive && P.homeSince != null && this.game.now - P.homeSince > 5); }
   // Push or back off, as a clan: their combined firepower near you against your gear.
   // AK against a clan of bows: they all back off. AK against three or more guns: they all come.
   assessPlayer(t) {
@@ -95,6 +139,7 @@ export class BotManager {
     const clear = () => { t.push = null; t.retreat = null; };
     if (t.hunt && (G.now > t.hunt.until || !P || !P.alive)) t.hunt = null;
     if (!P || !P.alive || !t.intel || G.now - t.intel.t > 90) return clear();
+    if (this.playerSheltered() && !(t.raid && t.raid.targetTeam === P.team)) { t.hunt = null; return clear(); }   // you're home: not worth sieging for
     // a well-off clan that heard your shots keeps coming unless it's clearly outgunned
     if (t.hunt) {
       const fire = (a) => { const w = this.prog.bestWeapon(a); return weaponScore(w) * (1 + Math.min(1, a.armorScore()) * 0.5); };
@@ -142,6 +187,7 @@ export class BotManager {
   }
   // Your gunshots (and explosions) carry: well-off clans in earshot come to fight you.
   answerShots(e) {
+    if (this.playerSheltered()) return;   // shooting out of your own base doesn't bring clans running
     const G = this.game, R = Math.min(350, (e.r || 150) * 1.5);
     for (const t of G.teams.teams.values()) {
       const alive = G.teams.alive(t); if (!alive.length) continue;
@@ -166,7 +212,10 @@ export class BotManager {
   }
   respawn(b) {
     const G = this.game;
-    const bags = G.deploy.list.filter(d => d.def.spawn && d.team === b.team && G.deploy.spawnReady(d));
+    let bags = G.deploy.list.filter(d => d.def.spawn && d.team === b.team && G.deploy.spawnReady(d));
+    // mid-raid, the dead come back at the FOB's bags (the next wave), not at home
+    const raid = G.teams.of(b)?.raid;
+    if (raid && raid.fob && raid.fob.bags && ['rally', 'breach', 'loot'].includes(raid.state)) { const fobBags = bags.filter(d => raid.fob.bags.includes(d.id)); if (fobBags.length) bags = fobBags; }
     this.starterKit(b);
     b.alive = true; b.hp = 60 + Math.random() * 20; b.bleed = 0; b.rads = 0; b.poison = 0; b.hot = 0;
     b.lastHitBy = null; b.ai.target = null; b.ai.task = null; b.ai.goal = 'task'; b.ai.path = null;
@@ -187,6 +236,8 @@ export class BotManager {
   update(dt) {
     const G = this.game, P = G.player;
     this.counts = { full: 0, mid: 0, far: 0 };
+    this.homeT = (this.homeT || 0) - dt;
+    if (P && this.homeT <= 0) { this.homeT = 0.5; P.homeSince = this.playerInside() ? (P.homeSince ?? G.now) : null; }
     for (const b of this.list) {
       if (!b.alive) {
         // the body stays down for a few seconds before the bag is all that's left

@@ -109,6 +109,7 @@ export class BotAI {
   }
   setTask(b, t) {
     const ai = b.ai;
+    if (t && t.type === 'roam' && t.x !== undefined) { const c = this.clearOfBases(b, t.x, t.z); t.x = c.x; t.z = c.z; }
     ai.claim = this.taskKey(t);
     if (!t.until) {
       // allow for the walk there: tasks far away get more time
@@ -170,6 +171,7 @@ export class BotAI {
         if (!G.physics.los(eye, { x: a.x, y: a.y + 1.3, z: a.z })) return;
       }
       if (!attacker && ai.ignore instanceof Map && (ai.ignore.get(a.id) || 0) > G.now) return;
+      if (a === G.player && !attacker && this.leaveAlone(b, a)) return;
       const score = (attacker ? 100 : 0) + (a === ai.target ? 30 : 0) - d;
       if (score > bs) { bs = score; best = a; }
     });
@@ -186,7 +188,7 @@ export class BotAI {
       const t = G.actorById(team.alert.id);
       const help = ai.tier === 'normal' ? 130 : 100;
       const ignored = ai.ignore instanceof Map && (ai.ignore.get(team.alert.id) || 0) > G.now;
-      if (t && t.alive && !ignored && G.now - team.alert.t < 6 && dist(b.x, b.z, team.alert.x, team.alert.z) < help && (this.kitted(b) || !(t.kind === 'survivor' && this.kitted(t)))) best = t;
+      if (t && t.alive && !ignored && !(t === G.player && this.leaveAlone(b, t)) && G.now - team.alert.t < 6 && dist(b.x, b.z, team.alert.x, team.alert.z) < help && (this.kitted(b) || !(t.kind === 'survivor' && this.kitted(t)))) best = t;
     }
     if (best) {
       if (best === G.player) this.mgr.spotPlayer(team, best.x, best.z);
@@ -201,6 +203,7 @@ export class BotAI {
     if (a.kind === 'survivor' && a.team && a.team === b.team) return;
     if (a.kind === 'animal' && nearMiss) return;
     ai.shotAt = { src: a, t: G.now, x: a.x, z: a.z, hit: !nearMiss };
+    if (!nearMiss) { ai.flinchAt = G.now; ai.flinchX = randRange(-0.06, 0.06); ai.flinchY = randRange(-0.02, 0.07); }
     if (a === G.player) this.mgr.spotPlayer(G.teams.of(b), a.x, a.z);
     ai.perceiveT = 0;
     const team = G.teams.of(b);
@@ -220,11 +223,18 @@ export class BotAI {
       if (b.crouch && !nearMiss) b.crouch = false;
     }
   }
+  // The player has been holed up in their base for over 5 s and isn't shooting at this bot: leave them
+  // be (unless this bot's clan is raiding that base).
+  leaveAlone(b, P) {
+    if (!this.mgr.playerSheltered() || this.underFire(b, P)) return false;
+    const team = this.game.teams.of(b);
+    return !(team && team.raid && team.raid.targetTeam === P.team && team.raid.state !== 'prep');
+  }
   underFire(b, a) { const s = b.ai.shotAt; return s && s.src === a && this.game.now - s.t < 10; }
   startCombat(b, t) {
     const ai = b.ai;
     ai.target = t; ai.reactT = ai.S.react * randRange(0.9, 1.3);   // expert about 0.3-0.45 s, a touch slower than a real player ai.targetSeen = this.game.now; ai.lastSeen = { x: t.x, z: t.z }; ai.engagedAt = this.game.now;
-    ai.aimErrX = randRange(-1, 1); ai.aimErrY = randRange(-1, 1); ai.aimFor = null;
+    ai.ex = randRange(-1.6, 1.6); ai.ey = randRange(-1.2, 1.2); ai.aimFor = null;   // the first flick lands off target
     const team = this.game.teams.of(b);
     if (team && t.kind === 'survivor') { if (b.lastHitBy === t) team.alert = { id: t.id, x: b.x, z: b.z, t: this.game.now }; this.game.teams.hostility(team, t.team, 1); }
   }
@@ -341,7 +351,7 @@ export class BotAI {
       }
     }
     // 2. loot bags lying around
-    const bag = G.loot.hash.nearest(b.x, b.z, 45, o => o.cont && o.label && !o.cont.isEmpty() && o.cont.totalValue() > 8 && b.inv.main.emptyCount() > 3);
+    const bag = G.loot.hash.nearest(b.x, b.z, 45, o => o.cont && o.label && !o.cont.isEmpty() && o.cont.totalValue() > 8 && b.inv.main.emptyCount() > 3 && !this.mgr.foreignBaseAt(b, o.x, o.z));
     if (bag) return this.setTask(b, { type: 'lootbag', bag });
     // 3. tidy up: drop spare copies of tools and weapons, then deposit when heavy (needs room in a base box)
     this.cleanInventory(b);
@@ -476,7 +486,7 @@ export class BotAI {
     const strong = weaponScore(this.mgr.prog.bestWeapon(b)) > 9;
     const ranged = !!this.mgr.prog.bestGun(b);
     const o = this.homeOrigin(b, this.game.teams.of(b));
-    return this.game.animals.nearest((b.x + o.x) / 2, (b.z + o.z) / 2, 200, a => a.alive && (ranged || a.species === 'boar' || a.species === 'chicken') && (strong || (a.species !== 'bear' && a.species !== 'wolf')));
+    return this.game.animals.nearest((b.x + o.x) / 2, (b.z + o.z) / 2, 200, a => a.alive && !this.mgr.foreignBaseAt(b, a.x, a.z) && (ranged || a.species === 'boar' || a.species === 'chicken') && (strong || (a.species !== 'bear' && a.species !== 'wolf')));
   }
 
   // Convert a progression activity into a task.
@@ -496,7 +506,7 @@ export class BotAI {
         const o = this.homeOrigin(b, team);
         const node = G.res.nearest(o.x, o.z, 200, n => !this.unreachable(b, n) && (kind === 'tree' ? n.type === 'tree' : (n.type === 'ore' && (n.kind === kind || (kind === 'stone' && n.kind !== 'sulfur'))) || (n.type === 'pick' && n.kind === kind + '_pile')))
           || G.res.nearest(b.x, b.z, 260, n => !this.unreachable(b, n) && (kind === 'tree' ? n.type === 'tree' : n.type === 'ore' && n.kind === kind))
-          || G.res.nearest(o.x, o.z, 700, n => kind === 'tree' ? n.type === 'tree' : n.type === 'ore' && n.kind === kind);
+          || G.res.nearest(o.x, o.z, 700, n => (kind === 'tree' ? n.type === 'tree' : n.type === 'ore' && n.kind === kind) && !this.mgr.foreignBaseAt(b, n.x, n.z));
         if (!node) return { type: 'roam', x: b.x + randRange(-150, 150), z: b.z + randRange(-150, 150), until: G.now + 30 };
         return node.type === 'pick' ? { type: 'pick', node } : { type: 'harvest', node, res: act.res, need: act.need + this.mgr.prog.buffer(act.res) };
       }
@@ -516,7 +526,15 @@ export class BotAI {
     if (L && L !== b && dist(L.x, L.z, b.x, b.z) < 600) return { x: L.x, z: L.z };
     return { x: b.x, z: b.z };
   }
-  unreachable(b, n) { const u = b.ai.unreach; return u && u.get(n) > this.game.now; }
+  // Also counts as out of reach: anything right outside someone else's base (see BotManager.baseZones).
+  unreachable(b, n) { const u = b.ai.unreach; return (u && u.get(n) > this.game.now) || !!this.mgr.foreignBaseAt(b, n.x, n.z); }
+  // A spot to wander to, moved out of any base zone the bot doesn't belong in.
+  clearOfBases(b, x, z) {
+    const zn = this.mgr.foreignBaseAt(b, x, z);
+    if (!zn) return { x, z };
+    const dx = x - zn.x, dz = z - zn.z, d = Math.hypot(dx, dz) || 1;
+    return { x: zn.x + dx / d * (zn.r + 8), z: zn.z + dz / d * (zn.r + 8) };
+  }
   markUnreachable(b, n) { const ai = b.ai; if (!ai.unreach) ai.unreach = new Map(); ai.unreach.set(n, this.game.now + 120); }
 
   stepTask(b, team, prog, step) {
@@ -652,7 +670,10 @@ export class BotAI {
   goTo(b, x, z, dt, mode, arrive = 1.3, opts = {}) {
     const G = this.game, ai = b.ai;
     const team = G.teams.of(b);
-    const st = opts.st || (team && team.base && team.base.st ? G.build.structures.get(team.base.st) : null);
+    let st = opts.st || null;
+    // standing inside someone else's base (looting a raid, say): plan the way out through it first
+    if (!st && mode !== 'far') { const inn = G.build.structureNear(b.x, b.z, 4); if (inn && inn.team !== b.team) { const zn = G.build.zoneOf(inn); if (dist(b.x, b.z, zn.x, zn.z) < zn.core) { st = inn; opts = { ...opts, raid: true }; } } }
+    if (!st) st = team && team.base && team.base.st ? G.build.structures.get(team.base.st) : null;
     if (st && mode !== 'far') {
       const zn = G.build.zoneOf(st);
       const targetIn = dist(x, z, zn.x, zn.z) < zn.core;
@@ -1191,43 +1212,58 @@ export class BotAI {
     const alive = p.type === 'doorway' ? !!p.door : t.st.pieces.has(p.key);
     if (!alive) return 'done';
     if (t.method === 'rocket') return this._rocketBreach(b, t, dt, mode);
-    // stand on the outside of the piece, on the side we're approaching from
+    // work the face of the piece that looks towards the FOB (where the crew covers from)
     const nx = Math.sin(p.wyaw + Math.PI / 2), nz = Math.cos(p.wyaw + Math.PI / 2);
-    const side = (b.x - p.wx) * nx + (b.z - p.wz) * nz >= 0 ? 1 : -1;
+    const from = t.fob || b;
+    if (t.side === undefined) t.side = (from.x - p.wx) * nx + (from.z - p.wz) * nz >= 0 ? 1 : -1;
+    const side = t.side;
     const sx = p.wx + nx * side * 1.3, sz = p.wz + nz * side * 1.3;
-    if (!t.placed || G.now > t.placed + 14) {
-      if (!this.nav.moveTo(b, sx, sz, dt, mode, { arrive: 0.9 })) return;
-      if (t.method === 'melee' || t.method === 'walk') {
-        const st = this.equipTool(b, 'tree') || this.equip(b, s => ITEMS[s.id].type === 'melee');
-        if (b.swingT <= 0 && st) {
-          b.swingT = ITEMS[st.id].rate; b.ai.swing = 1; this.faceTo(b, p.wx, p.wy + 1.2, p.wz);
-          const dmg = ITEMS[st.id].dmg;
-          if (p.type === 'doorway' && p.door) G.build.damageDoor(p, dmg, 'melee', b); else G.build.damagePiece(p, dmg, 'melee', b);
-          if (st.c !== undefined) st.c = Math.max(0, st.c - 1 / (ITEMS[st.id].dur || 300));
-          if (mode === 'full') G.audio.hitAt('wood', p);
-        }
-        return;
-      }
-      if (b.inv.count(t.method) <= 0) return 'done';
-      const def = ITEMS[t.method];
-      const live = G.combat.charges.filter(c => Math.hypot(c.x - p.wx, c.z - p.wz) < 2.5).length;
-      const hp = p.type === 'doorway' && p.door ? p.door.hp : p.hp;
-      const per = def.dmg;
-      const needed = Math.max(1, Math.ceil(hp / per) - live);
-      for (let i = 0; i < Math.min(needed, b.inv.count(t.method)); i++) G.combat.throwCharge(b, t.method, { x: p.wx + nx * side * 0.25 + randRange(-0.2, 0.2), y: p.wy + 1 + randRange(-0.3, 0.3), z: p.wz + nz * side * 0.25 });
-      t.placed = G.now;
-      if (mode === 'full') G.audio.click();
+    const melee = t.method === 'melee' || t.method === 'walk';
+    const live = G.combat.charges.filter(c => Math.hypot(c.x - p.wx, c.z - p.wz) < 2.5).length;
+    // charges already ticking on this piece: wait in cover until they go off
+    if (!melee && live > 0) { this.breachCover(b, t, p, nx, nz, side, dt, mode); return; }
+    if (!this.nav.moveTo(b, sx, sz, dt, mode, { arrive: 0.9 })) {
+      // can't get to that face (a box, a rock, a ditch): try the other face once, then plant from as
+      // close as we got, and failing that have the raid plan another way in
+      t.stuck = (t.stuck || 0) + (b.ai.stuckT > 2 ? dt : 0);
+      if (t.stuck > 4 && !t.flipped) { t.flipped = true; t.side = -t.side; t.stuck = 0; return; }
+      if (t.stuck > 8) {
+        if (Math.hypot(b.x - p.wx, b.z - p.wz) > 3.2) { const team = G.teams.of(b); if (team && team.raid) team.raid.replan = true; return 'fail'; }
+      } else return;
     }
-    // back off while it blows
-    this.nav.moveTo(b, p.wx + nx * side * 9, p.wz + nz * side * 9, dt, mode, { arrive: 1 });
+    if (melee) {
+      const st = this.equipTool(b, 'tree') || this.equip(b, s => ITEMS[s.id].type === 'melee');
+      if (b.swingT <= 0 && st) {
+        b.swingT = ITEMS[st.id].rate; b.ai.swing = 1; this.faceTo(b, p.wx, p.wy + 1.2, p.wz);
+        const dmg = ITEMS[st.id].dmg;
+        if (p.type === 'doorway' && p.door) G.build.damageDoor(p, dmg, 'melee', b); else G.build.damagePiece(p, dmg, 'melee', b);
+        if (st.c !== undefined) st.c = Math.max(0, st.c - 1 / (ITEMS[st.id].dur || 300));
+        if (mode === 'full') G.audio.hitAt('wood', p);
+      }
+      return;
+    }
+    if (b.inv.count(t.method) <= 0) return 'done';
+    const def = ITEMS[t.method];
+    const hp = p.type === 'doorway' && p.door ? p.door.hp : p.hp;
+    const needed = Math.max(1, Math.ceil(hp / def.dmg));
+    for (let i = 0; i < Math.min(needed, b.inv.count(t.method)); i++) G.combat.throwCharge(b, t.method, { x: p.wx + nx * side * 0.25 + randRange(-0.2, 0.2), y: p.wy + 1 + randRange(-0.3, 0.3), z: p.wz + nz * side * 0.25 });
+    t.placed = G.now;
+    if (mode === 'full') G.audio.click();
+  }
+  // Back off from planted charges towards the FOB and wait for the blast, facing the wall.
+  breachCover(b, t, p, nx, nz, side, dt, mode) {
+    const f = t.fob, dx = f ? f.x - p.wx : nx * side, dz = f ? f.z - p.wz : nz * side, L = Math.hypot(dx, dz) || 1;
+    if (this.nav.moveTo(b, p.wx + dx / L * 12, p.wz + dz / L * 12, dt, mode, { arrive: 1.5, run: true })) { b.vx = b.vz = 0; this.faceTo(b, p.wx, p.wy + 1, p.wz); this.equipWeapon(b); }
   }
   // Rocket raid: stand off about 18 m with a clear shot and put rockets into the wall or door.
   _rocketBreach(b, t, dt, mode) {
     const G = this.game, p = t.piece;
     if (b.inv.count('rocket') <= 0 || b.inv.count('rocket_launcher') <= 0) return 'done';
     const nx = Math.sin(p.wyaw + Math.PI / 2), nz = Math.cos(p.wyaw + Math.PI / 2);
-    if (t.side === undefined) t.side = (b.x - p.wx) * nx + (b.z - p.wz) * nz >= 0 ? 1 : -1;
-    if (t.range === undefined) t.range = 18;
+    // siege: fire from the FOB side, from range (step closer only if the shot is blocked)
+    const from = t.fob || b;
+    if (t.side === undefined) t.side = (from.x - p.wx) * nx + (from.z - p.wz) * nz >= 0 ? 1 : -1;
+    if (t.range === undefined) t.range = 24;
     const sx = p.wx + nx * t.side * t.range, sz = p.wz + nz * t.side * t.range;
     if (!t.inPos) { if (!this.nav.moveTo(b, sx, sz, dt, mode, { arrive: 3, run: true })) return; t.inPos = true; }
     b.vx = b.vz = 0;
@@ -1250,12 +1286,73 @@ export class BotAI {
   t_raidloot(b, t, dt, mode) {
     const G = this.game, d = t.dep;
     if (!G.deploy.byId.has(d.id) || d.cont.isEmpty()) return 'done';
-    if (!this.goTo(b, d.x, d.z, dt, mode, 1.6, { st: t.st, raid: true })) { if (b.ai.stuckT > 12) return 'fail'; return; }
+    if (!this.goTo(b, d.x, d.z, dt, mode, 1.6, t.st ? { st: t.st, raid: true } : {})) { if (b.ai.stuckT > 8) { this.markUnreachable(b, d); return 'fail'; } return; }
     const before = b.inv.totalValue();
     this.takeFrom(b, d.cont);
     const team = G.teams.of(b);
-    if (team && team.raid) { team.raid.lootedValue += Math.max(0, b.inv.totalValue() - before); }
+    if (team && team.raid && t.st) { team.raid.lootedValue += Math.max(0, b.inv.totalValue() - before); }
     return 'done';
+  }
+  // ---------- FOB jobs (see BotRaiding) ----------
+  // Put down the FOB box or this bot's sleeping bag next to the FOB spot.
+  t_fobsetup(b, t, dt, mode) {
+    const G = this.game, team = G.teams.of(b), r = team && team.raid;
+    if (!r || !r.fob || b.inv.count(t.item) < 1) return 'done';
+    for (let k = 0; k < 8; k++) {
+      const a = Math.random() * Math.PI * 2, rr = t.item === 'sleeping_bag' ? 3 + Math.random() * 4 : 1 + Math.random() * 2;
+      const x = r.fob.x + Math.sin(a) * rr, z = r.fob.z + Math.cos(a) * rr, y = G.world.heightAt(x, z);
+      const res = G.deploy.place(b, t.item, x, y, z, Math.random() * Math.PI * 2);
+      if (res.ok) {
+        if (t.item === 'sleeping_bag') (r.fob.bags = r.fob.bags || []).push(res.dep.id);
+        else r.fob.box = res.dep.id;
+        return 'done';
+      }
+    }
+    return 'fail';
+  }
+  // Take boom out of the FOB box.
+  t_fobfetch(b, t, dt, mode) {
+    const G = this.game, d = t.dep;
+    if (!G.deploy.byId.has(d.id) || d.cont.count(t.item) <= 0) return 'done';
+    if (!this.goTo(b, d.x, d.z, dt, mode, 1.6)) { if (b.ai.stuckT > 8) return 'fail'; return; }
+    const n = Math.min(t.n - b.inv.count(t.item), d.cont.count(t.item));
+    if (n > 0) { d.cont.remove(t.item, n); const left = b.inv.give(t.item, n); if (left > 0) d.cont.add(t.item, left); }
+    return 'done';
+  }
+  // Leave spare boom (or, when looting, everything but the kit) in the FOB box.
+  t_fobstash(b, t, dt, mode) {
+    const G = this.game, d = t.dep;
+    if (!G.deploy.byId.has(d.id)) return 'done';
+    if (!this.goTo(b, d.x, d.z, dt, mode, 1.6)) { if (b.ai.stuckT > 8) return 'fail'; return; }
+    if (t.item) { const n = b.inv.count(t.item) - (t.keep || 0); if (n > 0) { const k = Math.min(n, d.cont.room(t.item)); b.inv.remove(t.item, k); d.cont.add(t.item, k); } return 'done'; }
+    const kp = this.keepPlan(b);
+    for (let i = 0; i < b.inv.main.size; i++) {
+      const s = b.inv.main.slots[i]; if (!s || kp[i] >= s.n) continue;
+      const k = kp[i] || 0;
+      if (k > 0) { const part = { ...s, n: s.n - k }; s.n = k; const left = d.cont.addStack(part); if (left) s.n += left.n; continue; }
+      b.inv.main.slots[i] = d.cont.addStack(s);
+    }
+    b.inv.main.touch();
+    return 'done';
+  }
+  // Runner: bring boom to a breacher and hand it over.
+  t_handoff(b, t, dt, mode) {
+    const G = this.game, to = G.bots.byId.get(t.to);
+    if (!to || !to.alive || b.inv.count(t.item) <= 0) return 'done';
+    if (!this.nav.moveTo(b, to.x, to.z, dt, mode, { arrive: 2.5, run: true }) && dist(b.x, b.z, to.x, to.z) > 3) return;
+    const n = b.inv.count(t.item); b.inv.remove(t.item, n); const left = to.inv.give(t.item, n); if (left > 0) b.inv.give(t.item, left);
+    return 'done';
+  }
+  // Overwatch: hold a spot in the FOB firing line, gun out, watching the target (crouching now and
+  // then like a player peeking over cover). Defenders who show up are fought by the normal sensing.
+  t_overwatch(b, t, dt, mode) {
+    if (!this.game.teams.of(b)?.raid) return 'done';
+    if (!this.nav.moveTo(b, t.x, t.z, dt, mode, { arrive: 1.5 })) { if (b.ai.stuckT > 6) { t.x += randRange(-4, 4); t.z += randRange(-4, 4); b.ai.stuckT = 0; } return; }
+    b.vx = b.vz = 0;
+    this.equipWeapon(b);
+    this.faceTo(b, t.face.x, this.game.world.heightAt(t.face.x, t.face.z) + 1.5, t.face.z);
+    t.peekT = (t.peekT || 0) - dt;
+    if (t.peekT <= 0) { t.peekT = randRange(1.5, 4); b.crouch = Math.random() < 0.5; }
   }
 
   // ================= COMBAT =================
@@ -1278,6 +1375,7 @@ export class BotAI {
   fight(b, dt, mode) {
     const G = this.game, ai = b.ai, S = ai.S, t = ai.target;
     if (!t || !t.alive) { this.endCombat(b); return; }
+    if (t === G.player && this.leaveAlone(b, t) && G.now - (b.lastHitTime || -99) > 5) { this.endCombat(b); return; }
     const team = G.teams.of(b);
     // call for help only when actually under fire
     if (team && t.kind === 'survivor' && ((b.lastHitBy === t && G.now - b.lastHitTime < 6) || b.hp < 50)) team.alert = { id: t.id, x: b.x, z: b.z, t: G.now };
@@ -1336,15 +1434,26 @@ export class BotAI {
     const lead = (0.3 + S.recoilCtrl * 0.7) * (1 + ai.leadErr);
     const px = tx + (t.vx || 0) * travel * lead, pz = tz + (t.vz || 0) * travel * lead;
     const drop = ranged ? 0.5 * 9.81 * (def.type === 'bow' || def.id === 'crossbow' ? 0.5 : 0.35) * travel * travel * (0.3 + S.recoilCtrl * 0.7) : 0;
-    ai.errT = (ai.errT || 0) - dt;
-    if (ai.errT <= 0) { ai.errT = 0.4; ai.aimErrX = randRange(-1, 1); ai.aimErrY = randRange(-1, 1); }
+    // Misses come from where the bot points, like a person's, not from wider bullet spread (its gun
+    // spreads exactly as yours does):
+    //  - the crosshair wanders smoothly around the target (a slow drift, so shots come in streaks of
+    //    hits and misses instead of a random spray),
+    //  - it trails a target strafing across its view by a reaction-time lag,
+    //  - the first shots of a fight are rushed and it settles over a couple of seconds,
+    //  - taking a hit makes it flinch.
+    const wk = 1 / 0.55;   // the wander changes direction about twice a second
+    ai.ex = (ai.ex ?? ai.aimErrX ?? 0) * (1 - wk * dt) + gauss() * Math.sqrt(2 * wk * dt);
+    ai.ey = (ai.ey ?? ai.aimErrY ?? 0) * (1 - wk * dt) + gauss() * Math.sqrt(2 * wk * dt);
     const moving = Math.hypot(t.vx || 0, t.vz || 0) > 1;
     const bow = def && def.type === 'bow';
-    // the first shots of a fight are rushed; aim settles over a couple of seconds
     const settle = 1 + 1.6 * Math.exp(-(G.now - (ai.engagedAt ?? -99)) / 1.4);
-    const err = settle * S.aimErr * (1 + d / 70) * (moving ? 1.5 : 1) * (G.env.isNight ? 1.3 : 1) * (bow ? 1.5 : 1) * (Math.hypot(b.vx, b.vz) > 1 ? 1.3 : 1);
-    const wantYaw = Math.atan2(px - e.x, pz - e.z) + ai.aimErrX * err;
-    const wantPitch = Math.atan2(ty + drop - e.y, Math.hypot(px - e.x, pz - e.z)) + ai.aimErrY * err * 0.6;
+    const err = settle * S.aimErr * 0.8 * (1 + d / 70) * (G.env.isNight ? 1.3 : 1) * (bow ? 1.5 : 1) * (Math.hypot(b.vx, b.vz) > 1 ? 1.3 : 1);
+    const rx = tx - b.x, rz = tz - b.z, r2 = Math.max(4, rx * rx + rz * rz);
+    const angVel = ((t.vx || 0) * rz - (t.vz || 0) * rx) / r2;            // how fast the target crosses the view
+    const trail = -angVel * S.react * 0.35 * (moving ? 1 : 0);             // aim lags behind it
+    const fl = ai.flinchAt ? Math.exp(-(G.now - ai.flinchAt) / 0.25) : 0;   // knocked off aim by a hit
+    const wantYaw = Math.atan2(px - e.x, pz - e.z) + ai.ex * err + trail + fl * (ai.flinchX || 0);
+    const wantPitch = Math.atan2(ty + drop - e.y, Math.hypot(px - e.x, pz - e.z)) + ai.ey * err * 0.6 + fl * (ai.flinchY || 0);
     // The bot tracks its intended aim; recoil drift (rs.accP/accY) sits on top of it and is only
     // pulled back as fast as the bot's recoil control allows - the same kick the player feels.
     if (ai.aimYaw === undefined || ai.aimFor !== t) { ai.aimYaw = b.yaw; ai.aimPitch = b.pitch; ai.aimFor = t; }
@@ -1373,7 +1482,12 @@ export class BotAI {
       }
       // fire discipline: better bots wait for drift to settle; worse bots keep spraying
       const maxDrift = ({ normal: 5, hard: 3.5, expert: 2.5 })[ai.tier] * (d < 15 ? 2.5 : 1);
-      if (def.type === 'gun' && def.auto) { if (rs.accP > maxDrift) { ai.burstHold = G.now + 0.15 + (1 - S.recoilCtrl) * 0.2; } if (G.now < (ai.burstHold || 0)) return; }
+      if (def.type === 'gun' && def.auto) {
+        if (rs.accP > maxDrift) { ai.burstHold = G.now + 0.15 + (1 - S.recoilCtrl) * 0.2; }
+        // past ~40 m players tap or burst an automatic instead of holding the trigger
+        if (d > 40 && (ai.burstN || 0) >= (ai.burstLen || 4)) { ai.burstN = 0; ai.burstLen = d > 70 ? 1 + Math.floor(Math.random() * 2) : 3 + Math.floor(Math.random() * 3); ai.burstHold = G.now + randRange(0.3, 0.6); }
+        if (G.now < (ai.burstHold || 0)) return;
+      }
       else if (def.type === 'gun' && (rs.accP > maxDrift * 0.6 || G.now - (ai.lastShot || 0) < (60 / def.rpm) * (1.6 - S.recoilCtrl * 0.6))) return;
       if (def.type === 'bow') {
         // nock, draw and hold like a player: about 1.6-2.4 s between arrows
@@ -1383,7 +1497,7 @@ export class BotAI {
         ai.drawT = 0;
       }
       const r = G.combat.fire(b, st, b.dir(), { aiming: d > 12, moving: Math.hypot(b.vx, b.vz) > 0.5 });
-      if (r && r.recoil) { ai.lastShot = G.now; ai.shotFx = 0.06; ai.shot = 1; }
+      if (r && r.recoil) { ai.lastShot = G.now; ai.shotFx = 0.06; ai.shot = 1; ai.burstN = (ai.burstN || 0) + 1; }
     } else if (d < (def ? def.range : 1.6) + 0.5 && b.swingT <= 0) {
       ai.swing = 1;
       if (st) G.combat.melee(b, st, { dir: b.dir() });
@@ -1445,6 +1559,8 @@ export class BotAI {
   }
 }
 
+// A normally distributed random number (mean 0, spread 1).
+function gauss() { return (Math.random() + Math.random() + Math.random() + Math.random() - 2) * 1.732; }
 function mode_far(b) { return b.ai.mode === 'far'; }
 function Y_loot(team) { return styleOf(team).loot; }
 function G_upkeep(game, st) { return game.build.upkeepPerHour(st); }

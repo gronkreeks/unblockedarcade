@@ -826,11 +826,26 @@ export class UIManager {
   }
   setPrompt(t) { const el = $('prompt'); if (el.textContent !== (t || '')) el.textContent = t || ''; el.hidden = !t; }
   hitmarker(head) { const h = $('hitmark'); h.className = head ? 'show head' : 'show'; clearTimeout(this.hmT); this.hmT = setTimeout(() => h.className = '', 120); this.game.audio.hitmark(); }
+  // Your base is being raided: red banner with skulls at the top of the screen, and an alarm when it
+  // starts. It stays up for 40 s after the last blast or hit on your base.
+  raidAlert(who) {
+    const G = this.game, B = $('raidBanner');
+    const fresh = B.hidden;
+    this.raidUntil = G.now + 40;
+    if (who) $('raidWho').textContent = who === 'someone' ? 'Your base is taking explosive damage' : `${who} are breaking into your base`;
+    if (fresh) { B.hidden = false; G.audio.raidAlarm(); G.logEvent(who && who !== 'someone' ? `${who} started raiding your base` : 'Your base is being raided'); }
+  }
+  // A blast close by whites out the screen for a moment.
+  blastFlash(strength) {
+    const f = $('blastflash'); f.style.transition = 'none'; f.style.opacity = Math.min(0.8, strength);
+    requestAnimationFrame(() => { f.style.transition = 'opacity 0.6s ease-out'; f.style.opacity = 0; });
+  }
   damageFlash() { const d = $('dmgflash'); d.style.opacity = 0.45; clearTimeout(this.dfT); this.dfT = setTimeout(() => d.style.opacity = 0, 160); }
 
   updateHUD(dt) {
     const P = this.P, G = this.game;
     if (!P) return;
+    if (this.raidUntil && G.now > this.raidUntil) { this.raidUntil = 0; $('raidBanner').hidden = true; }
     const bar = (id, v, max) => { const el = $(id); el.querySelector('i').style.width = Math.max(0, Math.min(100, v / max * 100)) + '%'; el.querySelector('b').textContent = Math.round(v); };
     bar('vHp', P.hp, 100); bar('vCal', P.cal, 500); bar('vHyd', P.hyd, 250);
     // status lines

@@ -22,6 +22,9 @@ export function hitShapes(a) {
   ];
 }
 
+// How big each blast looks, sounds and shakes (satchel = 1).
+const BLAST_SIZE = { timed_charge: 1.8, rocket: 1.3, satchel_charge: 1, beancan: 0.7, grenade: 0.8 };
+
 export class CombatSystem {
   constructor(game) {
     this.game = game;
@@ -360,10 +363,11 @@ export class CombatSystem {
       const d = Math.hypot(a.x - c.x, a.y + 1 - c.y, a.z - c.z);
       if (d < R * 1.6) this.damageActor(a, (c.type === 'timed_charge' ? 150 : c.type === 'rocket' ? 90 : 60) * (1 - d / (R * 1.6)), { type: 'explosive', attacker: c.owner });
     });
-    this.flash(c.x, c.y, c.z);
-    this.fxAt('explosion', c, null, 1);
-    this.game.events.emit('noise', { x: c.x, z: c.z, r: 350, src: c.owner, kind: 'explosion' });
-    this.game.events.emit('explosion', { x: c.x, y: c.y, z: c.z, owner: c.owner, type: c.type });
+    const size = c.size = BLAST_SIZE[c.type] || 1;
+    this.flash(c.x, c.y, c.z, size);
+    this.fxAt('explosion', c, null, size);
+    this.game.events.emit('noise', { x: c.x, z: c.z, r: 350 + 100 * size, src: c.owner, kind: 'explosion' });
+    this.game.events.emit('explosion', { x: c.x, y: c.y, z: c.z, owner: c.owner, type: c.type, size });
     this.game.audio && this.game.audio.explosion(c);
   }
 
@@ -391,10 +395,10 @@ export class CombatSystem {
     this.game.scene.add(m);
     this.fx.push({ m, t: 0.25, vy: 0.6 });
   }
-  flash(x, y, z) {
+  flash(x, y, z, size = 1) {
     if (!this.game.camPos || Math.abs(x - this.game.camPos.x) + Math.abs(z - this.game.camPos.z) > 400) return;
     const m = new THREE.Mesh(new THREE.SphereGeometry(0.8, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffb040, transparent: true, opacity: 0.85 }));
-    m.position.set(x, y, z);
+    m.position.set(x, y, z); m.scale.setScalar(size);
     this.game.scene.add(m);
     this.fx.push({ m, t: 0.35, vy: 1, grow: true });
   }

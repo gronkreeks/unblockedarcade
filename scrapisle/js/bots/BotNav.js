@@ -24,7 +24,7 @@ export class BotNav {
     if (mode === 'far') {
       // abstract: terrain-following travel without collision, still walking around guarded monuments
       const step = Math.min(d, 5.6 * (0.85 + 0.15 * ai.S.efficiency) * dt);
-      const a = this.avoidMonuments(b, tx, tz, Math.atan2(tx - b.x, tz - b.z));
+      const a = this.avoidBases(b, tx, tz, this.avoidMonuments(b, tx, tz, Math.atan2(tx - b.x, tz - b.z)));
       b.x += Math.sin(a) * step; b.z += Math.cos(a) * step;
       const ws = W.waterSurface(b.x, b.z);
       b.y = Math.max(W.heightAt(b.x, b.z), ws ? ws.y - 1.3 : -99);
@@ -32,7 +32,7 @@ export class BotNav {
       return d - step <= arrive;
     }
     let want = Math.atan2(tx - b.x, tz - b.z);
-    want = this.avoidMonuments(b, tx, tz, want);
+    want = this.avoidBases(b, tx, tz, this.avoidMonuments(b, tx, tz, want));
     // walls, rocks or a building in the way (or stuck): walk a planned route around them
     let routed = false, steer = null;
     if (mode === 'full' && d > 2.5 && d < 70 && !opts.noGrid) {
@@ -187,6 +187,25 @@ export class BotNav {
       hz += pz * w * 1.5 - (az / d) * w * 0.5;
     }
     return Math.atan2(hx, hz);
+  }
+  // Walk around other people's bases instead of past their walls (see BotManager.baseZones). Not
+  // while fighting, and not around a base the bot is heading into on purpose (a raid, a fight).
+  avoidBases(b, tx, tz, want) {
+    if (b.ai.goal === 'fight') return want;
+    const mgr = this.game.bots, team = this.game.teams.of(b), raid = team && team.raid;
+    let hx = Math.sin(want), hz = Math.cos(want), turned = false;
+    for (const zn of mgr.baseZones()) {
+      if (zn.team === b.team || (raid && raid.target === zn.st)) continue;
+      const ax = zn.x - b.x, az = zn.z - b.z, d = Math.hypot(ax, az) || 1, R = zn.r;
+      if (d > R + 30 || dist(tx, tz, zn.x, zn.z) < R) continue;
+      if (d < R) { hx -= ax / d * 2; hz -= az / d * 2; turned = true; continue; }   // inside: get out
+      if (ax * hx + az * hz < 0) continue;                    // already moving away
+      let px = az / d, pz = -ax / d;
+      if (px * hx + pz * hz < 0) { px = -px; pz = -pz; }
+      const w = Math.min(2, (R + 30 - d) / 30);
+      hx += px * w * 1.5 - (ax / d) * w * 0.5; hz += pz * w * 1.5 - (az / d) * w * 0.5; turned = true;
+    }
+    return turned ? Math.atan2(hx, hz) : want;
   }
   avoid(b, want) {
     const P = this.game.physics, look = 2.6;

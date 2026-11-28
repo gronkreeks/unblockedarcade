@@ -1,5 +1,16 @@
-// Team raids: discover bases, judge if a raid is worth it, prepare charges, rally, breach, loot, go home.
-// Also base defence: teams react when their buildings take damage.
+// Team raids: discover bases, judge if a raid is worth it, prepare charges, set up a forward base,
+// breach, loot, haul it home. Also base defence: teams react when their buildings take damage.
+//
+// How a raid runs (the way player clans do it in Rust):
+//  prep   - craft the boom, a box and a sleeping bag each.
+//  rally  - set up a FOB (forward operating base) 40-50 m from the target, out of its sight where
+//           possible: bags to respawn at, a box holding the spare boom, the crew spread in a firing
+//           line watching the walls.
+//  breach - one or two breachers carry a few charges at a time and blow the cheapest way in; a runner
+//           brings more from the FOB box; everyone else holds overwatch and shoots defenders. Rockets
+//           are fired from the FOB side from range (a siege). The dead respawn at the FOB.
+//  loot   - strip the boxes; full bags are dropped in the FOB box instead of running home each time.
+//  haul   - empty the FOB box and carry it all home.
 import { ITEMS } from '../data/items.js';
 import { STRUCT_DMG, DOORS, CELL } from '../data/building.js';
 import { SKILL, PERSONALITIES } from './BotProfiles.js';
@@ -8,6 +19,7 @@ import { dist, randRange } from '../core/util.js';
 const COOLDOWN = { normal: 420, hard: 480, expert: 600 };
 const WORTH = { normal: 0.42, hard: 0.6, expert: 0.8 };
 const ROCKET = 250;   // a rocket's blast against buildings (before the grade/door multiplier)
+export const CARRY = { satchel_charge: 4, timed_charge: 2, rocket: 3 };   // what a breacher carries at once (the rest waits in the FOB box)
 
 export class BotRaiding {
   constructor(game) {
@@ -38,11 +50,11 @@ export class BotRaiding {
 
   // ---------- breach planning ----------
   // Plan the cheapest route into the base's Claim Cabinet (or biggest box). Returns plan or null.
-  planBreach(team, st, from) {
+  planBreach(team, st, from, goalDep = null) {
     const G = this.game, nav = G.bots.nav;
     const tc = G.build.tcOf(st);
     const targets = G.deploy.list.filter(d => d.st === st.id && d.cont);
-    const goal = tc || targets[0];
+    const goal = goalDep || tc || targets[0];
     if (!goal) return null;
     const cell = nav.cellOf(st, goal.x, goal.z);
     const r = nav.basePath(st, team.id, from.x, from.z, cell, true);
@@ -106,25 +118,65 @@ export class BotRaiding {
       const size = st.pieces.size;
       const worth = k.value * pers * (1 + size / 30) / ((cost + 10) * risk * (1 + travel));
       const grudge = 1 + (team.threats.get(st.team) || 0) * 0.02;
-      const score = worth * grudge * (0.75 + Math.random() * 0.5);
+      // like players: offline raids (nobody home) are the safe ones, and night hides the approach
+      let when = G.env.isNight ? 1.15 : 1;
+      if (G.player && st.team === G.player.team) { const P = G.player; when *= !P.alive || dist(P.x, P.z, k.x, k.z) > 300 ? 1.4 : G.bots.playerSheltered() ? 0.75 : 1; }
+      const score = worth * grudge * when * (0.75 + Math.random() * 0.5);
       if (score > WORTH[team.tier] && score > bs) { bs = score; best = { st, plan, method, charges }; }
     }
     if (!best) { team.raidDrive = Math.min(team.raidDrive, 1.1); return; }
     const z = G.build.zoneOf(best.st);
     const home = G.build.structures.get(team.base.st);
     const hz = home ? G.build.zoneOf(home) : z;
-    const ang = Math.atan2(hz.x - z.x, hz.z - z.z);
+    const fob = this.chooseFob(best.st, hz);
     team.raid = {
       state: best.method === 'melee' || best.method === 'walk' ? 'rally' : 'prep', target: best.st.id, targetTeam: best.st.team, method: best.method,
-      need: best.charges + (best.method === 'satchel_charge' ? 2 : best.method === 'timed_charge' ? 1 : best.method === 'rocket' ? 2 : 0),
-      rally: { x: z.x + Math.sin(ang) * (z.r + 30), z: z.z + Math.cos(ang) * (z.r + 30) }, started: G.now, stateT: G.now, looted: 0, lootedValue: 0,
+      need: this.needFor(best.method, best.charges),
+      rally: fob, fob, started: G.now, stateT: G.now, looted: 0, lootedValue: 0,
       targetName: this.teamLabel(best.st.team), tx: z.x, tz: z.z,
     };
     team.raidDrive = 0;
     this.log(`${team.name} are planning a ${best.method === 'rocket' ? 'rocket raid' : 'raid'} on ${team.raid.targetName}'s base`);
   }
+  // A FOB spot 40-50 m out from the target on the home side: flat dry ground, not right outside
+  // anyone else's base, and best of all with a hill, rock or trees between it and the target's walls.
+  chooseFob(st, home) {
+    const G = this.game, W = G.world, z = G.build.zoneOf(st);
+    const ang = Math.atan2(home.x - z.x, home.z - z.z);
+    let best = null, bs = -Infinity;
+    for (let k = -4; k <= 4; k++) for (const extra of [38, 46]) {
+      const a = ang + k * 0.3, x = z.x + Math.sin(a) * (z.core + extra), zz = z.z + Math.cos(a) * (z.core + extra);
+      const h = W.heightAt(x, zz);
+      if (h < 1.5 || W.slopeAt(x, zz) > 0.35 || W.riverAt(x, zz) > h - 0.5 || W.monumentAt(x, zz, 8) || G.build.blockedAt(x, zz, 3)) continue;
+      let sc = -Math.abs(k) * 6;
+      if (!G.physics.los({ x: z.x, y: W.heightAt(z.x, z.z) + 4, z: z.z }, { x, y: h + 1.5, z: zz })) sc += 60;   // out of sight of the walls
+      for (const zn of G.bots.baseZones()) if (zn.st !== st.id && dist(x, zz, zn.x, zn.z) < zn.r) sc -= 80;
+      if (sc > bs) { bs = sc; best = { x, z: zz }; }
+    }
+    return best || { x: z.x + Math.sin(ang) * (z.core + 40), z: z.z + Math.cos(ang) * (z.core + 40) };
+  }
+  // Boom to bring: the plan's count plus spares, like players do (satchels dud now and then,
+  // rockets miss, and a door gets replaced mid-raid).
+  needFor(method, n) { return method === 'satchel_charge' ? Math.ceil(n * 1.35) + 2 : method === 'timed_charge' ? n + 1 : method === 'rocket' ? Math.ceil(n * 1.25) + 2 : n; }
+  fobBox(r) { const d = r && r.fob && r.fob.box && this.game.deploy.byId.get(r.fob.box); return d && d.cont ? d : null; }
+  fobBags(r) { return r && r.fob && r.fob.bags ? r.fob.bags.map(id => this.game.deploy.byId.get(id)).filter(Boolean) : []; }
+  // Firing-line spot n for the overwatch: spread sideways across the FOB, facing the target.
+  overwatchSpot(r, n) {
+    const f = r.fob, ax = r.tx - f.x, az = r.tz - f.z, L = Math.hypot(ax, az) || 1, ux = ax / L, uz = az / L;
+    const side = [0, -7, 7, -14, 14, -20, 20][n % 7], fwd = 3 + (n % 3) * 2;
+    return { x: f.x + uz * side + ux * fwd, z: f.z - ux * side + uz * fwd };
+  }
   teamLabel(id) { if (this.game.player && id === this.game.player.team) return 'you'; const t = this.game.teams.get(id); return t ? t.name : 'a lone survivor'; }
 
+  // Boom actually on the crew (what a raid can use). Charges still in the home boxes don't count:
+  // counting those sent clans out with empty pockets to stand around the target until they gave up.
+  chargesCarried(team) {
+    const r = team.raid;
+    if (!r || r.method === 'melee' || r.method === 'walk') return 0;
+    let n = 0;
+    for (const b of this.game.teams.alive(team)) n += b.inv.count(r.method);
+    return n;
+  }
   chargesOwned(team) {
     const G = this.game, r = team.raid;
     if (!r || r.method === 'melee' || r.method === 'walk') return 0;
@@ -156,41 +208,84 @@ export class BotRaiding {
     if (G.now - r.started > 2400) return end('timed out');
     switch (r.state) {
       case 'prep': {
-        const launcher = r.method !== 'rocket' || alive.some(m => m.inv.count('rocket_launcher') > 0) || G.bots.progressOf(team).stash('rocket_launcher') > 0;
-        if (this.chargesOwned(team) >= r.need && launcher) { r.state = 'rally'; r.stateT = G.now; this.log(`${team.name} are heading out to ${r.method === 'rocket' ? 'rocket ' : ''}raid ${r.targetName}`); }
+        const launcher = r.method !== 'rocket' || alive.some(m => m.inv.count('rocket_launcher') > 0);
+        if (this.chargesCarried(team) >= r.need && launcher) { r.state = 'rally'; r.stateT = G.now; this.log(`${team.name} are heading out to ${r.method === 'rocket' ? 'rocket ' : ''}raid ${r.targetName}`); }
         else if (G.now - r.stateT > 1800) end('was called off (not enough charges)');
         break;
       }
       case 'rally': {
-        const there = alive.filter(b => dist(b.x, b.z, r.rally.x, r.rally.z) < 25).length;
-        if (there >= Math.ceil(alive.length * 0.7) || G.now - r.stateT > 150) {
-          // fresh breach plan from the rally point
-          const plan = this.planBreach(team, st, r.rally);
+        const f = r.fob, there = alive.filter(b => dist(b.x, b.z, f.x, f.z) < 25);
+        if (there.length && !r.arrivedT) r.arrivedT = G.now;
+        // go once most of the crew is at the FOB and it's set up (or they've waited long enough)
+        const setUp = (this.fobBox(r) || G.now - (r.arrivedT || G.now) > 25) && (this.fobBags(r).length || G.now - (r.arrivedT || G.now) > 25);
+        if ((there.length >= Math.ceil(alive.length * 0.7) && (setUp || r.method === 'melee' || r.method === 'walk')) || G.now - r.stateT > 180) {
+          const plan = this.planBreach(team, st, f);
           if (!plan) return end('found no way in');
-          r.breaches = plan.breaches; r.path = plan.path; r.state = 'breach'; r.stateT = G.now; r.goal = plan.goal;
+          r.breaches = plan.breaches; r.path = plan.path; r.state = 'breach'; r.stateT = G.now; r.goal = plan.goal; r.roles = null;
           G.events.emit('raidStarted', { team, st });
+          this.log(`${team.name} are breaching ${r.targetName === 'you' ? 'your' : r.targetName + (/s$/.test(r.targetName) ? "'" : "'s")} base`);
         }
         break;
       }
       case 'breach': {
         // remaining breaches = pieces still standing
         r.breaches = r.breaches.filter(id => this.findPiece(st, id));
+        // a breacher couldn't get to its wall: plan a fresh way in from the FOB
+        if (r.replan) {
+          r.replan = false;
+          const plan = this.planBreach(team, st, r.fob, r.goal ? G.deploy.byId.get(r.goal) : null) || this.planBreach(team, st, r.fob);
+          if (plan) { r.breaches = plan.breaches; r.path = plan.path; }
+        }
         if (!r.breaches.length) { r.state = 'loot'; r.stateT = G.now; break; }
-        if (r.method !== 'melee' && r.method !== 'walk' && this.chargesOwned(team) <= 0 && !G.combat.charges.some(c => c.owner && c.owner.team === team.id)) return end('ran out of charges');
+        const boom = this.chargesCarried(team) + (this.fobBox(r) ? this.fobBox(r).cont.count(r.method) : 0);
+        const ticking = G.combat.charges.some(c => c.owner && c.owner.team === team.id);
+        if (r.method !== 'melee' && r.method !== 'walk' && boom <= 0 && !ticking) {
+          // out of boom at the FOB: someone runs home for more (or the clan crafts it), up to 4 minutes
+          const home = G.bots.progressOf(team).stash(r.method);
+          if (!r.resupply) { r.resupply = G.now; if (home > 0) this.log(`${team.name} are running home for more ${ITEMS[r.method].name}s`); }
+          if (G.now - r.resupply > 240) return end('ran out of charges');
+        } else if (boom > 0) r.resupply = 0;
         if (G.now - r.stateT > 900) return end('stalled');
+        this.assignRoles(team);
         break;
       }
       case 'loot': {
-        const conts = G.deploy.list.filter(d => d.st === st.id && d.cont && !d.cont.isEmpty());
+        const conts = G.deploy.list.filter(d => d.st === st.id && d.cont && !d.cont.isEmpty() && !d.def.spawn);
         const full = alive.every(b => b.inv.main.emptyCount() < 2);
-        if (!conts.length || full || G.now - r.stateT > 300) { r.state = 'return'; r.stateT = G.now; }
+        // boxes left that nobody can get to: blow a way to the nearest one (if there's boom left)
+        const ai = G.bots.ai, reachable = conts.filter(d => alive.some(b => !ai.unreachable(b, d)));
+        if (conts.length && !reachable.length && r.method !== 'melee' && this.chargesCarried(team) + (this.fobBox(r) ? this.fobBox(r).cont.count(r.method) : 0) > 0) {
+          const plan = this.planBreach(team, st, r.fob, conts[0]);
+          if (plan && plan.breaches.length) { r.breaches = plan.breaches; r.path = plan.path; r.goal = plan.goal; r.state = 'breach'; r.stateT = G.now; break; }
+        }
+        if (!reachable.length || full || G.now - r.stateT > 360) { r.state = 'haul'; r.stateT = G.now; }
         break;
       }
-      case 'return': {
-        if (G.now - r.stateT > 60) end('success');
+      case 'return': case 'haul': {
+        const box = this.fobBox(r);
+        if (!box || box.cont.isEmpty() || G.now - r.stateT > 240) end('success');
         break;
       }
     }
+  }
+  // Who does what during the breach: one or two breachers (whoever holds boom; for rockets, whoever
+  // holds a launcher), one runner who keeps them supplied from the FOB box, the rest on overwatch.
+  assignRoles(team) {
+    const G = this.game, r = team.raid, alive = G.teams.alive(team);
+    if (r.roles && G.now - r.rolesT < 6 && Object.keys(r.roles).every(id => G.bots.byId.get(id)?.alive)) return;
+    r.roles = {}; r.rolesT = G.now;
+    if (r.method === 'melee' || r.method === 'walk') { for (const b of alive) r.roles[b.id] = 'breacher'; return; }
+    const holds = b => r.method === 'rocket' ? b.inv.count('rocket_launcher') : b.inv.count(r.method);
+    const byBoom = alive.slice().sort((a, b) => holds(b) - holds(a));
+    const nBreach = r.method === 'rocket' ? 2 : alive.length >= 4 ? 2 : 1;
+    let n = 0, ow = 0;
+    for (const b of byBoom) {
+      if (n < nBreach && holds(b) > 0) { r.roles[b.id] = 'breacher'; n++; continue; }
+      if (!Object.values(r.roles).includes('runner') && this.fobBox(r) && alive.length >= 3) { r.roles[b.id] = 'runner'; continue; }
+      r.roles[b.id] = 'overwatch'; b.ai.owSlot = ow++;
+    }
+    // nobody holds boom yet but the box has it: the first in line goes and gets it
+    if (!n && byBoom[0]) r.roles[byBoom[0].id] = 'breacher';
   }
   findPiece(st, id) { for (const p of st.pieces.values()) if (p.id === id) return p.type === 'doorway' ? (p.door ? p : null) : p; return null; }
 
@@ -200,47 +295,90 @@ export class BotRaiding {
     if (!r) return null;
     const st = G.build.structures.get(r.target);
     if (!st) return null;
+    const alive = G.teams.alive(team), prog = G.bots.progressOf(team);
+    const fob = r.fob || r.rally, box = this.fobBox(r), atFob = dist(b.x, b.z, fob.x, fob.z) < 12;
     if (r.state === 'prep') {
       // everyone helps build charges: whoever can craft them does
-      const prog = G.bots.progressOf(team);
-      if (r.method === 'rocket' && !G.teams.alive(team).some(m => m.inv.count('rocket_launcher') > 0) && G.teams.alive(team)[0] === b) {
+      if (r.method === 'rocket' && !alive.some(m => m.inv.count('rocket_launcher') > 0) && alive[0] === b) {
+        if (prog.stash('rocket_launcher') > 0) return { type: 'activity', act: { a: 'withdraw', items: { rocket_launcher: 1 } } };
         const act = G.bots.prog.resolve(b, prog, 'rocket_launcher', 1);
         return act ? { type: 'activity', act } : null;
       }
-      const per = Math.ceil(r.need / Math.max(1, G.teams.alive(team).length));
-      if (b.inv.count(r.method) < per && this.chargesOwned(team) < r.need) {
+      const per = Math.ceil(r.need / Math.max(1, alive.length));
+      if (b.inv.count(r.method) < per && this.chargesCarried(team) < r.need) {
+        // boom already made and sitting in the base boxes: pick it up first
+        if (prog.stash(r.method) > 0) return { type: 'activity', act: { a: 'withdraw', items: { [r.method]: per - b.inv.count(r.method) } } };
         const act = G.bots.prog.resolve(b, prog, r.method, per);
         return act ? { type: 'activity', act } : null;
       }
+      // the FOB kit: a box (the leader) and a sleeping bag each, if they're cheap to make
+      if (alive[0] === b && b.inv.count('wood_box') + b.inv.count('large_box') < 1 && b.inv.count('wood') >= 100) { const act = G.bots.prog.resolve(b, prog, 'wood_box', 1); if (act && act.a === 'craft') return { type: 'activity', act }; }
+      if (b.inv.count('sleeping_bag') < 1 && b.inv.count('cloth') >= 30) { const act = G.bots.prog.resolve(b, prog, 'sleeping_bag', 1); if (act && act.a === 'craft') return { type: 'activity', act }; }
       return null;
     }
-    if (r.state === 'rally') return { type: 'goto', x: r.rally.x + randRange(-6, 6), z: r.rally.z + randRange(-6, 6), arrive: 4, raid: true };
+    if (r.state === 'rally') {
+      if (!atFob) return { type: 'goto', x: fob.x + randRange(-5, 5), z: fob.z + randRange(-5, 5), arrive: 4, raid: true };
+      const setup = this.fobSetupFor(b, r);
+      if (setup) return setup;
+      return { type: 'overwatch', ...this.overwatchSpot(r, alive.indexOf(b)), face: { x: r.tx, z: r.tz } };
+    }
     if (r.state === 'breach') {
       const pid = r.breaches[0];
       const p = this.findPiece(st, pid);
       if (!p) return null;
-      // the member with charges (or everyone, for melee) works the breach; others guard
-      if (r.method === 'rocket') {
-        if (b.inv.count('rocket_launcher') > 0) {
-          // teammates nearby pass their rockets to the shooter
-          if (b.inv.count('rocket') < 2) for (const m of G.teams.alive(team)) { if (m === b) continue; const n = m.inv.count('rocket'); if (n && dist(m.x, m.z, b.x, b.z) < 40) { m.inv.remove('rocket', n); b.inv.give('rocket', n); } }
-          if (b.inv.count('rocket') > 0) return { type: 'breach', piece: p, st, method: 'rocket', path: r.path };
+      const role = (r.roles && r.roles[b.id]) || 'overwatch';
+      const m = r.method;
+      if (m === 'melee' || m === 'walk') return { type: 'breach', piece: p, st, method: m, path: r.path, fob };
+      if (role === 'breacher') {
+        if (m === 'rocket') {
+          if (b.inv.count('rocket_launcher') > 0 && b.inv.count('rocket') > 0) return { type: 'breach', piece: p, st, method: 'rocket', path: r.path, fob };
+          if (b.inv.count('rocket_launcher') > 0 && box && box.cont.count('rocket') > 0) return { type: 'fobfetch', dep: box, item: 'rocket', n: CARRY.rocket };
+        } else {
+          if (b.inv.count(m) > 0) return { type: 'breach', piece: p, st, method: m, path: r.path, fob };
+          if (box && box.cont.count(m) > 0) return { type: 'fobfetch', dep: box, item: m, n: CARRY[m] || 3 };
         }
-        return { type: 'guard', x: r.rally.x, z: r.rally.z, near: { x: p.wx, z: p.wz } };
       }
-      const carrier = r.method === 'melee' || r.method === 'walk' || b.inv.count(r.method) > 0;
-      if (!carrier) {
-        if (r.method !== 'melee' && this.chargesOwned(team) > 0 && G.bots.progressOf(team).stash(r.method) > 0 && dist(b.x, b.z, r.rally.x, r.rally.z) > 200) return null;
-        return { type: 'guard', x: r.rally.x, z: r.rally.z, near: { x: p.wx, z: p.wz } };
+      if (r.resupply && (role === 'runner' || (role === 'overwatch' && !Object.values(r.roles || {}).includes('runner') && (b.ai.owSlot ?? 0) === 0))) {
+        const item = m === 'rocket' ? 'rocket' : m;
+        if (b.inv.count(item) > 0) return box ? { type: 'fobstash', dep: box, item, keep: 0 } : { type: 'goto', x: fob.x, z: fob.z, arrive: 4, raid: true };
+        if (prog.stash(item) > 0) return { type: 'activity', act: { a: 'withdraw', items: { [item]: 12 } } };
+        const act = G.bots.prog.resolve(b, prog, item, 4);
+        if (act) return { type: 'activity', act };
       }
-      return { type: 'breach', piece: p, st, method: r.method, path: r.path };
+      if (role === 'runner') {
+        const item = m === 'rocket' ? 'rocket' : m;
+        const needy = alive.filter(x => r.roles[x.id] === 'breacher' && x.inv.count(item) < 2 && (m !== 'rocket' || x.inv.count('rocket_launcher') > 0));
+        if (b.inv.count(item) > 0 && needy.length) return { type: 'handoff', to: needy[0].id, item, dep: needy[0] };
+        if (box && box.cont.count(item) > 0 && b.inv.count(item) < (CARRY[item] || 3)) return { type: 'fobfetch', dep: box, item, n: CARRY[item] || 3 };
+      }
+      // overwatch: hold the firing line at the FOB (spare boom carried by others goes in the box first)
+      const setup = atFob && this.fobSetupFor(b, r);
+      if (setup) return setup;
+      return { type: 'overwatch', ...this.overwatchSpot(r, b.ai.owSlot ?? alive.indexOf(b)), face: { x: p.wx, z: p.wz } };
     }
     if (r.state === 'loot') {
-      const conts = G.deploy.list.filter(d => d.st === st.id && d.cont && !d.cont.isEmpty());
-      if (!conts.length || b.inv.main.emptyCount() < 2) return null;
+      // a full bag goes into the FOB box (a short walk) instead of all the way home
+      if (b.inv.main.emptyCount() < 2) return box && box.cont.emptyCount() > 0 ? { type: 'fobstash', dep: box, all: true } : null;
+      const conts = G.deploy.list.filter(d => d.st === st.id && d.cont && !d.cont.isEmpty() && !d.def.spawn && !G.bots.ai.unreachable(b, d));
+      if (!conts.length) return null;
       conts.sort((a, c) => dist(b.x, b.z, a.x, a.z) - dist(b.x, b.z, c.x, c.z));
       return { type: 'raidloot', dep: conts[0], st };
     }
+    if (r.state === 'haul' || r.state === 'return') {
+      // carry the FOB box home a bagful at a time (the normal deposit run takes it from there)
+      if (box && !box.cont.isEmpty() && b.inv.main.emptyCount() >= 3) return { type: 'raidloot', dep: box, st: null };
+      return null;
+    }
+    return null;
+  }
+  // FOB set-up jobs for one bot standing at it: put the box down, put its sleeping bag down, and
+  // leave spare boom in the box (a breacher only carries a few at a time).
+  fobSetupFor(b, r) {
+    const box = this.fobBox(r);
+    if (!box && (b.inv.count('wood_box') || b.inv.count('large_box'))) return { type: 'fobsetup', item: b.inv.count('large_box') ? 'large_box' : 'wood_box' };
+    if (b.inv.count('sleeping_bag') && !this.fobBags(r).some(d => d.owner === b.id)) return { type: 'fobsetup', item: 'sleeping_bag' };
+    const item = r.method === 'rocket' ? 'rocket' : r.method, keep = (r.roles && r.roles[b.id] === 'breacher') || r.state === 'rally' ? (CARRY[item] || 3) : 0;
+    if (box && CARRY[item] && b.inv.count(item) > keep && box.cont.room(item) > 0) return { type: 'fobstash', dep: box, item, keep };
     return null;
   }
 

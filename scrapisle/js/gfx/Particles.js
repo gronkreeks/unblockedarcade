@@ -62,14 +62,14 @@ class Pool {
 }
 
 const C = (h) => new THREE.Color(h);
-const COL = { dust: C(0x8a7a62), sand: C(0xc9b48a), wood: C(0x8a6238), spark: C(0xffc860), stone: C(0x9a9a95), blood: C(0x7a0e0e), water: C(0xc8dce8), smoke: C(0xb0b0b0), snow: C(0xf0f4f8), leaf: C(0x4a6b2a), metal: C(0xb8c0c8) };
+const COL = { dust: C(0x8a7a62), sand: C(0xc9b48a), wood: C(0x8a6238), spark: C(0xffc860), stone: C(0x9a9a95), blood: C(0x7a0e0e), water: C(0xc8dce8), smoke: C(0xb0b0b0), darkSmoke: C(0x4a4642), fire: C(0xff8a2a), snow: C(0xf0f4f8), leaf: C(0x4a6b2a), metal: C(0xb8c0c8) };
 const r = (a = 1) => (Math.random() * 2 - 1) * a;
 
 export class Particles {
   constructor(scene, density = 1) {
     this.density = density;
-    this.add = new Pool(scene, 600, true);
-    this.norm = new Pool(scene, 1600, false);
+    this.add = new Pool(scene, 800, true);
+    this.norm = new Pool(scene, 2000, false);
     // rain streaks
     const n = 2400, pos = new Float32Array(n * 6);
     for (let i = 0; i < n; i++) { const x = r(30), y = Math.random() * 25, z = r(30); pos.set([x, y, z, x, y - 0.5, z], i * 6); }
@@ -112,11 +112,17 @@ export class Particles {
       case 'leaves':
         emit(this.norm, 6, p => p.spawn(x, y + 2 + Math.random() * 3, z, r(1), -0.2, r(1), 2.5, 0.06, COL.leaf, 1, 0.6));
         break;
-      case 'explosion':
-        emit(this.add, 40, p => p.spawn(x, y, z, r(8), Math.random() * 8, r(8), 0.35, 0.3, COL.spark, 1, 2, 2));
-        emit(this.norm, 30, p => p.spawn(x, y, z, r(4), Math.random() * 4 + 1, r(4), 2.5, 0.5, COL.smoke, 0.5, -0.3, 1.2));
-        emit(this.norm, 20, p => p.spawn(x, y, z, r(7), Math.random() * 7, r(7), 1.2, 0.06, COL.dust, 1, 9.8));
+      case 'explosion': {
+        // scale: satchel about 1, rocket 1.3, C4 1.8. Bigger blasts throw everything further and
+        // leave a taller smoke column.
+        const s = Math.max(0.6, scale);
+        emit(this.add, 30, p => p.spawn(x, y, z, r(3) * s, Math.random() * 3 * s, r(3) * s, 0.22, 0.9 * s, COL.fire, 1, -1, 3));   // fireball
+        emit(this.add, 40, p => p.spawn(x, y, z, r(11) * s, Math.random() * 10 * s, r(11) * s, 0.4 + Math.random() * 0.3, 0.05, COL.spark, 1, 9.8));
+        emit(this.norm, 26, p => p.spawn(x, y, z, r(9) * s, 2 + Math.random() * 9 * s, r(9) * s, 1.4 + Math.random() * 0.6, 0.05 + Math.random() * 0.06, COL.dust, 1, 9.8));   // debris
+        emit(this.norm, 30, p => p.spawn(x + r(0.8), y, z + r(0.8), r(2.5) * s, 0.5 + Math.random() * 2.5 * s, r(2.5) * s, 3 + Math.random() * 2 * s, 0.6 * s, COL.smoke, 0.55, -0.4, 1.4));   // smoke cloud
+        emit(this.norm, 14, p => p.spawn(x + r(0.5), y + 1, z + r(0.5), r(0.6), 1.5 + Math.random() * 1.5 * s, r(0.6), 5 + Math.random() * 3 * s, 0.8 * s, COL.darkSmoke, 0.45, -0.25, 1.1));   // rising column
         break;
+      }
     }
   }
   footstep(x, y, z, surface) { if (Math.random() > this.density) return; for (let i = 0; i < 3; i++) this.norm.spawn(x + r(0.15), y + 0.05, z + r(0.15), r(0.4), 0.3 + Math.random() * 0.4, r(0.4), 0.7, 0.12, COL[surface] || COL.dust, 0.35, 0.5, 0.3); }

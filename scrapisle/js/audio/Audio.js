@@ -60,7 +60,7 @@ export class Audio {
   noise(dur, freq, q, vol, type = 'bandpass', at = 0, dest = null) {
     if (!this.ctx || vol <= 0.003) return;
     const c = this.ctx, t = c.currentTime + at;
-    const s = c.createBufferSource(); s.buffer = this.noiseBuf;
+    const s = c.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true;   // the buffer is 1 s; long booms loop it
     const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
     const g = c.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
     s.connect(f); f.connect(g); g.connect(dest || this.master);
@@ -91,13 +91,26 @@ export class Audio {
     // distant shots lose their high end and arrive as a low boom
     if (src && !src.isPlayer && v < 0.35) this.noise(0.7, 220, 0.5, 0.65 * Math.sqrt(v), 'lowpass', late + 0.03, out);
   }
+  // Explosions are the loudest thing on the island: a crack, a deep boom you feel, debris raining
+  // down and a long rolling echo. Bigger charges (C4) sound bigger and carry further, and one
+  // going off close leaves your ears ringing.
   explosion(c) {
-    const v = this._gainFor(c, BOOM_RANGE) * 0.85, out = this._dest(c);
-    const P = this.game.player, late = P ? Math.min(2.5, Math.hypot(c.x - P.x, c.z - P.z) / 340) : 0;
-    this.noise(0.08, 2200, 0.5, 0.8 * v, 'highpass', late, out);   // the blast crack
-    this.noise(1.6, 180, 0.6, 1.1 * v, 'lowpass', late, out);      // the boom
-    this.tone(48, 1.1, 0.8 * v, 'sine', 0.45, late, out);          // the thump you feel
-    this.noise(2.2, 120, 0.4, 0.35 * Math.sqrt(v), 'lowpass', late + 0.15, out); // rolling echo
+    const size = c.size || 1, range = BOOM_RANGE * (0.8 + size * 0.35);
+    const v = Math.min(1.3, this._gainFor(c, range) * (0.9 + size * 0.25)), out = this._dest(c);
+    if (v < 0.01) return;
+    const P = this.game.player, d = P ? Math.hypot(c.x - P.x, c.z - P.z) : 0, late = Math.min(2.5, d / 340);
+    this.noise(0.09, 2400, 0.5, 1.0 * v, 'highpass', late, out);                     // the blast crack
+    this.noise(1.4 + size * 0.5, 150, 0.6, 1.4 * v, 'lowpass', late, out);           // the boom
+    this.tone(55, 1.3, 1.1 * v, 'sine', 0.4, late, out);                             // the thump you feel
+    this.tone(34, 1.8, 0.9 * v, 'sine', 0.6, late + 0.02, out);                       // sub rumble
+    this.noise(0.6, 1800, 1.2, 0.3 * v, 'bandpass', late + 0.25, out);               // debris raining down
+    this.noise(2.6 + size, 110, 0.4, 0.5 * Math.sqrt(v), 'lowpass', late + 0.15, out); // rolling echo
+    if (d < 25 * size) { const k = 1 - d / (25 * size); this.tone(3900, 2.2, 0.06 * k, 'sine', 1, late + 0.1); }   // ringing ears
+  }
+  // The raid alarm: a few loud rising wails when your base starts getting blown open.
+  raidAlarm() {
+    if (!this.ctx || this._throttle('raidAlarm', 20000)) return;
+    for (let i = 0; i < 3; i++) { this.tone(520, 0.45, 0.32, 'sawtooth', 1.6, i * 0.6); this.tone(780, 0.15, 0.18, 'square', 1, i * 0.6 + 0.45); }
   }
   hit(kind) { if (kind === 'wood') this.noise(0.12, 500, 3, 0.35); else if (kind === 'flesh') this.noise(0.1, 300, 1, 0.3, 'lowpass'); else { this.noise(0.08, 2400, 4, 0.3); this.tone(900, 0.06, 0.08, 'square'); } }
   hitAt(kind, pos) { const v = this._gainFor(pos, 60); if (v < 0.02 || this._throttle('hit' + kind, 80)) return; const out = this._dest(pos); if (kind === 'wood') this.noise(0.12, 500, 3, 0.3 * v, 'bandpass', 0, out); else this.noise(0.08, 2400, 4, 0.25 * v, 'bandpass', 0, out); }
