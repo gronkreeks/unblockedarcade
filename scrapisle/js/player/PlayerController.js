@@ -306,8 +306,36 @@ export class PlayerController {
   }
 
   // ---------- per-frame ----------
+  // Watching a raid scenario: fly around freely (WASD, Space up, Ctrl down, Shift faster). Nobody
+  // can see or hit you: you're taken out of the world's list of people while watching.
+  spectate(dt) {
+    const s = this.s, G = this.game, k = this.keys, uiOpen = G.ui.isOpen();
+    const speed = (k.has('ShiftLeft') || k.has('ShiftRight') ? 45 : 14) * dt;
+    const fx = Math.sin(s.yaw) * Math.cos(s.pitch), fy = Math.sin(s.pitch), fz = Math.cos(s.yaw) * Math.cos(s.pitch);
+    const rx = -Math.cos(s.yaw), rz = Math.sin(s.yaw);
+    let mx = 0, my = 0, mz = 0;
+    if (!uiOpen) {
+      if (k.has('KeyW')) { mx += fx; my += fy; mz += fz; }
+      if (k.has('KeyS')) { mx -= fx; my -= fy; mz -= fz; }
+      if (k.has('KeyD')) { mx += rx; mz += rz; }
+      if (k.has('KeyA')) { mx -= rx; mz -= rz; }
+      if (k.has('Space')) my += 1;
+      if (k.has('ControlLeft') || k.has('ControlRight') || k.has('KeyC')) my -= 1;
+    }
+    const L = Math.hypot(mx, my, mz);
+    if (L > 0) { s.x += mx / L * speed; s.y += my / L * speed; s.z += mz / L * speed; }
+    const lim = G.world.half - 20;
+    s.x = Math.max(-lim, Math.min(lim, s.x)); s.z = Math.max(-lim, Math.min(lim, s.z));
+    s.y = Math.max(G.world.heightAt(s.x, s.z) + 0.6, Math.min(400, s.y));
+    s.vx = s.vy = s.vz = 0; s.hp = 100; s.cal = Math.max(s.cal, 300); s.hyd = Math.max(s.hyd, 200);
+    G.actors.delete(s); G.actorHash.remove(s);   // (the world only moves people in G.actors)
+    this.cam.position.set(s.x, s.y, s.z);
+    this.cam.rotation.set(s.pitch, s.yaw + Math.PI, 0, 'YXZ');
+    this.vm.update(dt, 0, { hidden: true }); this.clearGhost();
+  }
   update(dt) {
     const s = this.s, G = this.game;
+    if (G.spectate && s) return this.spectate(dt);
     if (!s || !s.alive) { this.vm.update(dt, 0, { hidden: true }); this.clearGhost(); return; }
     const uiOpen = G.ui.isOpen();
     const still = uiOpen && G.ui.open !== 'inv';   // menus other than the inventory stop you

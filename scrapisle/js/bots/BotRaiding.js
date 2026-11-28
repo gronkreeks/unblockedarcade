@@ -3,16 +3,17 @@
 //
 // How a raid runs (the way player clans do it in Rust):
 //  prep   - craft the boom, a box and a sleeping bag each.
-//  rally  - set up a FOB (forward operating base) 40-50 m from the target, out of its sight where
-//           possible: bags to respawn at, a box holding the spare boom, the crew spread in a firing
-//           line watching the walls.
+//  rally  - put up a FOB (forward operating base) right outside the target's building privilege:
+//           a two-storey stone tower with windows facing the base (stairs inside), sleeping bags and
+//           a box for the spare boom on the ground floor. The overwatch shoots from its windows.
+//           Where there's no room for a tower, a bag-and-box FOB on open ground 40-50 m out.
 //  breach - one or two breachers carry a few charges at a time and blow the cheapest way in; a runner
 //           brings more from the FOB box; everyone else holds overwatch and shoots defenders. Rockets
 //           are fired from the FOB side from range (a siege). The dead respawn at the FOB.
 //  loot   - strip the boxes; full bags are dropped in the FOB box instead of running home each time.
 //  haul   - empty the FOB box and carry it all home.
 import { ITEMS } from '../data/items.js';
-import { STRUCT_DMG, DOORS, CELL } from '../data/building.js';
+import { STRUCT_DMG, DOORS, CELL, FOUND_H, LEVEL_H, pieceMaxHp } from '../data/building.js';
 import { SKILL, PERSONALITIES } from './BotProfiles.js';
 import { dist, randRange } from '../core/util.js';
 
@@ -128,8 +129,9 @@ export class BotRaiding {
     const z = G.build.zoneOf(best.st);
     const home = G.build.structures.get(team.base.st);
     const hz = home ? G.build.zoneOf(home) : z;
-    const fob = this.chooseFob(best.st, hz);
+    const { fob, tower } = this.planFob(team, best.st, hz);
     team.raid = {
+      tower,
       state: best.method === 'melee' || best.method === 'walk' ? 'rally' : 'prep', target: best.st.id, targetTeam: best.st.team, method: best.method,
       need: this.needFor(best.method, best.charges),
       rally: fob, fob, started: G.now, stateT: G.now, looted: 0, lootedValue: 0,
@@ -155,6 +157,129 @@ export class BotRaiding {
     }
     return best || { x: z.x + Math.sin(ang) * (z.core + 40), z: z.z + Math.cos(ang) * (z.core + 40) };
   }
+  // ---------- the FOB tower ----------
+  // Three cells in a row, side-on to the target: ground floor walled with a doorway on the far side
+  // and stairs in the end cell, an upper floor over the other two cells with windows facing the
+  // base, and a roof. Built just outside the target's building privilege (closer isn't allowed).
+  towerSite(team, st, home) {
+    const G = this.game, z = G.build.zoneOf(st);
+    const ang0 = Math.atan2(home.x - z.x, home.z - z.z);
+    for (const extra of [4, 8, 13, 19]) for (const k of [0, -1, 1, -2, 2, -3, 3]) {
+      const a = ang0 + k * 0.32, d = z.r + extra;
+      const cx = z.x + Math.sin(a) * d, cz = z.z + Math.cos(a) * d;
+      const yaw = Math.atan2(z.x - cx, z.z - cz);        // local +z faces the target
+      const c = Math.cos(yaw), sn = Math.sin(yaw);
+      const ox = cx - (4.5 * c + 1.5 * sn), oz = cz - (-4.5 * sn + 1.5 * c);   // footprint centred on (cx, cz)
+      if (G.world.monumentAt(cx, cz, 10)) continue;
+      const site = G.bots.builder.fitSite(team, ox, oz, yaw, { cells: [[0, 0], [1, 0], [2, 0]] });
+      if (site) return site;
+    }
+    return null;
+  }
+  // Plan a raid's FOB: a tower when there's room for one (else open ground). Returns { fob, tower }.
+  planFob(team, st, home) {
+    const G = this.game, site = this.towerSite(team, st, home);
+    if (!site) return { fob: this.chooseFob(st, home), tower: null };
+    const w = (lx, lz, ly = FOUND_H) => { const c = Math.cos(site.yaw), sn = Math.sin(site.yaw); return { x: site.ox + lx * c + lz * sn, y: site.oy + ly, z: site.oz - lx * sn + lz * c }; };
+    const plan = [];
+    for (let i = 0; i < 3; i++) plan.push({ type: 'foundation', i, j: 0, k: 0 });
+    const ground = [['x', 0, 0, 'wall'], ['x', 3, 0, 'wall'], ['z', 0, 0, 'wall'], ['z', 1, 0, 'doorway'], ['z', 2, 0, 'wall'], ['z', 0, 1, 'wall'], ['z', 1, 1, 'wall'], ['z', 2, 1, 'wall']];
+    for (const [axis, i, j, type] of ground) plan.push({ type, i, j, k: 0, axis });
+    plan.push({ type: 'stairs', i: 2, j: 0, k: 0, rot: 0, stairs: true });
+    plan.push({ type: 'floor', i: 0, j: 0, k: 1 }, { type: 'floor', i: 1, j: 0, k: 1 });
+    const upper = [['x', 0, 0, 'wall'], ['x', 3, 0, 'wall'], ['z', 0, 0, 'wall'], ['z', 1, 0, 'wall'], ['z', 2, 0, 'wall'], ['z', 0, 1, 'window'], ['z', 1, 1, 'window'], ['z', 2, 1, 'wall']];
+    for (const [axis, i, j, type] of upper) plan.push({ type, i, j, k: 1, axis });
+    for (let i = 0; i < 3; i++) plan.push({ type: 'roof', i, j: 0, k: 2 });
+    const up = FOUND_H + LEVEL_H + 0.05;
+    const tower = {
+      site, plan, next: 0, st: null, built: false,
+      outDoor: w(4.5, -1.6), inDoor: w(4.5, 1.2), build: w(4.5, -4.5),
+      spots: [w(1.0, 2.3, up), w(2.0, 2.3, up), w(4.0, 2.3, up), w(5.0, 2.3, up)],
+      boxAt: w(1.0, 1.6), bagAt: [w(3.6, 0.8), w(4.6, 0.8), w(5.4, 1.4), w(3.4, 2.1), w(4.4, 2.3), w(2.0, 0.8), w(1.0, 0.7), w(2.2, 2.4)],
+      floorY: site.oy + up,
+    };
+    return { fob: { x: tower.outDoor.x, z: tower.outDoor.z }, tower };
+  }
+  // Put the next piece of the tower up (free, straight to stone: it's a quick build). Returns false
+  // once there's nothing left to place.
+  buildTowerStep(b, r) {
+    const G = this.game, T = r.tower;
+    while (T.next < T.plan.length) {
+      const sp = T.plan[T.next];
+      const spec = { ...sp, st: T.st || undefined, newSt: T.st ? undefined : T.site };
+      if (sp.stairs) return this.placeStairs(b, T, spec);
+      const res = G.build.place(b, spec, { free: true });
+      if (res.ok) {
+        if (!T.st) T.st = res.st.id;
+        this.toStone(res.piece);
+        T.next++;
+        return true;
+      }
+      // can't place this one (terrain, someone standing in it): try again shortly, skip after a few goes
+      sp.fails = (sp.fails || 0) + 1;
+      if (sp.fails < 4 && !/already/.test(res.err)) return true;
+      if (sp.type === 'foundation' && !T.st) { T.failed = true; return false; }
+      T.next++;
+    }
+    return false;
+  }
+  toStone(p) {
+    const G = this.game, st = G.build.structures.get(p.st);
+    p.grade = 2; p.maxHp = pieceMaxHp(p.type, 2); p.hp = p.maxHp;
+    G.build._buildPieceVisual(st, p); st.version++;
+  }
+  // The stairs have to rise towards the upper floor: try each way round until the top step lands
+  // over the middle cell, and remember where to start and finish the climb.
+  placeStairs(b, T, spec) {
+    const G = this.game, mid = (() => { const c = Math.cos(T.site.yaw), sn = Math.sin(T.site.yaw); return { x: T.site.ox + 4.5 * c + 1.5 * sn, z: T.site.oz - 4.5 * sn + 1.5 * c }; })();
+    for (let rot = 0; rot < 4; rot++) {
+      const res = G.build.place(b, { ...spec, rot }, { free: true });
+      if (!res.ok) { T.next++; return true; }
+      const cols = res.piece.cols.slice().sort((a, c) => a.y - c.y), lo = cols[0], hi = cols[cols.length - 1];
+      const dx = hi.x - lo.x, dz = hi.z - lo.z, L = Math.hypot(dx, dz) || 1;
+      const top = { x: hi.x + dx / L * 1.0, z: hi.z + dz / L * 1.0 };
+      if (Math.hypot(top.x - mid.x, top.z - mid.z) < 2.2) {
+        this.toStone(res.piece);
+        T.stairBot = { x: lo.x - dx / L * 1.0, y: T.site.oy + FOUND_H, z: lo.z - dz / L * 1.0 };
+        T.stairTop = { x: top.x, y: T.floorY, z: top.z };
+        T.next++;
+        return true;
+      }
+      const st = G.build.structures.get(res.piece.st);
+      G.build.removePiece(st, res.piece, 'demolish'); G.build.recompute(st);
+    }
+    T.next++;
+    return true;
+  }
+
+  // A rocket raid keeps a spare launcher in the FOB box (a dead shooter's launcher is in his body bag).
+  spareKit(r) {
+    const box = this.fobBox(r);
+    if (box && r.method === 'rocket' && !r.spareLauncher) { r.spareLauncher = true; box.cont.add('rocket_launcher', 1); }
+  }
+  // Tower's up: the box and everyone's sleeping bags go on its ground floor.
+  finishTower(b, team, r) {
+    const G = this.game, T = r.tower;
+    if (T.built) return;
+    T.built = true;
+    if (T.failed || !T.st) { T.failed = true; return; }
+    if (!this.fobBox(r)) {
+      const type = b.inv.count('large_box') ? 'large_box' : 'wood_box';
+      const res = G.deploy.place(b, type, T.boxAt.x, T.boxAt.y, T.boxAt.z, T.site.yaw, { free: !b.inv.count(type) });
+      if (res.ok) r.fob.box = res.dep.id;
+    }
+    this.spareKit(r);
+    r.fob.bags = r.fob.bags || [];
+    for (const m of G.teams.alive(team)) {
+      if (r.fob.bags.some(id => G.deploy.byId.get(id)?.owner === m.id)) continue;
+      for (const at of T.bagAt) {
+        const res = G.deploy.place(m, 'sleeping_bag', at.x, at.y, at.z, T.site.yaw, { free: !m.inv.count('sleeping_bag') });
+        if (res.ok) { r.fob.bags.push(res.dep.id); break; }
+      }
+    }
+    G.logEvent(`${team.name} put up a raid tower outside ${r.targetName === 'you' ? 'your' : r.targetName + (/s$/.test(r.targetName) ? "'" : "'s")} base`);
+  }
+
   // Boom to bring: the plan's count plus spares, like players do (satchels dud now and then,
   // rockets miss, and a door gets replaced mid-raid).
   needFor(method, n) { return method === 'satchel_charge' ? Math.ceil(n * 1.35) + 2 : method === 'timed_charge' ? n + 1 : method === 'rocket' ? Math.ceil(n * 1.25) + 2 : n; }
@@ -202,11 +327,16 @@ export class BotRaiding {
       }
       if (result === 'success' && r.lootedValue < 1) result = 'found nothing worth taking';
       this.log(result === 'success' ? `${team.name} raided ${r.targetName} and took ${Math.round(r.lootedValue)} scrap worth of loot` : `${team.name}'s raid on ${r.targetName}: ${result}`);
+      G.events.emit('raidEnded', { team, result, value: r.lootedValue });
       G.raidHistory.push({ t: G.now, day: G.env.day, team: team.name, teamId: team.id, color: team.color, target: r.targetName, result, value: Math.round(r.lootedValue), x: r.tx !== undefined ? Math.round(r.tx) : undefined, z: r.tz !== undefined ? Math.round(r.tz) : undefined });
       team.raid = null;
     };
     if (!st) { if (r.state === 'loot' || r.state === 'enter') return end('success'); return end('was called off (target gone)'); }
-    if (alive.length < Math.max(1, Math.ceil(team.size * 0.35)) && r.state !== 'prep') return end('failed');
+    // Too few left standing: the raid's beaten - unless they have bags at the FOB to come back at
+    // (then it's only over if they can't get enough back up within two minutes).
+    if (alive.length < Math.max(1, Math.ceil(team.size * 0.35)) && r.state !== 'prep') {
+      if (!this.fobBags(r).length || G.now - (r.lowSince ??= G.now) > 120) return end('failed');
+    } else r.lowSince = null;
     if (G.now - r.started > 2400) return end('timed out');
     switch (r.state) {
       case 'prep': {
@@ -219,7 +349,9 @@ export class BotRaiding {
         const f = r.fob, there = alive.filter(b => dist(b.x, b.z, f.x, f.z) < 25);
         if (there.length && !r.arrivedT) r.arrivedT = G.now;
         // go once most of the crew is at the FOB and it's set up (or they've waited long enough)
-        const setUp = (this.fobBox(r) || G.now - (r.arrivedT || G.now) > 25) && (this.fobBags(r).length || G.now - (r.arrivedT || G.now) > 25);
+        const waited = G.now - (r.arrivedT || G.now);
+        const setUp = r.tower && !r.tower.failed ? (r.tower.built || waited > 150)
+          : (this.fobBox(r) || waited > 25) && (this.fobBags(r).length || waited > 25);
         if ((there.length >= Math.ceil(alive.length * 0.7) && (setUp || r.method === 'melee' || r.method === 'walk')) || G.now - r.stateT > 180) {
           const plan = this.planBreach(team, st, f);
           if (!plan) return end('found no way in');
@@ -277,7 +409,8 @@ export class BotRaiding {
     if (r.roles && G.now - r.rolesT < 6 && Object.keys(r.roles).every(id => G.bots.byId.get(id)?.alive)) return;
     r.roles = {}; r.rolesT = G.now;
     if (r.method === 'melee' || r.method === 'walk') { for (const b of alive) r.roles[b.id] = 'breacher'; return; }
-    const holds = b => r.method === 'rocket' ? b.inv.count('rocket_launcher') : b.inv.count(r.method);
+    const box = this.fobBox(r);
+    const holds = b => r.method === 'rocket' ? b.inv.count('rocket_launcher') + (box && box.cont.count('rocket_launcher') ? 0.5 : 0) : b.inv.count(r.method);
     const byBoom = alive.slice().sort((a, b) => holds(b) - holds(a));
     const nBreach = r.method === 'rocket' ? 2 : alive.length >= 4 ? 2 : 1;
     let n = 0, ow = 0;
@@ -319,11 +452,19 @@ export class BotRaiding {
       if (b.inv.count('sleeping_bag') < 1 && b.inv.count('cloth') >= 30) { const act = G.bots.prog.resolve(b, prog, 'sleeping_bag', 1); if (act && act.a === 'craft') return { type: 'activity', act }; }
       return null;
     }
+    const T = r.tower && !r.tower.failed ? r.tower : null;
+    // the tower goes up first: one or two builders, everyone else covers them
+    if (T && !T.built && (r.state === 'rally' || r.state === 'breach')) {
+      const builders = alive.slice(0, alive.length >= 4 ? 2 : 1);
+      if (builders.includes(b)) return { type: 'fobbuild' };
+    }
+    // the tower's up: the first few overwatch take its windows
+    const towerSlot = (n) => T && T.built && n < T.spots.length ? { type: 'towerwatch', slot: n } : null;
     if (r.state === 'rally') {
       if (!atFob) return { type: 'goto', x: fob.x + randRange(-5, 5), z: fob.z + randRange(-5, 5), arrive: 4, raid: true };
       const setup = this.fobSetupFor(b, r);
       if (setup) return setup;
-      return { type: 'overwatch', ...this.overwatchSpot(r, alive.indexOf(b)), face: { x: r.tx, z: r.tz } };
+      return towerSlot(alive.indexOf(b)) || { type: 'overwatch', ...this.overwatchSpot(r, alive.indexOf(b) + 3), face: { x: r.tx, z: r.tz } };
     }
     if (r.state === 'breach') {
       const pid = r.breaches[0];
@@ -336,6 +477,8 @@ export class BotRaiding {
         if (m === 'rocket') {
           if (b.inv.count('rocket_launcher') > 0 && b.inv.count('rocket') > 0) return { type: 'breach', piece: p, st, method: 'rocket', path: r.path, fob };
           if (b.inv.count('rocket_launcher') > 0 && box && box.cont.count('rocket') > 0) return { type: 'fobfetch', dep: box, item: 'rocket', n: CARRY.rocket };
+          // lost the launcher (died and came back at the FOB): the spare's in the box
+          if (!b.inv.count('rocket_launcher') && box && box.cont.count('rocket_launcher') > 0) return { type: 'fobfetch', dep: box, item: 'rocket_launcher', n: 1 };
         } else {
           if (b.inv.count(m) > 0) return { type: 'breach', piece: p, st, method: m, path: r.path, fob };
           if (box && box.cont.count(m) > 0) return { type: 'fobfetch', dep: box, item: m, n: CARRY[m] || 3 };
@@ -357,7 +500,7 @@ export class BotRaiding {
       // overwatch: hold the firing line at the FOB (spare boom carried by others goes in the box first)
       const setup = atFob && this.fobSetupFor(b, r);
       if (setup) return setup;
-      return { type: 'overwatch', ...this.overwatchSpot(r, b.ai.owSlot ?? alive.indexOf(b)), face: { x: p.wx, z: p.wz } };
+      return towerSlot(b.ai.owSlot ?? alive.indexOf(b)) || { type: 'overwatch', ...this.overwatchSpot(r, (b.ai.owSlot ?? alive.indexOf(b)) + 3), face: { x: p.wx, z: p.wz } };
     }
     if (r.state === 'loot') {
       // a full bag goes into the FOB box (a short walk) instead of all the way home
@@ -377,9 +520,9 @@ export class BotRaiding {
   // FOB set-up jobs for one bot standing at it: put the box down, put its sleeping bag down, and
   // leave spare boom in the box (a breacher only carries a few at a time).
   fobSetupFor(b, r) {
-    const box = this.fobBox(r);
-    if (!box && (b.inv.count('wood_box') || b.inv.count('large_box'))) return { type: 'fobsetup', item: b.inv.count('large_box') ? 'large_box' : 'wood_box' };
-    if (b.inv.count('sleeping_bag') && !this.fobBags(r).some(d => d.owner === b.id)) return { type: 'fobsetup', item: 'sleeping_bag' };
+    const box = this.fobBox(r), tower = r.tower && !r.tower.failed;   // a tower gets its box and bags when it's finished
+    if (!tower && !box && (b.inv.count('wood_box') || b.inv.count('large_box'))) return { type: 'fobsetup', item: b.inv.count('large_box') ? 'large_box' : 'wood_box' };
+    if (!tower && b.inv.count('sleeping_bag') && !this.fobBags(r).some(d => d.owner === b.id)) return { type: 'fobsetup', item: 'sleeping_bag' };
     const item = r.method === 'rocket' ? 'rocket' : r.method, keep = (r.roles && r.roles[b.id] === 'breacher') || r.state === 'rally' ? (CARRY[item] || 3) : 0;
     if (box && CARRY[item] && b.inv.count(item) > keep && box.cont.room(item) > 0) return { type: 'fobstash', dep: box, item, keep };
     return null;
@@ -391,6 +534,7 @@ export class BotRaiding {
     if (!e.st || !e.attacker || e.attacker.kind !== 'survivor') return;
     const owner = G.teams.get(e.st.team);
     if (!owner || e.attacker.team === owner.id) return;
+    if (owner.raid && owner.raid.tower && owner.raid.tower.st === e.st.id) return;   // their raid tower getting shot at isn't a raid on their base
     if (owner.underAttack <= 0) this.log(`${owner.name}'s base is under attack`);
     owner.underAttack = 120;
     owner.attackers.add(e.attacker.id);

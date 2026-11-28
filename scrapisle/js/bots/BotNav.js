@@ -16,6 +16,8 @@ export class BotNav {
   }
   moveTo(b, tx, tz, dt, mode, opts = {}) {
     const ai = b.ai, W = this.game.world;
+    // inside the clan's raid tower and heading somewhere outside it: down the stairs and out the door first
+    if (mode !== 'far' && this.leaveTower(b, tx, tz, dt)) return false;
     const arrive = opts.arrive ?? 1.2;
     const d = dist(b.x, b.z, tx, tz);
     if (d <= arrive) { b.vx = 0; b.vz = 0; return true; }
@@ -187,6 +189,36 @@ export class BotNav {
       hz += pz * w * 1.5 - (az / d) * w * 0.5;
     }
     return Math.atan2(hx, hz);
+  }
+  // The way out of the raid tower (BotRaiding.planFob) for a bot standing in it: back down the
+  // stairs from the upper floor, then out through the doorway. Returns true while it's walking out.
+  leaveTower(b, tx, tz, dt) {
+    const team = this.game.teams.of(b), T = team && team.raid && team.raid.tower;
+    if (!T || !T.built || !T.stairTop) return false;
+    const S = T.site, c = Math.cos(S.yaw), sn = Math.sin(S.yaw);
+    const inside = (x, z) => { const dx = x - S.ox, dz = z - S.oz, lx = dx * c - dz * sn, lz = dx * sn + dz * c; return lx > -0.3 && lx < 9.3 && lz > -0.3 && lz < 3.3; };
+    if (!inside(b.x, b.z) || inside(tx, tz)) { b.ai.exitI = null; return false; }
+    const route = b.y > T.floorY - 0.8 ? [T.stairTop, T.stairBot, T.inDoor, T.outDoor] : [T.inDoor, T.outDoor];
+    if (b.ai.exitR !== route.length) { b.ai.exitR = route.length; b.ai.exitI = 0; b.ai.exitT = 0; }
+    const wp = route[Math.min(b.ai.exitI || 0, route.length - 1)];
+    b.ai.exitT = (b.ai.exitT || 0) + dt;
+    if (this.walkTo(b, wp.x, wp.z, dt, 0.5) || b.ai.exitT > 4) {
+      if (b.ai.exitT > 4) { b.x = wp.x; b.z = wp.z; b.y = wp.y + 0.05; b.vx = b.vy = b.vz = 0; }   // caught on something: step through
+      b.ai.exitI = (b.ai.exitI || 0) + 1; b.ai.exitT = 0;
+    }
+    return true;
+  }
+  // Straight-line walk with full collisions and no route planning (inside a small building, up
+  // stairs): returns true on arrival.
+  walkTo(b, x, z, dt, arrive = 0.5) {
+    const d = dist(b.x, b.z, x, z);
+    if (d <= arrive) { b.vx = b.vz = 0; return true; }
+    const want = Math.atan2(x - b.x, z - b.z);
+    b.yaw += angleWrap(want - b.yaw) * Math.min(1, dt * 8);
+    b.crouch = false;
+    b.vx = Math.sin(want) * 2.8; b.vz = Math.cos(want) * 2.8; b.vy -= 9.8 * 1.35 * dt;
+    this.game.physics.move(b, dt);
+    return false;
   }
   // Walk around other people's bases instead of past their walls (see BotManager.baseZones). Not
   // while fighting, and not around a base the bot is heading into on purpose (a raid, a fight).

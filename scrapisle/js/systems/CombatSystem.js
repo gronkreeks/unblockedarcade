@@ -23,7 +23,7 @@ export function hitShapes(a) {
 }
 
 // How big each blast looks, sounds and shakes (satchel = 1).
-const BLAST_SIZE = { timed_charge: 1.8, rocket: 1.3, satchel_charge: 1, beancan: 0.7, grenade: 0.8 };
+const BLAST_SIZE = { timed_charge: 1.8, rocket: 1.3, hv_rocket: 0.8, satchel_charge: 1, beancan: 0.7, grenade: 0.8 };
 
 export class CombatSystem {
   constructor(game) {
@@ -102,7 +102,7 @@ export class CombatSystem {
     for (let p = 0; p < pellets; p++) {
       const sp = (spread + (pellets > 1 ? A.spread : 0)) * Math.PI / 180;
       const d = jitter(dir, sp);
-      this.spawnProjectile({ x: eye.x + d.x * 0.4, y: eye.y + d.y * 0.4, z: eye.z + d.z * 0.4, vx: d.x * vel, vy: d.y * vel, vz: d.z * vel, dmg, owner: surv, weapon: def.id, ammo: at, bleed: A.bleed || 0.3, arrow: def.type === 'bow' || def.id === 'crossbow', headMult: def.headMult || 2, rocket: A.blast ? { dmg: A.blast, radius: A.radius || 3 } : null });
+      this.spawnProjectile({ x: eye.x + d.x * 0.4, y: eye.y + d.y * 0.4, z: eye.z + d.z * 0.4, vx: d.x * vel, vy: d.y * vel, vz: d.z * vel, dmg, owner: surv, weapon: def.id, ammo: at, bleed: A.bleed || 0.3, arrow: def.type === 'bow' || def.id === 'crossbow', headMult: def.headMult || 2, rocket: A.blast ? { type: at, dmg: A.blast, radius: A.radius || 3, hurt: A.hurt, splash: A.splash } : null });
     }
     if (stack.c !== undefined) stack.c = Math.max(0, stack.c - 1 / def.dur);
     this.game.events.emit('noise', { x: surv.x, z: surv.z, r: def.noise || 150, src: surv, kind: 'shot', weapon: def.id });
@@ -143,7 +143,7 @@ export class CombatSystem {
         pos.setXYZ(0, nx, ny, nz); pos.setXYZ(1, nx - p.vx / sp * L, ny - p.vy / sp * L, nz - p.vz / sp * L);
         pos.needsUpdate = true; p.line.geometry.computeBoundingSphere();
       }
-      if (p.life <= 0 || ny < -20) { if (p.rocket && p.life <= 0) this.explode({ type: 'rocket', x: nx, y: ny, z: nz, dmg: p.rocket.dmg, radius: p.rocket.radius, owner: p.owner }); this._killProj(i); }
+      if (p.life <= 0 || ny < -20) { if (p.rocket && p.life <= 0) this.explode({ ...p.rocket, type: p.rocket.type || 'rocket', x: nx, y: ny, z: nz, owner: p.owner }); this._killProj(i); }
     }
     for (let i = this.charges.length - 1; i >= 0; i--) {
       const c = this.charges[i];
@@ -204,7 +204,7 @@ export class CombatSystem {
     if (p.rocket) {
       // rockets blow up on whatever they hit, a little in front of the surface
       const sp = Math.hypot(p.vx, p.vy, p.vz) || 1;
-      this.explode({ type: 'rocket', x: pt.x - p.vx / sp * 0.3, y: pt.y - p.vy / sp * 0.3, z: pt.z - p.vz / sp * 0.3, dmg: p.rocket.dmg, radius: p.rocket.radius, owner: p.owner });
+      this.explode({ ...p.rocket, type: p.rocket.type || 'rocket', x: pt.x - p.vx / sp * 0.3, y: pt.y - p.vy / sp * 0.3, z: pt.z - p.vz / sp * 0.3, owner: p.owner });
       return;
     }
     if (hit.actor) {
@@ -359,10 +359,15 @@ export class CombatSystem {
       const f = 1 - 0.5 * (d / R);
       this.damageCollider(col, c.dmg * f, 'explosive', c.owner);
     });
-    this.game.actorHash.query(c.x, c.z, R * 2, a => {
+    // Splash on people: full force close in, fading to nothing at the edge of the blast. Rockets
+    // (and HV rockets) say how hard and how far; charges use their size.
+    const reach = c.splash || R * 1.6, hurt = c.hurt || (c.type === 'timed_charge' ? 150 : 60);
+    this.game.actorHash.query(c.x, c.z, reach + 1, a => {
       if (!a.alive) return;
       const d = Math.hypot(a.x - c.x, a.y + 1 - c.y, a.z - c.z);
-      if (d < R * 1.6) this.damageActor(a, (c.type === 'timed_charge' ? 150 : c.type === 'rocket' ? 90 : 60) * (1 - d / (R * 1.6)), { type: 'explosive', attacker: c.owner });
+      if (d >= reach) return;
+      const f = d < reach * 0.25 ? 1 : 1 - (d - reach * 0.25) / (reach * 0.75);
+      this.damageActor(a, hurt * f, { type: 'explosive', attacker: c.owner });
     });
     const size = c.size = BLAST_SIZE[c.type] || 1;
     this.flash(c.x, c.y, c.z, size);

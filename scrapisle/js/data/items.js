@@ -71,7 +71,10 @@ ammo('handmade_shell', 'Handmade Shell', { icon: 'shell', color: '#6b8a3a', stac
 ammo('buckshot', '12 Gauge Buckshot', { icon: 'shell', color: '#b03a2e', stack: 64, pellets: 8, spread: 5, dmgMult: 0.7, value: 1, bleed: 0.4 });
 ammo('slug', '12 Gauge Slug', { icon: 'shell', color: '#2e6bb0', stack: 64, pellets: 1, spread: 0.5, dmgMult: 3.2, value: 1.4, bleed: 0.5 });
 ammo('pistol_ammo', 'Pistol Bullet', { color: '#c7a34b', value: 0.5, bleed: 0.3 });
-ammo('rocket', 'Rocket', { cat: 'Raid', icon: 'rocket', color: '#6b7a4a', stack: 6, value: 40, blast: 250, radius: 3, bleed: 0 });
+ammo('rocket', 'Rocket', { cat: 'Raid', icon: 'rocket', color: '#6b7a4a', stack: 6, value: 40, blast: 250, radius: 3, hurt: 130, splash: 6, bleed: 0 });
+// High velocity rocket: the PvP rocket. Flies more than twice as fast and hits people hard, but
+// barely scratches a wall.
+ammo('hv_rocket', 'High Velocity Rocket', { icon: 'rocket', color: '#a07a3a', stack: 6, value: 18, blast: 45, radius: 2, hurt: 110, splash: 3.5, velMult: 2.4, bleed: 0 });
 ammo('rifle_ammo', '5.56 Rifle Ammo', { color: '#9c7a32', value: 0.8, bleed: 0.4 });
 
 // ---------- Ranged weapons ----------
@@ -88,7 +91,7 @@ gun('drum_smg', 'Drum SMG', { icon: 'smg', color: '#7a5a3a', ammo: ['pistol_ammo
 gun('scrap_smg', 'Scrap SMG', { icon: 'smg', color: '#8f969e', ammo: ['pistol_ammo'], dmg: 30, vel: 300, rpm: 600, mag: 24, reload: 4, auto: true, spread: 2.4, aimSpread: 0.8, recoil: 1.2, recoilH: 0.8, dur: 600, value: 55, noise: 170 });
 gun('semi_rifle', 'Semi Rifle', { icon: 'rifle', color: '#55606b', ammo: ['rifle_ammo'], dmg: 40, vel: 375, rpm: 343, mag: 16, reload: 4.4, spread: 1.2, aimSpread: 0.2, recoil: 2, recoilH: 0.6, dur: 600, value: 80, noise: 220 });
 gun('assault_rifle', 'Assault Rifle', { icon: 'rifle', color: '#3e464f', ammo: ['rifle_ammo'], dmg: 50, vel: 375, rpm: 450, mag: 30, reload: 4.4, auto: true, spread: 1.6, aimSpread: 0.35, recoil: 2.4, recoilH: 1.2, dur: 900, value: 180, noise: 240 });
-gun('rocket_launcher', 'Rocket Launcher', { icon: 'launcher', color: '#4f5a3c', ammo: ['rocket'], dmg: 0, vel: 42, rpm: 10, mag: 1, reload: 5.5, spread: 1.2, aimSpread: 0.35, recoil: 4, recoilH: 1, zoom: 1.2, dur: 60, value: 150, noise: 320, rocket: true });
+gun('rocket_launcher', 'Rocket Launcher', { icon: 'launcher', color: '#4f5a3c', ammo: ['rocket', 'hv_rocket'], dmg: 0, vel: 42, rpm: 10, mag: 1, reload: 5.5, spread: 1.2, aimSpread: 0.35, recoil: 4, recoilH: 1, zoom: 1.2, dur: 60, value: 150, noise: 320, rocket: true });
 gun('bolt_rifle', 'Bolt Action Rifle', { icon: 'rifle', color: '#2e3a45', ammo: ['rifle_ammo'], dmg: 80, vel: 650, rpm: 35, mag: 4, reload: 4.5, spread: 1.5, aimSpread: 0.03, recoil: 6, recoilH: 1, zoom: 3.5, headMult: 2.2, dur: 400, value: 160, noise: 240 });
 
 // ---------- Raid tools ----------

@@ -37,6 +37,7 @@ import { setMaterials } from './entities/WeaponModels.js';
 import { setAvatarMaterials, setAvatarBatch } from './entities/Avatars.js';
 import { Batcher } from './gfx/Batcher.js';
 import { Admin } from './ui/Admin.js';
+import { buildScenario } from './sim/Scenario.js';
 
 const PENDING = 'scrapisle.pending';
 
@@ -136,7 +137,15 @@ class Game {
   // ---------- world setup ----------
   async startNew(cfg) {
     if (this.running) { sessionStorage.setItem(PENDING, JSON.stringify({ type: 'new', cfg })); location.reload(); return; }
-    this.worldId = 'w' + Date.now().toString(36);
+    this.worldId = cfg.scenario ? 'scenario' : 'w' + Date.now().toString(36);
+    this.cfg = cfg;
+    await this.setup(cfg, null);
+  }
+  // Admin raid scenario: a fresh small island with one base and a clan coming to raid it (sim/Scenario.js).
+  async startScenario(sc) {
+    const cfg = { name: 'Raid scenario', seed: Math.floor(Math.random() * 1e6), difficulty: 'hard', mult: 2, bots: 0, size: 1024, layout: 3, scenario: sc };
+    if (this.running) { sessionStorage.setItem(PENDING, JSON.stringify({ type: 'new', cfg })); location.reload(); return; }
+    this.worldId = 'scenario';
     this.cfg = cfg;
     await this.setup(cfg, null);
   }
@@ -243,6 +252,7 @@ class Game {
     document.getElementById('hud').hidden = false;
     this.running = true;
     this.lastSave = 0;
+    if (cfg.scenario) { const msg = buildScenario(this, cfg.scenario); this.ui.toast(msg); this.logEvent(msg); if (this.spectate) this.ui.toast('Watching: WASD to fly, Space up, Ctrl down, Shift faster'); }
     await this.saveGame(true);
     this.online.start();
     document.getElementById('clickBox').hidden = !this.player.alive ? true : false;
@@ -305,6 +315,7 @@ class Game {
       if (d < 16 * size) this.ui.blastFlash((1 - d / (16 * size)) * 0.85);
     });
     // Explosives on your base (or a clan's raid reaching your walls): the raid banner and alarm.
+    E.on('raidEnded', e => { if (this.cfg && this.cfg.scenario) this.ui.toast(`Raid over: ${e.team.name} ${e.result === 'success' ? 'got in and took the loot' : e.result}`); });
     E.on('raidStarted', e => { if (e.st && e.st.team === this.player.team) this.ui.raidAlert(e.team.name); });
     E.on('structureHit', e => {
       if (!e.st || e.st.team !== this.player.team || !e.attacker || e.attacker === this.player) return;
@@ -329,6 +340,7 @@ class Game {
   }
   async saveGame(auto) {
     if (!this.running) return false;
+    if (this.cfg && this.cfg.scenario) { if (!auto) this.ui.toast('Raid scenarios aren\'t saved'); return true; }
     try {
       // plain data only: a stray 3D object or function anywhere would make the whole save fail
       const seen = new WeakSet();

@@ -42,6 +42,8 @@ export class BotAI {
       }
     }
     ai.goal = 'task';
+    // a clan holding its base (raid scenarios) stays home and defends it
+    if (team && team.homeGuard && team.base && team.base.st) team.underAttack = Math.max(team.underAttack, 5);
     // base defence
     if (team && team.underAttack > 0 && team.base && team.base.st && !(team.raid && team.raid.state === 'breach')) {
       const st = G.build.structures.get(team.base.st);
@@ -57,6 +59,15 @@ export class BotAI {
           else if (d > z.core + 4 && (!ai.task || ai.task.type !== 'defend')) this.setTask(b, { type: 'defend', x: z.x, z: z.z, until: G.now + 60 });
           if (ai.task && ai.task.type === 'defend') return;
         }
+      }
+    }
+    // a clan holding its base (raid scenarios) waits inside it instead of going about its day
+    if (team && team.homeGuard && team.base && team.base.st && !team.raid) {
+      const st = G.build.structures.get(team.base.st);
+      if (st) {
+        const z = G.build.zoneOf(st);
+        if (!ai.task || ai.task.type !== 'defend' || G.now > ai.task.until) this.setTask(b, { type: 'defend', x: z.x + randRange(-2.5, 2.5), z: z.z + randRange(-2.5, 2.5), until: G.now + randRange(15, 30) });
+        return;
       }
     }
     // raid participation
@@ -598,7 +609,7 @@ export class BotAI {
     // start a run: most of the clan goes together, to a harder monument once they need better parts
     const body = res === 'rifle_body' || res === 'smg_body' || res === 'semi_body';
     const wantMon = body || Math.random() < (ai.pers === 'looter' ? 0.8 : 0.45) * Math.min(1.3, Y_loot(team));
-    if (wantMon && gear > 8 && (!team || G.now > (team.nextRunT || 0))) {
+    if (wantMon && gear > 8 && !(team && team.raid) && (!team || G.now > (team.nextRunT || 0))) {
       const crew = team ? G.teams.alive(team) : [b];
       const minTier = res === 'rifle_body' ? 3 : (body || prog.bench >= 2) ? 2 : 1;
       const options = G.world.monuments.filter(m => m.tier >= minTier)
@@ -1273,12 +1284,12 @@ export class BotAI {
     b.fireT = (b.fireT || 0) - dt;
     if (b.fireT > 0) return;
     const e = b.eye(); const dx = p.wx - e.x, dy = ty - e.y, dz = p.wz - e.z, L = Math.hypot(dx, dy, dz) || 1;
-    if (!G.physics.los(e, { x: p.wx - dx / L * 0.8, y: ty, z: p.wz - dz / L * 0.8 }, c => !(c.ref === p || (p.door && c.ref === p)))) { if (t.range > 6) { t.range -= 4; t.inPos = false; return; } }   // something in the way: step closer
+    if (!G.physics.los(e, { x: p.wx - dx / L * 0.8, y: ty, z: p.wz - dz / L * 0.8 }, c => !(c.ref === p || (p.door && c.ref === p)))) { if (t.range > 13) { t.range -= 4; t.inPos = false; return; } }   // something in the way: step closer (but stay out of the splash)
     const err = b.ai.S.aimErr * 1.5;
     const ux = dx / L + randRange(-err, err), uy = dy / L + randRange(-err, err) + L * 0.0014, uz = dz / L + randRange(-err, err);
     const ul = Math.hypot(ux, uy, uz), v = ITEMS.rocket_launcher.vel;
     b.inv.remove('rocket', 1);
-    G.combat.spawnProjectile({ x: e.x + ux / ul * 0.8, y: e.y + uy / ul * 0.8, z: e.z + uz / ul * 0.8, vx: ux / ul * v, vy: uy / ul * v, vz: uz / ul * v, dmg: 0, owner: b, weapon: 'rocket_launcher', ammo: 'rocket', bleed: 0, rocket: { dmg: ITEMS.rocket.blast, radius: ITEMS.rocket.radius } });
+    G.combat.spawnProjectile({ x: e.x + ux / ul * 0.8, y: e.y + uy / ul * 0.8, z: e.z + uz / ul * 0.8, vx: ux / ul * v, vy: uy / ul * v, vz: uz / ul * v, dmg: 0, owner: b, weapon: 'rocket_launcher', ammo: 'rocket', bleed: 0, rocket: { type: 'rocket', dmg: ITEMS.rocket.blast, radius: ITEMS.rocket.radius, hurt: ITEMS.rocket.hurt, splash: ITEMS.rocket.splash } });
     G.events.emit('noise', { x: b.x, z: b.z, r: 320, src: b, kind: 'shot', weapon: 'rocket_launcher' });
     if (mode === 'full' && G.audio) G.audio.shot(ITEMS.rocket_launcher, b);
     b.ai.swing = 0; b.fireT = 3.5 + Math.random();
@@ -1304,7 +1315,7 @@ export class BotAI {
       const res = G.deploy.place(b, t.item, x, y, z, Math.random() * Math.PI * 2);
       if (res.ok) {
         if (t.item === 'sleeping_bag') (r.fob.bags = r.fob.bags || []).push(res.dep.id);
-        else r.fob.box = res.dep.id;
+        else { r.fob.box = res.dep.id; this.mgr.raiding.spareKit(r); }
         return 'done';
       }
     }
@@ -1342,6 +1353,46 @@ export class BotAI {
     if (!this.nav.moveTo(b, to.x, to.z, dt, mode, { arrive: 2.5, run: true }) && dist(b.x, b.z, to.x, to.z) > 3) return;
     const n = b.inv.count(t.item); b.inv.remove(t.item, n); const left = to.inv.give(t.item, n); if (left > 0) b.inv.give(t.item, left);
     return 'done';
+  }
+  // Build the raid tower (see BotRaiding.planFob): stand by its doorway side and put a piece up
+  // every half second or so.
+  t_fobbuild(b, t, dt, mode) {
+    const G = this.game, team = G.teams.of(b), r = team && team.raid, T = r && r.tower;
+    if (!T || T.built) return 'done';
+    if (!this.goTo(b, T.build.x, T.build.z, dt, mode, 2)) { if (b.ai.stuckT > 10) { G.bots.placeAt(b, T.build.x, T.build.z); b.ai.stuckT = 0; } return; }
+    b.vx = b.vz = 0;
+    this.equip(b, s => s.id === 'hammer' || ITEMS[s.id].type === 'tool');
+    this.faceTo(b, T.inDoor.x, T.inDoor.y + 1.5, T.inDoor.z);
+    t.stepT = (t.stepT || 0) - dt;
+    if (t.stepT > 0) return;
+    t.stepT = mode === 'full' ? 0.55 : 0.2;
+    b.ai.swing = 1;
+    if (!this.mgr.raiding.buildTowerStep(b, r)) { this.mgr.raiding.finishTower(b, team, r); return 'done'; }
+    if (mode === 'full') G.audio.hitAt('wood', b);
+  }
+  // Overwatch from the raid tower: in through the doorway, up the stairs, to a window, and hold it
+  // (crouching behind the sill to reload). Bots far from you just take their place.
+  t_towerwatch(b, t, dt, mode) {
+    const G = this.game, team = G.teams.of(b), r = team && team.raid, T = r && r.tower;
+    if (!T || !T.built || T.failed || !T.stairTop) return 'done';
+    const spot = T.spots[t.slot]; if (!spot) return 'done';
+    const route = [T.outDoor, T.inDoor, T.stairBot, T.stairTop, spot];
+    if (t.i === undefined) t.i = b.y > T.floorY - 0.8 && dist(b.x, b.z, spot.x, spot.z) < 6 ? route.length - 1 : 0;
+    if (mode !== 'full' && t.i < route.length) { b.x = spot.x; b.z = spot.z; b.y = spot.y; b.vx = b.vy = b.vz = 0; t.i = route.length; }
+    if (t.i < route.length) {
+      const wp = route[t.i];
+      t.wpT = (t.wpT || 0) + dt;
+      const up = wp === T.stairTop || wp === spot;
+      if (this.nav.walkTo(b, wp.x, wp.z, dt, up ? 0.5 : 0.6) && (!up || b.y > T.floorY - 0.7)) { t.i++; t.wpT = 0; }
+      else if (t.wpT > 4) { b.x = wp.x; b.z = wp.z; b.y = wp.y + 0.05; b.vx = b.vy = b.vz = 0; t.i++; t.wpT = 0; }   // caught on something: step through
+      return;
+    }
+    b.vx = b.vz = 0; b.vy -= 9.8 * dt; if (mode === 'full') G.physics.move(b, dt);
+    b.ai.hold = { x: spot.x, z: spot.z, until: G.now + 20 };
+    this.equipWeapon(b);
+    this.faceTo(b, r.tx, G.world.heightAt(r.tx, r.tz) + 1.5, r.tz);
+    t.peekT = (t.peekT || 0) - dt;
+    if (t.peekT <= 0) { t.peekT = randRange(1.5, 4); b.crouch = Math.random() < 0.35; }
   }
   // Overwatch: hold a spot in the FOB firing line, gun out, watching the target (crouching now and
   // then like a player peeking over cover). Defenders who show up are fought by the normal sensing.
@@ -1416,7 +1467,11 @@ export class BotAI {
       const off = idx < 0 ? 0 : (idx - (n - 1) / 2) * 6 * Math.min(1, (d - 8) / 30);
       gx = tx - (b.z - tz) / d * off; gz = tz + (b.x - tx) / d * off;
     }
-    if (!ranged || d > want + 6) { this.nav.moveTo(b, gx, gz, dt, mode, { arrive: ranged ? want : 1.2, run: true }); b.crouch = false; }
+    const holding = ai.hold && G.now < ai.hold.until && dist(b.x, b.z, ai.hold.x, ai.hold.z) < 2.5;
+    if (holding) {
+      // holding a window in the raid tower: shoot from it, duck below the sill to reload
+      b.vx = b.vz = 0; b.vy -= 9.8 * dt; G.physics.move(b, dt); b.crouch = reloading;
+    } else if (!ranged || d > want + 6) { this.nav.moveTo(b, gx, gz, dt, mode, { arrive: ranged ? want : 1.2, run: true }); b.crouch = false; }
     else if (d < want - 4 || (reloading && S.caution > 0.5)) { const ax = b.x - (tx - b.x), az = b.z - (tz - b.z); this.nav.moveTo(b, ax, az, dt, mode, { arrive: 0.5, run: true }); }
     else if (Math.random() < S.strafe) {
       const ang = Math.atan2(tx - b.x, tz - b.z) + ai.strafeDir * Math.PI / 2;

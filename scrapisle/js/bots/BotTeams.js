@@ -32,6 +32,7 @@ export class Team {
     this.monumentRun = null;
     this.style = o.style || rollStyle(o.tier, hashRand(this.id));
     this.ms = o.ms || {};
+    this.homeGuard = !!o.homeGuard;      // raid scenarios: the clan stays home and holds its base
     this.lessons = o.lessons || null;  // what the clan learned from its mistakes (BotReport)            // progression milestones: name -> game time reached
   }
   get size() { return this.members.length; }

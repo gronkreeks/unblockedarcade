@@ -57,6 +57,7 @@ export class UIManager {
     document.addEventListener('mouseup', e => this.onDragEnd(e));
     $('mnNew').onclick = () => this.showScreen('newScreen');
     $('mnLoad').onclick = () => this.showLoad();
+    $('mnAdmin').onclick = () => this.game.adminUI.open();
     $('mnSettings').onclick = () => { this.settingsBack = 'menuScreen'; this.showSettings(); };
     $('mnContinue').onclick = () => { const id = this.game.save.lastWorld(); if (id) this.game.loadWorld(id); };
     for (const b of document.querySelectorAll('[data-back]')) b.onclick = () => this.showScreen(b.dataset.back === 'settings' ? this.settingsBack : b.dataset.back);

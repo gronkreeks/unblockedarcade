@@ -1,22 +1,15 @@
-// Admin space: set up situations to test and practise against. A raid on your base you can defend,
-// clan against clan raids to watch, clans hunting you, kits, time and weather, fast-forward.
+// Admin space: set up situations to test and practise against. A raid scenario on a fresh small
+// island (defend the base or fly around and watch), raids on your base in the current world, clan
+// against clan raids, clans hunting you, kits, time and weather, fast-forward.
 // Opens from the pause menu and asks for the team password (the same one the chat team sign-in uses).
 // The server checks it (POST /team/check); the page never sees or stores the password, only that
 // this tab was unlocked. A world where admin tools were used no longer posts to the leaderboard.
-import { ITEMS, makeStack } from '../data/items.js';
+import { ITEMS } from '../data/items.js';
+import { KITS, METHODS, kitUp, startRaid } from '../sim/Scenario.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const UNLOCK = 'clanwars.admin';
-
-// Kits for you or for bots, from early game to late game.
-const KITS = {
-  bow: { name: 'Bow', gun: 'hunting_bow', ammo: ['wooden_arrow', 60], wear: ['cloth_hood', 'cloth_shirt', 'cloth_pants', 'hide_boots'], meds: [['bandage', 6]] },
-  pistol: { name: 'Revolver', gun: 'revolver', ammo: ['pistol_ammo', 120], wear: ['bone_helmet', 'wood_chest', 'cloth_pants', 'hide_boots'], meds: [['bandage', 6], ['med_syringe', 2]] },
-  rifle: { name: 'Semi rifle', gun: 'semi_rifle', ammo: ['rifle_ammo', 160], wear: ['coffee_can_helmet', 'roadsign_vest', 'roadsign_kilt', 'hide_boots', 'leather_gloves'], meds: [['med_syringe', 4], ['bandage', 4]] },
-  ak: { name: 'Assault rifle', gun: 'assault_rifle', ammo: ['rifle_ammo', 240], wear: ['metal_facemask', 'metal_chest', 'roadsign_kilt', 'hide_boots', 'leather_gloves'], meds: [['med_syringe', 6], ['large_medkit', 2]] },
-};
-const METHODS = { satchel_charge: 'Satchel charges', timed_charge: 'C4 (timed charges)', rocket: 'Rockets', melee: 'Melee (soft side, no boom)' };
 
 function serverBase() {
   let p = null;
@@ -39,11 +32,14 @@ export class Admin {
   get unlocked() { try { return sessionStorage.getItem(UNLOCK) === '1'; } catch (e) { return false; } }
   open() {
     const G = this.game;
-    if (!G.running) return;
     G.ui.showScreen('adminScreen');
-    if (this.unlocked) this.render(); else this.renderLock();
+    if (!this.unlocked) this.renderLock(); else if (G.running) this.render(); else this.renderScenario();
   }
-  close(resume) { this.el.hidden = true; if (resume) this.game.ui.resume(); else this.game.ui.showPause(); }
+  close(resume) {
+    this.el.hidden = true;
+    if (!this.game.running) return this.game.ui.showMenu();
+    if (resume) this.game.ui.resume(); else this.game.ui.showPause();
+  }
 
   // ---------- password ----------
   renderLock(msg = '') {
@@ -63,10 +59,45 @@ export class Admin {
     try {
       const r = await fetch(serverBase() + '/team/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pw }) });
       const j = await r.json().catch(() => ({ ok: false, error: 'The server didn\'t answer.' }));
-      if (j.ok) { try { sessionStorage.setItem(UNLOCK, '1'); } catch (e) { /* private mode: unlocked until reload */ } this.render(); }
+      if (j.ok) { try { sessionStorage.setItem(UNLOCK, '1'); } catch (e) { /* private mode: unlocked until reload */ } if (this.game.running) this.render(); else this.renderScenario(); }
       else this.renderLock(j.error || 'Wrong password.');
     } catch (e) { this.renderLock('Couldn\'t reach the server. Check your connection and try again.'); }
     this.busy = false;
+  }
+
+  // ---------- raid scenario (a new world) ----------
+  renderScenario(msg = '') {
+    const opt = (o, sel) => Object.entries(o).map(([k, v]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${esc(v)}</option>`).join('');
+    const kits = Object.fromEntries(Object.entries(KITS).map(([k, v]) => [k, v.name]));
+    this.el.innerHTML = `<div class="wrap admin">
+      <h2>Raid scenario</h2>
+      <p class="muted small">Starts a new small island with one base and a clan coming to raid it. It isn't saved, and your current world stays as it was.</p>
+      <label>You <select id="scRole">${opt({ defend: 'Defend the base yourself', watch: 'Watch (fly around, nobody can see you)' }, 'defend')}</select></label>
+      <h4>The base</h4>
+      <label>Size <select id="scBase">${opt({ small: 'Small (2 x 2 and an airlock)', medium: 'Medium (3 x 2 and an airlock)', large: 'Large (4 x 3 and an airlock)' }, 'medium')}</select></label>
+      <label>Walls <select id="scGrade">${opt({ 1: 'Wood', 2: 'Stone', 3: 'Sheet metal', 4: 'Armored' }, '2')}</select></label>
+      <label>Doors <select id="scDoor">${opt({ wood_door: 'Wooden', metal_door: 'Sheet metal', armored_door: 'Armored' }, 'metal_door')}</select></label>
+      <label>Your kit (defending) <select id="scPKit">${opt(kits, 'ak')}</select></label>
+      <label>Defenders (watching) <select id="scDef">${opt({ 0: 'Nobody home (an offline raid)', 2: '2', 3: '3', 4: '4', 6: '6' }, '3')}</select></label>
+      <label>Defenders' kit <select id="scDKit">${opt(kits, 'rifle')}</select></label>
+      <h4>The raiders</h4>
+      <label>How many <select id="scN">${opt({ 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 8: '8' }, '4')}</select></label>
+      <label>Skill <select id="scTier">${opt({ normal: 'Normal', hard: 'Hard', expert: 'Expert' }, 'hard')}</select></label>
+      <label>Raiding with <select id="scMethod">${opt(METHODS, 'timed_charge')}</select></label>
+      <label>Their kit <select id="scKit">${opt(kits, 'rifle')}</select></label>
+      <label>They start <select id="scStart">${opt({ fob: 'Right outside, putting up their raid tower', home: 'From 300 m away (they walk over first)' }, 'fob')}</select></label>
+      <label>Time <select id="scTime">${opt({ day: 'Day', night: 'Night' }, 'day')}</select></label>
+      <p class="muted" id="adMsg">${esc(msg)}</p>
+      <div class="row"><button class="btn go" data-a="scstart">Start the scenario</button><button class="btn" data-a="${this.game.running ? 'panel' : 'back'}">Back</button></div>
+    </div>`;
+  }
+  startScenario() {
+    const v = id => $(id).value;
+    const sc = { role: v('scRole'), base: v('scBase'), grade: +v('scGrade'), door: v('scDoor'), playerKit: v('scPKit'), defenders: +v('scDef'), defKit: v('scDKit'),
+      raiders: +v('scN'), tier: v('scTier'), method: v('scMethod'), kit: v('scKit'), start: v('scStart'), night: v('scTime') === 'night', defTier: 'hard' };
+    if (sc.role === 'watch' && !sc.defenders) sc.defenders = 1;   // somebody has to own it (they sit tight)
+    this.msg('Making the island…');
+    this.game.startScenario(sc);
   }
 
   // ---------- panel ----------
@@ -84,6 +115,7 @@ export class Admin {
     this.el.innerHTML = `<div class="wrap admin">
       <h2>Admin space</h2>
       <p class="muted small">Scores from this world stop going to the leaderboard once you use anything here.</p>
+      <div class="row"><button class="btn go" data-a="scenario">Raid scenario on a new island</button></div>
 
       <h4>Raid on your base</h4>
       ${myBase ? '' : '<p class="muted small">You don\'t have a base. Build one, or claim a clan\'s base below.</p>'}
@@ -132,16 +164,19 @@ export class Admin {
     if (a === 'resume') return this.close(true);
     if (a === 'lock') { try { sessionStorage.removeItem(UNLOCK); } catch (err) { /* nothing to remove */ } return this.renderLock(); }
     if (!this.unlocked || this.busy) return;
+    if (a === 'scenario') return this.renderScenario();
+    if (a === 'panel') return this.render();
+    if (a === 'scstart') return this.startScenario();
     const val = id => $(id) ? $(id).value : '';
     try {
       switch (a) {
-        case 'raidme': this.used(); return this.done(this.raid(G.teams.get(val('adRaidClan')), this.playerBase(), val('adRaidMethod'), val('adRaidKit'), val('adRaidStart')));
-        case 'raidclan': { this.used(); const t = G.teams.get(val('adCvCt')); return this.done(this.raid(G.teams.get(val('adCvCa')), t && G.build.structures.get(t.base.st), 'satchel_charge', '', 'fob')); }
+        case 'raidme': this.used(); return this.done(startRaid(G, G.teams.get(val('adRaidClan')), this.playerBase(), val('adRaidMethod'), val('adRaidKit'), val('adRaidStart')));
+        case 'raidclan': { this.used(); const t = G.teams.get(val('adCvCt')); return this.done(startRaid(G, G.teams.get(val('adCvCa')), t && G.build.structures.get(t.base.st), 'satchel_charge', '', 'fob')); }
         case 'watch': { this.used(); const t = G.teams.get(val('adCvCt')); const st = t && G.build.structures.get(t.base.st); if (!st) return this.msg('That clan has no base'); const z = G.build.zoneOf(st); this.teleport(z.x + z.r + 25, z.z); return this.msg(`You're next to ${t.name}'s base`); }
         case 'cancelraids': { let n = 0; for (const t of G.teams.teams.values()) if (t.raid) { t.raid = null; t.lastRaid = G.now; n++; } return this.msg(n ? `Called off ${n} raid${n > 1 ? 's' : ''}` : 'No raids running'); }
         case 'hunt': this.used(); return this.msg(this.hunt(G.teams.get(val('adHuntClan')), val('adHuntKit'), false));
         case 'nearby': this.used(); return this.msg(this.hunt(G.teams.get(val('adHuntClan')), val('adHuntKit'), true));
-        case 'kit': this.used(); this.kitUp(G.player, val('adKit')); return this.msg(`Gave you the ${KITS[val('adKit')].name} kit`);
+        case 'kit': this.used(); kitUp(G.player, val('adKit')); return this.msg(`Gave you the ${KITS[val('adKit')].name} kit`);
         case 'heal': { this.used(); const P = G.player; P.hp = 100; P.bleed = 0; P.rads = 0; P.poison = 0; P.cal = Math.max(P.cal, 400); P.hyd = Math.max(P.hyd, 200); return this.msg('Healed'); }
         case 'claim': this.used(); return this.msg(this.claimBase());
         case 'give': { this.used(); const id = val('adItem'), n = Math.max(1, Math.min(10000, parseInt(val('adCount'), 10) || 1)); const left = G.player.inv.give(id, n); return this.msg(left ? `Gave ${n - left} ${ITEMS[id].name} (no room for ${left})` : `Gave ${n} ${ITEMS[id].name}`); }
@@ -152,7 +187,7 @@ export class Admin {
       }
     } catch (err) { console.error(err); this.msg('That didn\'t work: ' + err.message); }
   }
-  done(r) { if (typeof r === 'string') return this.msg(r); this.msg(r.msg); if (r.resume) setTimeout(() => this.close(true), 600); }
+  done(r) { if (typeof r === 'string') return this.msg(r); this.msg(r.msg); if (r.mine) setTimeout(() => this.close(true), 600); }
 
   // ---------- helpers ----------
   playerBase() {
@@ -161,67 +196,14 @@ export class Admin {
     return best;
   }
   teleport(x, z) { const G = this.game, P = G.player; P.x = x; P.z = z; P.y = G.world.heightAt(x, z) + 0.3; P.vx = P.vy = P.vz = 0; }
-  // Arm someone with a kit: gun (loaded) on the belt, ammo, armour worn, meds.
-  kitUp(a, kind) {
-    const K = KITS[kind]; if (!K) return;
-    const gun = makeStack(K.gun); if (ITEMS[K.gun].mag) gun.ammo = ITEMS[K.gun].mag;
-    const free = a.inv.belt.slots.findIndex(s => !s);
-    if (free >= 0) { a.inv.belt.slots[free] = gun; a.inv.belt.touch(); if (!a.isPlayer) a.active = free; } else a.inv.giveStack(gun);
-    a.inv.give(K.ammo[0], K.ammo[1]);
-    for (const w of K.wear) { const left = a.inv.equip(makeStack(w)); if (left) a.inv.giveStack(left); }
-    for (const [m, n] of K.meds) a.inv.give(m, n);
-    a.hp = Math.max(a.hp, 100);
-  }
-  // Bring a clan's dead back and return the living members.
-  crew(team) {
-    const G = this.game;
-    for (const m of G.teams.membersOf(team)) if (!m.alive) G.bots.respawn(m);
-    return G.teams.alive(team);
-  }
-  // A raid by `team` on structure `st`. method: satchel_charge / timed_charge / rocket / melee.
-  // start: 'fob' (crew already at the FOB with the boom), 'home' (crew at home with the boom),
-  // 'prep' (the clan has to make the boom first, like a normal raid).
-  raid(team, st, method, kit, start) {
-    const G = this.game, R = G.bots.raiding;
-    if (!team) return 'Pick a clan';
-    if (!st) return 'There\'s no base to raid';
-    if (st.team === team.id) return 'A clan can\'t raid its own base';
-    const crew = this.crew(team);
-    if (!crew.length) return `${team.name} have nobody alive`;
-    for (const t of G.teams.teams.values()) if (t.raid && t.raid.target === st.id) t.raid = null;   // one raid at a time on a base
-    const z = G.build.zoneOf(st);
-    const homeSt = team.base && team.base.st && G.build.structures.get(team.base.st);
-    const home = homeSt ? G.build.zoneOf(homeSt) : { x: crew[0].x, z: crew[0].z };
-    const fob = R.chooseFob(st, home);
-    const plan = R.planBreach(team, st, fob);
-    if (!plan && method !== 'melee') return 'They can\'t find a way into that base';
-    const raw = method === 'timed_charge' ? plan.c4 : method === 'rocket' ? plan.rockets : method === 'satchel_charge' ? plan.sat : 0;
-    const need = method === 'melee' ? 0 : Math.max(2, R.needFor(method, raw));
-    // boom, launchers and the FOB kit, spread over the crew
-    if (start !== 'prep' && method !== 'melee') {
-      crew.forEach((m, i) => { const k = Math.ceil(need / crew.length); m.inv.give(method, k); });
-      if (method === 'rocket') crew.slice(0, Math.min(2, crew.length)).forEach(m => { if (!m.inv.count('rocket_launcher')) m.inv.give('rocket_launcher', 1); });
-    }
-    crew.forEach(m => { if (!m.inv.count('sleeping_bag')) m.inv.give('sleeping_bag', 1); });
-    if (!crew[0].inv.count('wood_box')) crew[0].inv.give('wood_box', 1);
-    if (method === 'melee') crew.forEach(m => { if (!m.inv.count('salvaged_axe') && !m.inv.count('pickaxe')) m.inv.give('pickaxe', 1); });
-    if (kit) crew.forEach(m => this.kitUp(m, kit));
-    if (start === 'fob') crew.forEach((m, i) => { const a = i * 2.4; G.bots.placeAt(m, fob.x + Math.sin(a) * 4, fob.z + Math.cos(a) * 4); m.ai.task = null; m.ai.target = null; m.ai.goal = 'task'; });
-    const tgtName = st.team === G.player.team ? 'you' : (G.teams.get(st.team) || {}).name || 'a lone survivor';
-    team.raid = { state: start === 'prep' ? 'prep' : 'rally', target: st.id, targetTeam: st.team, method: method === 'melee' ? 'melee' : method, need,
-      rally: fob, fob, started: G.now, stateT: G.now, looted: 0, lootedValue: 0, targetName: tgtName, tx: z.x, tz: z.z, admin: true };
-    team.raidDrive = 0;
-    G.logEvent(`${team.name} are coming to raid ${tgtName === 'you' ? 'you' : tgtName} (${METHODS[method]})`);
-    const where = start === 'fob' ? 'They\'re at their FOB' : start === 'home' ? 'They\'re setting out from home' : 'They\'re making the boom first';
-    return { msg: `${team.name} will raid ${tgtName === 'you' ? 'your base' : tgtName + '\'s base'} with ${need || 'no'} ${method === 'melee' ? 'boom (melee)' : ITEMS[method].name.toLowerCase() + 's'}. ${where}.`, resume: tgtName === 'you' };
-  }
   // A clan comes to fight you: a hunt (they know where you are and push), optionally dropped close.
   hunt(team, kit, close) {
     const G = this.game, P = G.player;
     if (!team) return 'Pick a clan';
-    const crew = this.crew(team);
+    for (const m of G.teams.membersOf(team)) if (!m.alive) G.bots.respawn(m);
+    const crew = G.teams.alive(team);
     if (!crew.length) return `${team.name} have nobody alive`;
-    if (kit) crew.forEach(m => this.kitUp(m, kit));
+    if (kit) crew.forEach(m => kitUp(m, kit));
     if (close) {
       const a0 = Math.random() * Math.PI * 2;
       crew.forEach((m, i) => { const a = a0 + (i - crew.length / 2) * 0.12; G.bots.placeAt(m, P.x + Math.sin(a) * 60, P.z + Math.cos(a) * 60); m.ai.task = null; });
