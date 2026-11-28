@@ -622,7 +622,7 @@ export class UIManager {
     this.mapSide();
     this.drawMap();
   }
-  get mapOpts() { const G = this.game; return (G.prefs.map = Object.assign({ bases: false, raids: true, clans: true }, G.prefs.map || {})); }
+  get mapOpts() { const G = this.game; return (G.prefs.map = Object.assign({ bases: false, top: true, clans: true }, G.prefs.map || {})); }
   // Clans ranked by size and strength from what they really own.
   clanTable() {
     const G = this.game, out = [];
@@ -671,7 +671,7 @@ export class UIManager {
       const hall = !window.Ranked ? '' : `<p class="muted">${os ? `Your best world is #${os.rank} in Clan Wars on the homepage's Hall of Challengers${os.challenger ? ', which makes you a Challenger' : ''}.` : 'Defend raids to post this world to the Hall of Challengers on the homepage. Your best world counts.'}</p><button type="button" class="btn" data-cr-open="clanwars">Hall of Challengers</button>`;
       board = `<h3>Leaderboard</h3><div class="boards"><table class="clanTable"><tr><th></th><th>Raids defended</th><th></th></tr>${defs}</table><table class="clanTable"><tr><th></th><th>Best K/D</th><th></th></tr>${kds}</table></div>${hall}`;
     }
-    $('mapSide').innerHTML = `<div class="mapOpts">${check('bases', 'Show every clan base')}${check('raids', 'Show raid spots')}${check('clans', 'Show clan list')}</div>
+    $('mapSide').innerHTML = `<div class="mapOpts">${check('bases', 'Show every clan base')}${check('top', 'Show top clan bases')}${check('clans', 'Show clan list')}</div>
       <h3>Biggest clan</h3>${biggest || '<p class="muted">No clans yet.</p>'}${clanHTML}${board}
       <h3>Raids</h3><p class="muted">${G.raidHistory.length} raids so far, ${won} of them successful.</p>${raids}
       <h3>Island news</h3>${log}
@@ -719,12 +719,19 @@ export class UIManager {
       x.fillStyle = '#d0583a';
       for (const s of G.seen.values()) { const [a, b] = toM(s.x, s.z); x.fillRect(a - 3, b - 3, 6, 6); }
     }
-    // where raids happened: a ring in the raiders' colour, filled when the raid succeeded
-    if (O.raids) for (const r of G.raidHistory.slice(-30)) {
-      if (r.x === undefined) continue;
-      const [a, b] = toM(r.x, r.z);
-      x.strokeStyle = r.color || '#e05a4a'; x.lineWidth = 2.5; x.beginPath(); x.arc(a, b, 9, 0, 7); x.stroke();
-      if (r.result === 'success') { x.fillStyle = r.color || '#e05a4a'; x.globalAlpha = 0.35; x.fill(); x.globalAlpha = 1; }
+    // the top clans' bases: a ring in the clan's colour with its rank (the list is ranked every few seconds)
+    if (O.top) {
+      if (!this.topClans || G.now - this.topClans.t > 3) this.topClans = { t: G.now, list: this.clanTable().filter(c => c.st).slice(0, 5) };
+      x.font = '800 12px Nunito, sans-serif';
+      this.topClans.list.forEach((c, i) => {
+        if (!G.build.structures.has(c.st.id)) return;
+        const z = G.build.zoneOf(c.st); const [a, b] = toM(z.x, z.z);
+        x.lineWidth = 5; x.strokeStyle = '#111'; x.beginPath(); x.arc(a, b, 12, 0, 7); x.stroke();
+        x.lineWidth = 3; x.strokeStyle = c.t.color; x.stroke();
+        const label = O.bases ? `#${i + 1}` : `#${i + 1} ${c.t.name}`;
+        x.fillStyle = '#111'; x.fillText(label, a + 1, b - 16); x.fillStyle = '#f4f1ea'; x.fillText(label, a, b - 17);
+      });
+      x.font = '600 13px Nunito, sans-serif';
     }
     // own buildings + bags
     x.fillStyle = '#6ea3e0';
