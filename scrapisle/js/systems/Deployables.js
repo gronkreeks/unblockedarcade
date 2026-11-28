@@ -141,7 +141,7 @@ export class Deployables {
     const W = this.game.world;
     if (!D) return 'Unknown item';
     if (W.waterSurface(x, z) && W.waterSurface(x, z).y > y) return 'Cannot place in water';
-    if (W.monumentAt(x, z, 6)) return 'Too close to a monument';
+    if (!D.quick && W.monumentAt(x, z, 6)) return 'Too close to a monument';   // barricades are fine there
     const b = this.game.build.blockedFor(team, x, z);
     if (b) return 'Building blocked';
     const sup = this.supportAt(x, y, z);

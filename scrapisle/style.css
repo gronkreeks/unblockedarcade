@@ -189,3 +189,8 @@ label select { display: block; margin-top: 0.3rem; font-family: inherit; font-si
 .boards { display: flex; gap: 0.8rem; }
 .boards table { flex: 1; }
 .clanTable tr.you td { color: var(--warn); font-weight: 800; }
+
+/* bolt-action scope: a clear lens with a fine crosshair, black around it */
+#scopeOverlay { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 50% 50%, transparent 0, transparent min(38vh, 38vw), #000 calc(min(38vh, 38vw) + 2px)); }
+#scopeOverlay i { position: absolute; inset: 0; background: linear-gradient(#000, #000) 50% 50% / 1px 100% no-repeat, linear-gradient(#000, #000) 50% 50% / 100% 1px no-repeat; }
+body.scoped #crosshair { display: none; }

@@ -20,6 +20,7 @@ import { BotTeams } from './bots/BotTeams.js';
 import { BotManager } from './bots/BotManager.js';
 import { WorldSimulation } from './sim/WorldSimulation.js';
 import { SaveSystem } from './save/SaveSystem.js';
+import { OnlineBoard } from './save/OnlineBoard.js';
 import { UIManager } from './ui/UIManager.js';
 import { PlayerController } from './player/PlayerController.js';
 import { Audio } from './audio/Audio.js';
@@ -134,6 +135,7 @@ class Game {
     this.log = data ? data.log || [] : [];
     this.raidHistory = data ? data.raidHistory || [] : [];
     this.pstats = Object.assign({ defended: 0 }, data ? data.pstats : null);
+    this.online = new OnlineBoard(this);   // Clan Wars board in the homepage's Hall of Challengers (Normal and up)
     this.seen = new Map(data ? data.seen || [] : []);
     this.actors = new Set();
     this.actorHash = new SpatialHash(16);
@@ -213,6 +215,7 @@ class Game {
     this.running = true;
     this.lastSave = 0;
     await this.saveGame(true);
+    this.online.start();
     document.getElementById('clickBox').hidden = !this.player.alive ? true : false;
   }
   makePlayer() {
@@ -257,8 +260,9 @@ class Game {
       if (e.victim === this.player) {
         this.deathSpot = { x: this.player.x, z: this.player.z };
         this.ui.showDeath(e);
-        this.logEvent(e.killer && e.killer.name ? `${e.killer.name} killed you` : 'You died');
-      } else if (e.killer === this.player && e.victim.kind === 'survivor') this.ui.toast(`You killed ${e.victim.name}`);
+        const tier = e.killer && e.killer.ai ? ` (${e.killer.ai.tier.toUpperCase()})` : '';
+        this.logEvent(e.killer && e.killer.name ? `${e.killer.name}${tier} killed you` : 'You died');
+      } else if (e.killer === this.player && e.victim.kind === 'survivor') this.ui.toastHTML(`You killed ${this.ui.esc(e.victim.name)}${this.ui.tierTag(e.victim)}`);
       else if (e.victim.kind === 'survivor' && e.killer && e.killer.kind === 'survivor' && Math.random() < 0.05) this.logEvent(`${e.killer.name} killed ${e.victim.name}`);
     });
     E.on('hurt', e => { if (e.victim === this.player && e.dmg > 0.5) { this.ui.damageFlash(); this.audio.hurt(); } });
@@ -318,6 +322,7 @@ class Game {
     this.fx.update(dt, cp, this.env);
     this.adapt(dt);
     this.ui.updateHUD(dt);
+    this.online.update();
     const cb = document.getElementById('clickBox');
     const wantClick = P.alive && !this.controls.locked && !this.ui.isOpen() && paused === false && document.getElementById('deathScreen').hidden && document.getElementById('pauseScreen').hidden;
     if (cb.hidden === wantClick) cb.hidden = !wantClick;

@@ -809,7 +809,7 @@
         </div>
         <div class="crh">
           <div class="crh-head"><span class="crh-em" id="crhEm"></span><div><h3>Hall of Challengers</h3>
-            <p>Challenger is the rank above Champion. Champions race the Champion bot, and the top 3 scores in each game hold Challenger.</p></div>
+            <p>Challenger is the rank above Champion. Champions race the Champion bot, and the top 3 scores in each game hold Challenger. In Clan Wars the top 3 for raids defended hold it.</p></div>
             <button type="button" class="crh-btn" data-cr-open="chess">Full leaderboards</button></div>
           <div class="crh-grid" id="crhGrid"></div>
         </div>
@@ -975,7 +975,7 @@
 })();
 </script>
 
-<script src="ranked.js?v=7"></script>
+<script src="ranked.js?v=8"></script>
 <script>
 // Ranked pills show your rank in each game (ranked.js keeps the ladders in this browser)
 (() => {
@@ -1024,9 +1024,10 @@
   document.getElementById('crhEm').innerHTML = Ranked.emblem(Ranked.CHALLENGER, 48);
   const grid = document.getElementById('crhGrid');
   const hall = (boards, msg) => {
-    grid.innerHTML = GAMES.map(([id, name]) => {
-      const b = boards && boards[id], top = b ? b.board.slice(0, 3) : [];
-      const rows = top.map(r => `<div class="crh-row ${b.you && b.you.id === r.id ? 'me' : ''}"><b>${r.rank}</b><span>${esc(r.name)}</span><small>${r.score.toLocaleString('en-US')}</small></div>`).join('');
+    // the ranked games, plus Clan Wars (posted from survival worlds on Normal and up)
+    grid.innerHTML = [...GAMES, ['clanwars', 'Clan Wars']].map(([id, name]) => {
+      const b = boards && boards[id], top = b ? b.board.slice(0, 3) : [], g = Ranked.CR_GAMES[id] || {};
+      const rows = top.map(r => `<div class="crh-row ${b.you && b.you.id === r.id ? 'me' : ''}"><b>${r.rank}</b><span>${esc(r.name)}</span><small>${g.short ? esc(g.short(r)) : r.score.toLocaleString('en-US')}</small></div>`).join('');
       return `<button type="button" class="crh-game" data-cr-open="${id}"><h4>${name}</h4>${rows || `<div class="crh-empty">${msg || 'No Challengers yet. Be the first!'}</div>`}</button>`;
     }).join('');
   };

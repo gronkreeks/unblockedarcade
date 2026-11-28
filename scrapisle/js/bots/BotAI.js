@@ -25,7 +25,7 @@ export class BotAI {
     this.perceive(b, mode);
     // the clan is pushing the player: everyone nearby joins in, using what the clan knows
     const P = G.player;
-    if (team && team.push && G.now < team.push.until && P && P.alive && dist(b.x, b.z, P.x, P.z) < 350 && !(team.raid && team.raid.state === 'breach') && !(team.underAttack > 0 && ai.goal === 'fight' && ai.target && ai.target !== P)) {
+    if (team && team.push && G.now < team.push.until && P && P.alive && this.kitted(b) && dist(b.x, b.z, P.x, P.z) < 350 && !(team.raid && team.raid.state === 'breach') && !(team.underAttack > 0 && ai.goal === 'fight' && ai.target && ai.target !== P)) {
       if (ai.target !== P) this.startCombat(b, P);
       ai.targetSeen = G.now; ai.lastSeen = { x: team.intel.x, z: team.intel.z };
       ai.goal = b.hp < 20 && !(ai.cornered > G.now) ? 'flee' : 'fight';
@@ -49,8 +49,11 @@ export class BotAI {
         const d = dist(b.x, b.z, z.x, z.z);
         if (d < 600) {
           // pick an attacker to hunt down
-          for (const id of team.attackers) { const a = G.actorById(id); if (a && a.alive && dist(a.x, a.z, z.x, z.z) < z.r + 60) { this.startCombat(b, a); ai.goal = 'fight'; return; } }
-          if (d > z.core + 4 && (!ai.task || ai.task.type !== 'defend')) this.setTask(b, { type: 'defend', x: z.x, z: z.z, until: G.now + 60 });
+          const bare = !this.kitted(b);
+          for (const id of team.attackers) { const a = G.actorById(id); if (a && a.alive && dist(a.x, a.z, z.x, z.z) < z.r + 60 && !(bare && a.kind === 'survivor' && this.kitted(a))) { this.startCombat(b, a); ai.goal = 'fight'; return; } }
+          // a bare bot doesn't run into a gunfight at home: it rekits or keeps away (chooseEconomy)
+          if (bare && [...team.attackers].some(id => { const a = G.actorById(id); return a && a.alive && a.kind === 'survivor' && this.kitted(a); })) { if (ai.task && ai.task.type === 'defend') ai.task = null; }
+          else if (d > z.core + 4 && (!ai.task || ai.task.type !== 'defend')) this.setTask(b, { type: 'defend', x: z.x, z: z.z, until: G.now + 60 });
           if (ai.task && ai.task.type === 'defend') return;
         }
       }
@@ -177,7 +180,7 @@ export class BotAI {
       const t = G.actorById(team.alert.id);
       const help = ai.tier === 'easy' ? 170 : ai.tier === 'normal' ? 130 : 100;
       const ignored = ai.ignore instanceof Map && (ai.ignore.get(team.alert.id) || 0) > G.now;
-      if (t && t.alive && !ignored && G.now - team.alert.t < 6 && dist(b.x, b.z, team.alert.x, team.alert.z) < help) best = t;
+      if (t && t.alive && !ignored && G.now - team.alert.t < 6 && dist(b.x, b.z, team.alert.x, team.alert.z) < help && (this.kitted(b) || !(t.kind === 'survivor' && this.kitted(t)))) best = t;
     }
     if (best) {
       if (best === G.player) this.mgr.spotPlayer(team, best.x, best.z);
@@ -221,6 +224,31 @@ export class BotAI {
   }
   endCombat(b, ignore) { const ai = b.ai; if (ignore && ai.target) { if (!(ai.ignore instanceof Map)) ai.ignore = new Map(); ai.ignore.set(ai.target.id, this.game.now + 150 + Math.random() * 150); } ai.target = null; ai.goal = 'task'; b.crouch = false; }
 
+  // A ranged kit: a bow or gun with arrows / ammo to shoot. Rocks, spears and empty guns don't count.
+  kitted(a) { return !!(a && a.inv && this.mgr.prog.bestGun(a)); }
+  // Remember where a kitted enemy is, so a bare bot keeps clear of it while it rekits
+  noteDanger(b, t) { b.ai.danger = { x: t.x, z: t.z, t: this.game.now }; }
+  // A kitted enemy close by in the last few minutes (where this bot died, or where the clan saw the player)
+  dangerNear(b, team) {
+    const G = this.game, ai = b.ai, spots = [];
+    if (ai.danger && G.now - ai.danger.t < 150) spots.push(ai.danger);
+    if (team && team.intel && G.now - team.intel.t < 75 && G.player && G.player.alive && this.kitted(G.player)) spots.push(team.intel);
+    return spots.find(p => dist(b.x, b.z, p.x, p.z) < 120) || null;
+  }
+  // The best bow or gun in the clan's boxes that has ammo stored with it: what a bare bot takes to rekit
+  storedKit(b, prog) {
+    if (!prog || !prog.st) return null;
+    let best = null, bs = 0;
+    for (const bx of prog.boxes) for (const sl of bx.cont.slots) {
+      if (!sl) continue; const d = ITEMS[sl.id]; if (d.type !== 'gun' && d.type !== 'bow') continue;
+      const ammo = d.ammo.find(a => prog.stash(a) > 0); if (!ammo && !(sl.ammo > 0)) continue;
+      const sc = weaponScore(sl.id); if (sc > bs) { bs = sc; best = { id: sl.id, ammo }; }
+    }
+    if (!best) return null;
+    const items = { [best.id]: 1 };
+    if (best.ammo) items[best.ammo] = Math.min(prog.stash(best.ammo), ITEMS[best.id].type === 'bow' ? 30 : ITEMS[best.id].mag * 4);
+    return items;
+  }
   powerOf(a) {
     if (!a) return 0;
     if (a.kind === 'npc') return 45;
@@ -234,6 +262,12 @@ export class BotAI {
     // outgunned as a clan (an AK against bows): everyone keeps away from the player
     if (team0 && team0.retreat && G.now < team0.retreat.until && t === G.player) return 'flee';
     if (ai.ignore instanceof Map && (ai.ignore.get(t.id) || 0) > G.now && b.lastHitBy !== t) return 'ignore';
+    // no bow or gun (rocks and spears don't count): never charge someone who has one. Back off and rekit
+    if (t.kind === 'survivor' && !this.kitted(b) && this.kitted(t)) {
+      const hit = b.lastHitBy === t && G.now - b.lastHitTime < 12;
+      if (hit || dist(b.x, b.z, t.x, t.z) < 35) { this.noteDanger(b, t); return 'flee'; }
+      return 'ignore';
+    }
     const mine = this.powerOf(b), theirs = this.powerOf(t);
     const attacked = b.lastHitBy === t && G.now - b.lastHitTime < 12;
     const team = G.teams.of(b);
@@ -257,6 +291,7 @@ export class BotAI {
     if (t.kind === 'survivor' && G.now - (t.spawnedAt || 0) < 90) return 'ignore';
     const armed = weaponScore(this.mgr.prog.bestWeapon(b)) > 9, theyArmed = t.kind === 'survivor' && weaponScore(this.mgr.prog.bestWeapon(t)) > 9;
     if (!armed) return 'ignore';
+    if (t.kind === 'survivor' && !this.kitted(b) && (theyArmed || d > 12)) return 'ignore';
     let kos = 0.05 * P.fight * (1 - S.caution * 0.5) * Math.min(1.5, odds) * ({ easy: 0.5, normal: 0.8, hard: 1, expert: 0.7 })[ai.tier];
     if (mode_far(b)) kos *= 0.5;
     kos *= styleOf(team).avoid;   // rushers and turtles don't go looking for fights
@@ -275,6 +310,22 @@ export class BotAI {
       const f = G.res.nearest(b.x, b.z, 120, n => n.type === 'pick' && (n.kind === 'berries' || n.kind === 'mushroom'));
       if (f) return this.setTask(b, { type: 'pick', node: f });
       const a = this.findPrey(b); if (a) return this.setTask(b, { type: 'hunt', animal: a });
+    }
+    // 1b. no kit and a kitted enemy about: don't wander back into them with a rock. Farm somewhere
+    // quiet away from them until it blows over, then rekit (bow and arrows from the boxes, or craft them)
+    if (!this.kitted(b)) {
+      const kit = this.storedKit(b, prog);
+      if (kit && (!ai.task || ai.task.type !== 'withdraw')) return this.setTask(b, { type: 'withdraw', items: kit });
+      const dz = this.dangerNear(b, team);
+      if (dz) {
+        if (ai.task && ai.task.calm && G.now < ai.task.calmUntil) return;
+        let ax = b.x - dz.x, az = b.z - dz.z; const L = Math.hypot(ax, az) || 1; ax /= L; az /= L;
+        if (L < 1) { const a = Math.random() * Math.PI * 2; ax = Math.cos(a); az = Math.sin(a); }
+        const tx = clampToIsland(G, dz.x + ax * 170, dz.z + az * 170), node = G.res.nearest(tx.x, tx.z, 60, n => n.type === 'tree' && !this.unreachable(b, n));
+        const task = node ? { type: 'harvest', node, res: 'wood', need: b.inv.count('wood') + 300 } : { type: 'roam', x: tx.x, z: tx.z, until: G.now + 30 };
+        task.calm = true; task.calmUntil = G.now + 40;
+        return this.setTask(b, task);
+      }
     }
     // 2. loot bags lying around
     const bag = G.loot.hash.nearest(b.x, b.z, 45, o => o.cont && o.label && !o.cont.isEmpty() && o.cont.totalValue() > 8 && b.inv.main.emptyCount() > 3);
@@ -349,7 +400,7 @@ export class BotAI {
     // personal wishes (first two)
     for (const [i, w] of wishes.slice(0, 3).entries()) {
       const unarmed = !this.mgr.prog.bestGun(b);
-      const base = { race: 3.0, raid: 1.7, tools: 2.6, weapon: unarmed ? 2.5 : 1.6 * P.fight, ammo: unarmed ? 2.0 : 1.2 * P.fight, clothes: 1.1, meds: 0.9, armour: 1.0 * P.fight }[w.why] || 1;
+      const base = { race: 3.0, raid: 1.7, tools: 2.6, weapon: unarmed ? 4.5 : 1.6 * P.fight, ammo: unarmed ? 3.5 : 1.2 * P.fight, clothes: 1.1, meds: 0.9, armour: 1.0 * P.fight }[w.why] || 1;
       const act = this.mgr.prog.resolve(b, prog, w.id, w.n);
       if (act) add(base * (i === 0 ? 1 : i === 1 ? 0.8 : 0.65), this.activityTask(b, team, act));
     }
@@ -1270,6 +1321,8 @@ export class BotAI {
       ai.cornered = G.now + 15; ai.fleeStuck = false; ai.goal = 'fight'; ai.reactT = Math.min(ai.reactT || 0, 0.3);
       return;
     }
+    // made it home without a kit and nobody's shooting: stop running and grab one from the boxes
+    if (arrived && !this.kitted(b) && !this.underFire(b, t) && G.now - (b.lastHitTime || -99) > 4) { this.noteDanger(b, t); this.endCombat(b, true); return; }
     if (!this.underFire(b, t) && (d > ai.S.sight || G.now - ai.targetSeen > 8)) this.endCombat(b, true);
   }
 }
@@ -1278,3 +1331,10 @@ function mode_far(b) { return b.ai.mode === 'far'; }
 function Y_loot(team) { return styleOf(team).loot; }
 function G_upkeep(game, st) { return game.build.upkeepPerHour(st); }
 export { pick, recycleYield };
+// A point on dry land near (x, z): pulled back toward the bot's own side of the island if it's in the sea
+function clampToIsland(G, x, z) {
+  const W = G.world, lim = W.half - 120;
+  x = clamp(x, -lim, lim); z = clamp(z, -lim, lim);
+  for (let i = 0; i < 6 && W.heightAt(x, z) < 1.5; i++) { x *= 0.8; z *= 0.8; }
+  return { x, z };
+}

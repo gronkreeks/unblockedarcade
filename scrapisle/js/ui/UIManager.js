@@ -9,6 +9,7 @@ import { recycleYield } from '../systems/Deployables.js';
 import { iconURL } from './Icons.js';
 import { fmtTime } from '../core/util.js';
 import { PRESETS, resolve as resolveGfx } from '../gfx/GraphicsSettings.js';
+const TIER_COLOR = { easy: '#6fdc5a', normal: '#58b4ff', hard: '#ff9a3c', expert: '#b77bff' };
 
 const $ = (id) => document.getElementById(id);
 export const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft', 'ShiftRight', 'Space', 'ControlLeft', 'ControlRight']);
@@ -666,7 +667,9 @@ export class UIManager {
       const line = (r, i, val) => `<tr class="${r.you ? 'you' : ''}"><td>${i + 1}</td><td><span class="swatch" style="background:${r.color}"></span>${esc(r.name)}</td><td>${val}</td></tr>`;
       const defs = rows.filter(r => r.def > 0 || r.you).sort((a, b) => b.def - a.def).slice(0, 6).map((r, i) => line(r, i, r.def)).join('');
       const kds = rows.filter(r => r.k >= 3 || r.you).sort((a, b) => kd(b.k, b.d) - kd(a.k, a.d)).slice(0, 6).map((r, i) => line(r, i, `${kd(r.k, r.d).toFixed(2)} <span class="muted">(${r.k}/${r.d})</span>`)).join('');
-      board = `<h3>Leaderboard</h3><div class="boards"><table class="clanTable"><tr><th></th><th>Raids defended</th><th></th></tr>${defs}</table><table class="clanTable"><tr><th></th><th>Best K/D</th><th></th></tr>${kds}</table></div>`;
+      const os = G.online && G.online.status;
+      const hall = !window.Ranked ? '' : `<p class="muted">${os ? `Your best world is #${os.rank} in Clan Wars on the homepage's Hall of Challengers${os.challenger ? ', which makes you a Challenger' : ''}.` : 'Defend raids to post this world to the Hall of Challengers on the homepage. Your best world counts.'}</p><button type="button" class="btn" data-cr-open="clanwars">Hall of Challengers</button>`;
+      board = `<h3>Leaderboard</h3><div class="boards"><table class="clanTable"><tr><th></th><th>Raids defended</th><th></th></tr>${defs}</table><table class="clanTable"><tr><th></th><th>Best K/D</th><th></th></tr>${kds}</table></div>${hall}`;
     }
     $('mapSide').innerHTML = `<div class="mapOpts">${check('bases', 'Show every clan base')}${check('raids', 'Show raid spots')}${check('clans', 'Show clan list')}</div>
       <h3>Biggest clan</h3>${biggest || '<p class="muted">No clans yet.</p>'}${clanHTML}${board}
@@ -732,13 +735,13 @@ export class UIManager {
     const G = this.game, P = this.P;
     const killer = info.killer;
     let cause = 'You died.';
-    if (killer && killer.kind === 'survivor') cause = `You were killed by ${killer.name}${killer.ai ? ` of ${G.teams.of(killer)?.name || 'a group'}` : ''}.`;
+    if (killer && killer.kind === 'survivor') cause = `You were killed by ${esc(killer.name)}${this.tierTag(killer)}${killer.ai ? ` of ${esc(G.teams.of(killer)?.name || 'a group')}` : ''}.`;
     else if (killer && killer.kind === 'npc') cause = 'You were shot by the militia.';
     else if (killer && killer.kind === 'animal') cause = `You were killed by a ${killer.species}.`;
     else if (info.info && info.info.cause) cause = `You died of ${info.info.cause}.`;
     else if (info.info && info.info.type === 'fall') cause = 'You died from a fall.';
     this.showScreen('deathScreen');
-    $('dsCause').textContent = cause;
+    $('dsCause').innerHTML = /<b /.test(cause) ? cause : esc(cause);
     const draw = () => {
       const bags = G.deploy.bagsOf(P.id);
       const html = `<button class="btn go" data-spawn="beach">Respawn on a beach</button>` + bags.map(d => {
@@ -760,6 +763,19 @@ export class UIManager {
   }
 
   // ================= HUD =================
+  // "(EASY)" in green up to "(EXPERT)" in purple, after a bot's name in kill and death messages
+  tierTag(a) {
+    const t = a && a.ai && a.ai.tier;
+    if (!TIER_COLOR[t]) return '';
+    return ` <b style="color:${TIER_COLOR[t]}">(${t.toUpperCase()})</b>`;
+  }
+  esc(s) { return esc(s); }
+  toastHTML(html) {
+    const el = document.createElement('div'); el.className = 'toast'; el.innerHTML = html;
+    $('toasts').appendChild(el);
+    setTimeout(() => el.remove(), 2600);
+    while ($('toasts').children.length > 4) $('toasts').firstChild.remove();
+  }
   toast(msg) {
     if (msg === undefined || msg === null || /\bundefined\b/.test(String(msg))) { if (msg) console.warn('toast with missing text:', msg); msg = msg ? String(msg).replace(/\s*\bundefined\b/g, '') : ''; if (!msg.trim()) return; }
     const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg;

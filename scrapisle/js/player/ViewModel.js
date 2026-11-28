@@ -98,6 +98,11 @@ export class ViewModel {
   update(dt, speed, o = {}) {
     const P = this.pivot;
     this.root.visible = !o.hidden;
+    // scoped rifles: once aimed in, the model hides and you look through the scope (overlay)
+    const scoped = !o.hidden && this.info && this.info.scope && this.aimT > 0.85;
+    const so = document.getElementById('scopeOverlay');
+    if (so && so.hidden === scoped) { so.hidden = !scoped; document.body.classList.toggle('scoped', scoped); }
+    if (scoped) this.root.visible = false;
     if (o.hidden) { this.light.intensity = 0; return; }
     this.bobT += dt * (speed > 0.3 ? speed * 2.1 : 1);
     this.equipT = Math.max(0, this.equipT - dt * 3);

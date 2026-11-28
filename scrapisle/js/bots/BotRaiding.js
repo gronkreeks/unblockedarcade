@@ -142,7 +142,7 @@ export class BotRaiding {
       // the side that was hit gets a defence when the raid was beaten back
       const beaten = /^(failed|stalled|ran out of charges|timed out)/.test(result) && r.state !== 'prep';
       if (beaten) {
-        if (G.player && r.targetTeam === G.player.team) G.pstats.defended++;
+        if (G.player && r.targetTeam === G.player.team) { G.pstats.defended++; if (G.online) G.online.soon(); }
         else { const def = G.teams.get(r.targetTeam); if (def) def.stats.defended = (def.stats.defended || 0) + 1; }
       }
       if (result === 'success' && r.lootedValue < 1) result = 'found nothing worth taking';

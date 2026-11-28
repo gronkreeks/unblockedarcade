@@ -222,6 +222,12 @@
                   stat: s => `average miss ${Math.round(s.km).toLocaleString('en-US')} km`, everyRun: true },
     bombsite:   { name: 'Bombsite',    href: 'bombsite.html',  how: 'The most kills in one Champion match wins. Every finished Champion match posts your kills, win or lose.',
                   stat: s => `${s.kills} kill${s.kills === 1 ? '' : 's'} · ${s.deaths} death${s.deaths === 1 ? '' : 's'}`, everyRun: true },
+    // Clan Wars isn't on the ranked ladder: worlds on Normal or harder post as you play (scrapisle/js/net/OnlineBoard.js)
+    clanwars:   { name: 'Clan Wars',   href: 'scrapisle.html', how: 'The most raids defended in one world wins, and a better kill/death ratio breaks ties.',
+                  note: 'Worlds on Normal difficulty or harder post your score while you play, and your best world counts.',
+                  empty: 'No Clan Wars scores yet. Defend a raid on Normal or harder to be the first.',
+                  stat: s => `${s.def} raid${s.def === 1 ? '' : 's'} defended · K/D ${(s.kills / Math.max(1, s.deaths)).toFixed(2)} (${s.kills}/${s.deaths})`,
+                  short: r => `${r.stats.def} def, ${(r.stats.kills / Math.max(1, r.stats.deaths)).toFixed(1)} K/D`, noTime: true },
   };
   const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
@@ -486,7 +492,7 @@
     if (!boardEl) {
       boardEl = document.createElement('div'); boardEl.className = 'chl-ov';
       boardEl.innerHTML = `<div class="chl-box" role="dialog" aria-modal="true" aria-label="Challenger leaderboard">
-        <div class="chl-head">${emblem(CHALLENGER, 44)}<div><div class="chl-title">Challenger</div><div class="chl-tag">The top 3 Champions in each game</div></div>
+        <div class="chl-head">${emblem(CHALLENGER, 44)}<div><div class="chl-title">Challenger</div><div class="chl-tag">The top 3 players in each game</div></div>
         <button type="button" class="chl-x" aria-label="Close">✕</button></div>
         <div class="chl-tabs">${Object.entries(CR_GAMES).map(([g, x]) => `<button type="button" data-g="${g}">${x.name}</button>`).join('')}</div>
         <div class="chl-how"></div><div class="chl-list"></div>
@@ -515,7 +521,8 @@
     const el = boardEl, g = CR_GAMES[game];
     el.dataset.g = game;
     for (const b of el.querySelectorAll('.chl-tabs button')) b.classList.toggle('on', b.dataset.g === game);
-    el.querySelector('.chl-how').innerHTML = `${esc(g.how)} ${g.everyRun ? 'Every Champion race counts' : 'Only wins against the Champion bot count'}, timed by the server. <a href="${g.href}">Play ${esc(g.name)}</a>`;
+    const tab = el.querySelector('.chl-tabs .on'); if (tab) tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    el.querySelector('.chl-how').innerHTML = `${esc(g.how)} ${g.note ? esc(g.note) : `${g.everyRun ? 'Every Champion race counts' : 'Only wins against the Champion bot count'}, timed by the server.`} <a href="${g.href}">Play ${esc(g.name)}</a>`;
     const list = el.querySelector('.chl-list');
     list.innerHTML = '<div class="chl-empty">Loading…</div>';
     try {
@@ -524,10 +531,10 @@
       setStatus(game, j.you);
       const row = r => `<div class="chl-row${r.challenger ? ' top' : ''}${j.you && r.id === j.you.id ? ' me' : ''}">
         <span class="chl-rank">${r.challenger ? emblem(CHALLENGER, 26) : ''}<b>${r.rank}</b></span>
-        <span class="chl-who">${esc(r.name)}${j.you && r.id === j.you.id ? ' <i>(you)</i>' : ''}<small>${fmtT(r.t)} · ${esc(g.stat(r.stats))}</small></span>
+        <span class="chl-who">${esc(r.name)}${j.you && r.id === j.you.id ? ' <i>(you)</i>' : ''}<small>${g.noTime ? '' : fmtT(r.t) + ' · '}${esc(g.stat(r.stats))}</small></span>
         <span class="chl-score">${fmtN(r.score)}</span></div>`;
       let h = j.board.map(row).join('');
-      if (!j.board.length) h = `<div class="chl-empty">No Challenger scores yet. Reach Champion in ${esc(g.name)} and win to be the first.</div>`;
+      if (!j.board.length) h = `<div class="chl-empty">${g.empty ? esc(g.empty) : `No Challenger scores yet. Reach Champion in ${esc(g.name)} and win to be the first.`}</div>`;
       if (j.you && !j.board.some(r => r.id === j.you.id)) h += '<div class="chl-gap">⋯</div>' + row(j.you);
       list.innerHTML = h + (j.players ? `<div class="chl-foot">${j.players} player${j.players === 1 ? '' : 's'} on this board</div>` : '');
     } catch (e) {
@@ -567,5 +574,8 @@
   }
 
   window.Ranked = Object.freeze({ create, TIERS: Object.freeze(TIERS.map(t => Object.freeze(t))), emblem, blendLevels, modded,
-    CHALLENGER, CR: Object.freeze({ ...CR }), CR_GAMES, crStatus, syncAll, openBoard, onStatus: f => listeners.add(f) });
+    CHALLENGER, CR: Object.freeze({ ...CR }), CR_GAMES, crStatus, syncAll, openBoard, onStatus: f => listeners.add(f),
+    // For games outside the ladder (Clan Wars): post a score with a server run token
+    crStart: game => api('/cr/start', { game }).then(j => j.run),
+    crFinish: (run, stats) => api('/cr/finish', { run, key: playerKey(), name: crName(), stats }).then(j => { setStatus(j.game, j.board.you); return j; }) });
 })();

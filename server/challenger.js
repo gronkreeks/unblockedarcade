@@ -62,6 +62,13 @@ const GAMES = {
     minT: 90, maxT: 3 * 3600, floor: 0, stats: { kills: [0, 60], deaths: [0, 60], hs: [0, 60] },
     score: (t, s) => s.kills,
   },
+  // Clan Wars: one survival world, posted while you play (Normal difficulty and up). Raids defended rank
+  // first, kill/death ratio breaks ties (K/D 2.45 adds 245, capped at 999). Your best world counts.
+  // Posts come every few minutes from a long world, so each run token only times the gap since the last.
+  clanwars: {
+    minT: 5, floor: 0, stats: { def: [0, 999], kills: [0, 99999], deaths: [0, 99999] },
+    score: (t, s) => 1000 * s.def + Math.min(999, Math.round(100 * s.kills / Math.max(1, s.deaths))),
+  },
 };
 
 function tidyName(raw) {

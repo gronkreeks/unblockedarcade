@@ -209,7 +209,10 @@ export class BuildingSystem {
     const f = this.frame(spec);
     const wp = this.toWorld(tmp, f.lx, f.ly, f.lz);
     if (!W.inBounds(wp.x, wp.z, 30)) return 'Too close to the edge of the world';
-    if (W.monumentAt(wp.x, wp.z, 12)) return 'Too close to a monument';
+    // walling at monuments is allowed (fights), just not inside the monument's own buildings;
+    // claim cabinets stay blocked there (Deployables) and monument walls decay fast (tickDecay)
+    const mon = W.monumentAt(wp.x, wp.z, 12);
+    if (mon && spec.type === 'foundation' && this._monumentInWay(mon, wp.x, wp.z, tmp.oy - 0.5, tmp.oy + 3.5)) return 'The monument is in the way';
     if (W.isRoad(wp.x, wp.z)) return 'Cannot build on roads';
     const blk = this.blockedFor(team, wp.x, wp.z);
     if (blk && (!st || blk !== st || !this.isAuthed(team, st))) return 'Building blocked';
@@ -284,6 +287,23 @@ export class BuildingSystem {
         const lx = dx * c - dz * s, lz = dx * s + dz * c;
         const r = a.r || 0.35, h = a.h || 1.8;
         if (Math.abs(lx) < b.hx + r && Math.abs(lz) < b.hz + r && a.y < by + b.hy - 0.05 && a.y + h > by - b.hy) { hit = true; return true; }
+      }
+    });
+    return hit;
+  }
+  // Does a foundation here overlap one of the monument's buildings or props?
+  _monumentInWay(mon, x, z, y0, y1) {
+    let hit = false;
+    this.game.physics.near(x, z, 8, c => {
+      if (hit || c.ref !== mon) return;
+      if (c.type === 'box') {
+        if (c.y + c.hy < y0 + 0.35 || c.y - c.hy > y1) return;
+        const dx = x - c.x, dz = z - c.z, cs = Math.cos(c.yaw || 0), sn = Math.sin(c.yaw || 0);
+        // either rotation sense: erring on the side of blocking
+        for (const sg of [1, -1]) { const lx = dx * cs + sg * dz * sn, lz = -sg * dx * sn + dz * cs; if (Math.abs(lx) < c.hx + 1.5 && Math.abs(lz) < c.hz + 1.5) hit = true; }
+      } else if (c.type === 'cyl') {
+        if (c.y1 < y0 + 0.35 || c.y0 > y1) return;
+        if (dist(x, z, c.x, c.z) < c.r + 1.5) hit = true;
       }
     });
     return hit;
@@ -572,8 +592,9 @@ export class BuildingSystem {
       }
       st.decaying = !paid;
       if (paid) continue;
+      const fast = this.game.world.monumentAt(st.ox, st.oz, 14) ? 8 : 1;   // walls at monuments are for fights
       for (const p of [...st.pieces.values()]) {
-        p.hp -= p.maxHp * hours / GRADES[p.grade].decayHours;
+        p.hp -= p.maxHp * hours * fast / GRADES[p.grade].decayHours;
         if (p.hp <= 0) this.removePiece(st, p, 'decay');
       }
       if (this.structures.has(st.id)) this.recompute(st);

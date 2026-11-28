@@ -75,6 +75,8 @@ export class BotManager {
     v.respawnAt = this.game.now + randRange(20, 45);
     v.ai.task = null; v.ai.target = null; v.ai.goal = 'task';
     v.diedAt = this.game.now;
+    // killed by someone with a gun or bow: after respawning, keep clear of them until rekitted
+    if (e.killer && e.killer.kind === 'survivor' && e.killer !== v && this.prog.bestGun(e.killer)) v.ai.danger = { x: e.killer.x, z: e.killer.z, t: this.game.now };
     if (v.avatar) { if (v.avatar.root.visible) v.avatar.die(); else v.avatar.root.visible = false; }
     const k = e.killer;
     if (k && k.kind === 'survivor' && k.ai) { const t = this.game.teams.of(k); if (t) t.stats.kills++; }

@@ -224,7 +224,10 @@ export class BotBuilder {
       const maxF = { hut: 1, small: 2, medium: 3, large: 4, xl: 5, xxl: 6 }[base.template] || 1;
       if (furnaces >= 1 && furnaces < maxF && (ore > 400 * furnaces || (prog.bench >= 2 && furnaces < 2))) want.push(['furnace', 0]);
       if (!this.has(st, 'workbench1')) want.push(['workbench1', 1]);
-      if (prog.boxSpace < 6 && this.count(st, 'large_box') < Y.boxes && prog.knows('large_box')) want.push(['large_box', 1]);
+      // surplus storage: always keep spare room, like a player who adds boxes before the last one fills.
+      // Room wanted grows with the clan; how many boxes fit grows with the base.
+      const room = 12 + 4 * team.size, maxBox = ({ hut: 3, small: 4, medium: 6, large: 8, xl: 10, xxl: 12 }[base.template] || 3) + (team.style === 'turtle' ? 2 : 0);
+      if (prog.boxSpace < room && boxN < maxBox) want.push([prog.knows('large_box') && prog.bench >= 1 ? 'large_box' : 'wood_box', prog.knows('large_box') && prog.bench >= 1 ? 1 : 0]);
       if (!this.has(st, 'research_table') && prog.bench >= 1 && prog.knows('research_table')) want.push(['research_table', 1]);
       if (!this.has(st, 'workbench2') && prog.bench >= 1 && prog.wantBench2) want.push(['workbench2', 2]);
       if (!this.has(st, 'workbench3') && prog.bench >= 2 && prog.wantBench3) want.push(['workbench3', 3]);
